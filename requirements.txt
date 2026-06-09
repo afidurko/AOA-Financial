@@ -1,0 +1,5 @@
+# Core runtime dependencies
+anthropic>=0.40.0      # Claude API — the reasoning engine for every agent
+httpx>=0.27.0          # HTTP client for the Alpaca REST/data APIs
+
+# Dev / test (optional, install with: pip install -r requirements-dev.txt)
