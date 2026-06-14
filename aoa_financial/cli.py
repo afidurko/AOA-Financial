@@ -210,6 +210,46 @@ def cmd_swarm(args, config: Config) -> int:
     return 0
 
 
+def cmd_backtest(args, config: Config) -> int:
+    from .backtest.engine import backtest_ticker
+    tickers = args.tickers or config.default_universe
+    results = []
+    with _store(config) as store:
+        for t in tickers:
+            _ensure_ingested(store, t, args.live)
+            try:
+                results.append(backtest_ticker(
+                    store, t, horizon=args.horizon, step=args.step,
+                    config=config, use_llm=not args.no_llm if args.llm else False))
+            except ValueError as e:
+                print(f"  skip {t}: {e}", file=sys.stderr)
+    if args.json:
+        print(json.dumps([r.to_dict(include_trades=args.trades)
+                          for r in results], indent=2))
+        return 0
+    print(f"\nWalk-forward backtest (horizon={args.horizon}d, "
+          f"step={args.step or args.horizon}d, no lookahead). "
+          f"Returns shown as annualised CAGR.\n" + "=" * 78)
+    print(f"{'TICKER':8s}{'N':>5s}{'YRS':>6s}{'HIT':>6s}{'WIN':>6s}"
+          f"{'STRAT~':>9s}{'B&H~':>9s}{'EXCESS~':>9s}{'SHARPE':>8s}{'MAXDD':>8s}")
+    for r in results:
+        print(f"{r.ticker:8s}{r.n_periods:>5d}{r.years:>6.0f}"
+              f"{r.hit_rate:>6.0%}{r.win_rate:>6.0%}"
+              f"{r.strategy_cagr:>+9.1%}{r.buy_hold_cagr:>+9.1%}"
+              f"{r.excess_return:>+9.1%}{r.sharpe:>8.2f}{r.max_drawdown:>8.1%}")
+    if results:
+        avg_hit = sum(r.hit_rate for r in results) / len(results)
+        avg_exc = sum(r.excess_return for r in results) / len(results)
+        avg_sharpe = sum(r.sharpe for r in results) / len(results)
+        print("-" * 78)
+        print(f"{'MEAN':8s}{'':>11s}{avg_hit:>6.0%}{'':>6s}{'':>9s}{'':>9s}"
+              f"{avg_exc:>+9.1%}{avg_sharpe:>8.2f}")
+        print("\n(~ = annualised CAGR. On synthetic data, hit-rate near 50% and "
+              "negative excess vs a strongly-\n trending buy & hold is the "
+              "expected, honest result — daily signals carry little edge.)")
+    return 0
+
+
 def cmd_demo(args, config: Config) -> int:
     tickers = args.tickers or ["AAPL", "XOM", "JPM"]
     print("AOA-Financial demonstration")
@@ -326,6 +366,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     add_common(sub.add_parser("swarm", help="rank decisions across tickers"),
                tickers=True)
+
+    sp = sub.add_parser("backtest", help="walk-forward backtest (no lookahead)")
+    sp.add_argument("tickers", nargs="*")
+    sp.add_argument("--horizon", type=int, default=21, help="holding period (days)")
+    sp.add_argument("--step", type=int, default=None,
+                    help="days between rebalances (default = horizon)")
+    sp.add_argument("--llm", action="store_true",
+                    help="include the LLM analyst at each step (slow)")
+    sp.add_argument("--no-llm", action="store_true", help=argparse.SUPPRESS)
+    sp.add_argument("--trades", action="store_true",
+                    help="include per-trade detail in --json output")
+    sp.add_argument("--json", action="store_true")
     add_common(sub.add_parser("demo", help="end-to-end demonstration"),
                tickers=True)
     return p
@@ -335,7 +387,7 @@ _HANDLERS = {
     "init": cmd_init, "ingest": cmd_ingest, "analyze": cmd_analyze,
     "forecast": cmd_forecast, "regime": cmd_regime, "reverse": cmd_reverse,
     "fundamentals": cmd_fundamentals, "frame": cmd_frame, "corr": cmd_corr,
-    "swarm": cmd_swarm, "demo": cmd_demo,
+    "swarm": cmd_swarm, "backtest": cmd_backtest, "demo": cmd_demo,
 }
 
 

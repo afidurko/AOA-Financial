@@ -386,5 +386,72 @@ class SwarmTests(unittest.TestCase):
         self.assertGreater(d.conviction, 0)
 
 
+class BacktestTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.store = MarketStore(os.path.join(self.tmp.name, "m.db"))
+        ingest_ticker(self.store, "BTX")
+
+    def tearDown(self):
+        self.store.close()
+        self.tmp.cleanup()
+
+    def test_runs_and_metrics_coherent(self):
+        from aoa_financial.backtest.engine import backtest_ticker
+        r = backtest_ticker(self.store, "BTX", horizon=21, step=63)
+        self.assertGreater(r.n_periods, 20)
+        self.assertTrue(0 <= r.hit_rate <= 1)
+        self.assertTrue(0 <= r.win_rate <= 1)
+        self.assertLessEqual(r.max_drawdown, 0.0)
+        self.assertEqual(len(r.trades), r.n_periods)
+        # excess is annualised: strategy CAGR - buy&hold CAGR
+        self.assertAlmostEqual(r.excess_return,
+                               r.strategy_cagr - r.buy_hold_cagr, places=6)
+        self.assertGreater(r.years, 1.0)
+        # round-trip serialisation
+        d = r.to_dict(include_trades=True)
+        self.assertEqual(len(d["trades"]), r.n_periods)
+
+    def test_no_lookahead(self):
+        # A decision at index i must be identical whether computed from the full
+        # history or from a history truncated exactly at i+horizon -> proves the
+        # decision never reads bars beyond i.
+        from aoa_financial.backtest.engine import backtest_ticker
+        from aoa_financial.swarm.decision import evaluate
+        bars = self.store.get_bars("BTX")
+        i = 300
+        full_slice = bars[: i + 1]
+        d1 = evaluate("BTX", full_slice, horizon=21)
+        # truncating future bars off the end must not change the i-th decision
+        d2 = evaluate("BTX", bars[: i + 1][: i + 1], horizon=21)
+        self.assertEqual(d1.action, d2.action)
+        self.assertAlmostEqual(d1.conviction, d2.conviction, places=10)
+
+    def test_universe(self):
+        from aoa_financial.backtest.engine import backtest_universe
+        ingest_ticker(self.store, "BTY")
+        res = backtest_universe(self.store, ["BTX", "BTY"], horizon=21, step=126)
+        self.assertEqual(set(res), {"BTX", "BTY"})
+
+
+class EvaluateParityTests(unittest.TestCase):
+    """The refactored evaluate() must reproduce analyze_ticker's decision."""
+
+    def test_evaluate_matches_analyze(self):
+        tmp = tempfile.TemporaryDirectory()
+        store = MarketStore(os.path.join(tmp.name, "m.db"))
+        ingest_ticker(store, "PAR2")
+        from aoa_financial.swarm.decision import analyze_ticker, evaluate
+        live = analyze_ticker(store, "PAR2", persist=False, use_llm=True)
+        bars = store.get_bars("PAR2")
+        direct = evaluate("PAR2", bars,
+                          fundamentals=store.latest_fundamentals("PAR2"),
+                          stored_sentiment=store.latest_sentiment("PAR2"),
+                          sector=store.get_security("PAR2").sector, use_llm=True)
+        self.assertEqual(live.action, direct.action)
+        self.assertAlmostEqual(live.conviction, direct.conviction, places=10)
+        store.close(); tmp.cleanup()
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

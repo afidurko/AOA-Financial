@@ -107,35 +107,34 @@ def _rationale(action, conviction, confidence, dispersion, signals) -> str:
     return " ".join(parts)
 
 
-def analyze_ticker(store: MarketStore, ticker: str, *,
-                   config: Optional[Config] = None,
-                   horizon: int = 21,
-                   use_llm: bool = True,
-                   run_id: Optional[str] = None,
-                   persist: bool = True) -> SwarmDecision:
-    """Run the full analysis stack for one ticker."""
+def evaluate(ticker: str, bars, *,
+             fundamentals: Optional[dict] = None,
+             stored_sentiment: Optional[float] = None,
+             sector: str = "Unknown",
+             config: Optional[Config] = None,
+             horizon: int = 21,
+             use_llm: bool = False,
+             regime_state=None) -> SwarmDecision:
+    """Run the analytics + swarm on an explicit bar slice (no store access).
+
+    This is the lookahead-free core shared by the live pipeline and the
+    backtester: it sees *only* the bars passed in. ``analyze_ticker`` wraps it
+    with store IO; the backtester calls it on a truncated history.
+    """
     config = config or Config()
     ticker = ticker.upper()
-    bars = store.get_bars(ticker)
     if len(bars) < 60:
-        raise ValueError(f"insufficient history for {ticker} "
-                         f"({len(bars)} bars); ingest it first")
+        raise ValueError(f"insufficient history for {ticker} ({len(bars)} bars)")
 
     closes = [b.close for b in bars]
-    sec = store.get_security(ticker)
-    sector = sec.sector if sec else "Unknown"
-
-    # --- analytics -------------------------------------------------------
     tech = TA.snapshot(bars).to_dict()
-    fund = FA.score(store.latest_fundamentals(ticker)).to_dict()
+    fund = FA.score(fundamentals).to_dict()
     fc = FC.forecast(closes, horizon_days=horizon).to_dict()
-    regime_state = RG.classify(bars)
-    regime = regime_state.to_dict()
-    sentiment = SENT.blended(store.latest_sentiment(ticker),
-                             S.log_returns(closes)[-21:])
-    rev = reverse_engineer(ticker, bars, stored_sentiment=store.latest_sentiment(ticker))
+    rstate = regime_state or RG.classify(bars)
+    regime = rstate.to_dict()
+    sentiment = SENT.blended(stored_sentiment, S.log_returns(closes)[-21:])
+    rev = reverse_engineer(ticker, bars, stored_sentiment=stored_sentiment)
 
-    # --- LLM analyst -----------------------------------------------------
     analyst_dict = None
     if use_llm:
         evidence = build_evidence(
@@ -144,17 +143,40 @@ def analyze_ticker(store: MarketStore, ticker: str, *,
             sector=sector)
         analyst_dict = ClaudeAnalyst(config).analyze(evidence).to_dict()
 
-    # --- swarm -----------------------------------------------------------
     signals = run_agents(technical=tech, fundamental=fund, forecast=fc,
-                         regime=regime, sentiment=sentiment,
-                         analyst=analyst_dict)
-    asof = bars[-1].date
-    decision = decide(ticker, signals, config=config, asof=asof)
+                         regime=regime, sentiment=sentiment, analyst=analyst_dict)
+    decision = decide(ticker, signals, config=config, asof=bars[-1].date)
     decision.evidence = {
         "technical": tech, "fundamental": fund, "forecast": fc,
         "regime": regime, "reverse_engineering": rev.to_dict(),
         "sentiment": round(sentiment, 4), "analyst": analyst_dict,
+        "_regime_state": rstate,
     }
+    return decision
+
+
+def analyze_ticker(store: MarketStore, ticker: str, *,
+                   config: Optional[Config] = None,
+                   horizon: int = 21,
+                   use_llm: bool = True,
+                   run_id: Optional[str] = None,
+                   persist: bool = True) -> SwarmDecision:
+    """Run the full analysis stack for one ticker, with store IO + persistence."""
+    config = config or Config()
+    ticker = ticker.upper()
+    bars = store.get_bars(ticker)
+    if len(bars) < 60:
+        raise ValueError(f"insufficient history for {ticker} "
+                         f"({len(bars)} bars); ingest it first")
+
+    sec = store.get_security(ticker)
+    sector = sec.sector if sec else "Unknown"
+    decision = evaluate(
+        ticker, bars, fundamentals=store.latest_fundamentals(ticker),
+        stored_sentiment=store.latest_sentiment(ticker), sector=sector,
+        config=config, horizon=horizon, use_llm=use_llm)
+    asof = bars[-1].date
+    regime_state = decision.evidence.pop("_regime_state")
 
     # --- persistence -----------------------------------------------------
     if persist:
@@ -165,7 +187,7 @@ def analyze_ticker(store: MarketStore, ticker: str, *,
                             regime_state.trend_strength)
         store.insert_signals(run_id, [
             {"run_id": run_id, "ticker": ticker, "asof": asof, **s.to_dict()}
-            for s in signals])
+            for s in decision.signals])
         store.insert_decision(run_id, {
             "run_id": run_id, "ticker": ticker, "asof": asof,
             "action": decision.action, "conviction": decision.conviction,

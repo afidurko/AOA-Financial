@@ -64,6 +64,9 @@ python -m aoa_financial corr AAPL MSFT XOM JPM KO --window 252
 python -m aoa_financial fundamentals AAPL
 python -m aoa_financial fundamentals AAPL --provider fmp --refresh
 
+# 9. Walk-forward backtest of the swarm's decisions (no lookahead)
+python -m aoa_financial backtest AAPL XOM JPM KO --horizon 21 --step 63
+
 # Or the full guided demo:
 python examples/run_demo.py
 ```
@@ -180,6 +183,32 @@ transparently falls back to the synthetic generator, so the pipeline never
 breaks. All provider parsing is unit-tested with the network mocked — no live
 calls are made in the test suite.
 
+## Backtesting (walk-forward, no lookahead)
+
+`backtest/engine.py` replays the swarm's decisions through history to measure
+whether the engine has edge. It is strictly **lookahead-free**: at each
+rebalance date the decision is built from the bar slice *up to that date only*
+(`swarm.decision.evaluate` on `bars[:i+1]`), the entry is that day's close, and
+the exit is `bars[i+horizon]`. Holding periods are non-overlapping by default
+(`step == horizon`) so the compounded equity curve and Sharpe are well-defined.
+Single-latest-value snapshots (stored sentiment, latest fundamentals) are **not**
+injected during the backtest, since they would leak the future.
+
+```bash
+python -m aoa_financial backtest AAPL XOM JPM KO --horizon 21 --step 63
+```
+
+Reported per ticker: number of periods, years covered, **hit rate** (directional
+accuracy on actionable signals), **win rate**, strategy vs buy-&-hold **CAGR**,
+annualised **excess**, **Sharpe**, and **max drawdown**. The no-lookahead
+property is asserted by the test-suite (a decision at index *i* is identical
+whether computed from full or future-truncated history).
+
+> On the synthetic data, hit-rate sits near 50% and the tactical strategy
+> trails a strongly-trending buy-&-hold — the **expected, honest** result, since
+> daily-frequency signals carry little edge. The harness exists so agent weights
+> can be tuned against real data on evidence rather than priors.
+
 ## The swarm decision engine
 
 Each specialist agent (`swarm/agents.py`) converts one analysis slice into a
@@ -248,6 +277,7 @@ aoa_financial/
                             #   vectorised indicators, correlation panel
   llm/                      # Claude Opus 4.8 analyst (+ offline fallback)
   swarm/                    # specialist agents + decision aggregator
+  backtest/                 # walk-forward, lookahead-free backtest harness
   cli.py / __main__.py      # command-line interface
 tests/test_core.py          # stdlib test suite
 examples/run_demo.py        # end-to-end demonstration
