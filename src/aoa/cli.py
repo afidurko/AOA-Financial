@@ -9,6 +9,7 @@ Commands:
   aoa analyze    Analyze the historical trend of a symbol.
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
+  aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
+from aoa.simulation.live import LiveMarketTracker
 from aoa.simulation.scenarios import extract_scenario, list_scenarios
 from aoa.simulation.simulator import MarketSimulator, SimulationConfig
 from aoa.simulation.trends import analyze_trends
@@ -242,6 +244,46 @@ def cmd_scenarios(cfg: Config) -> int:
     return 0
 
 
+def cmd_watch(
+    cfg: Config,
+    symbols: list[str],
+    interval: float,
+    iterations: int | None,
+    horizon: int,
+    paths: int,
+    halflife: int,
+) -> int:
+    broker = build_broker(cfg)
+    tracker = LiveMarketTracker(
+        broker,
+        sim_config=SimulationConfig(horizon=horizon, n_paths=paths),
+        ewma_halflife=halflife,
+        journal=Journal(),
+    )
+    syms = [s.upper() for s in symbols]
+    mode = "continuously" if iterations is None else f"{iterations}×"
+    print(
+        f"Live-tracking {', '.join(syms)} every {interval:g}s ({mode}); "
+        f"adaptive half-life {halflife} bars. Ctrl-C to stop."
+    )
+
+    def _print(update) -> None:
+        stamp = update.timestamp.strftime("%H:%M:%S")
+        print(f"[{stamp}] {update.summary()}")
+
+    try:
+        tracker.stream(
+            syms,
+            interval=interval,
+            iterations=iterations,
+            on_update=_print,
+            market_gate=broker.is_market_open,
+        )
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    return 0
+
+
 def cmd_journal(cfg: Config, n: int) -> int:
     entries = Journal().tail(n)
     if not entries:
@@ -278,6 +320,18 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("scenarios", help="List the built-in stress-scenario library.")
 
+    wp = sub.add_parser("watch", help="Live-track symbols: re-analyze & re-simulate.")
+    wp.add_argument("symbols", nargs="+", help="One or more tickers, e.g. AAPL MSFT.")
+    wp.add_argument("--interval", type=float, default=60.0, help="Seconds between refreshes.")
+    wp.add_argument(
+        "--iterations", type=int, default=None, help="Stop after N refreshes (default: forever)."
+    )
+    wp.add_argument("--horizon", type=int, default=21, help="Bars to project forward.")
+    wp.add_argument("--paths", type=int, default=500, help="Monte-Carlo paths per refresh.")
+    wp.add_argument(
+        "--halflife", type=int, default=63, help="Recency half-life (bars) for adaptation."
+    )
+
     args = parser.parse_args(argv)
     cfg = Config.from_env()
 
@@ -300,6 +354,16 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
+        if args.command == "watch":
+            return cmd_watch(
+                cfg,
+                args.symbols,
+                args.interval,
+                args.iterations,
+                args.horizon,
+                args.paths,
+                args.halflife,
+            )
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

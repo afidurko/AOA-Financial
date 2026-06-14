@@ -6,6 +6,7 @@ projections — both random (:class:`~aoa.simulation.simulator.MarketSimulator`)
 and deterministic scenario replays (:mod:`~aoa.simulation.scenarios`).
 """
 
+from aoa.simulation.live import LiveMarketTracker, LiveUpdate
 from aoa.simulation.scenarios import (
     SCENARIO_LIBRARY,
     Scenario,
@@ -51,4 +52,7 @@ __all__ = [
     "SimulationConfig",
     "SimulationResult",
     "StressResult",
+    # live
+    "LiveMarketTracker",
+    "LiveUpdate",
 ]

@@ -51,6 +51,11 @@ class SimulationConfig:
     n_paths: int = 1000
     block_size: int = 5  # bootstrap block length
     seed: int | None = None
+    # Recency weighting for parameter estimation. When set, returns decay with
+    # this half-life (in bars) so the model adapts to the *current* regime
+    # instead of weighting a year-old crash the same as yesterday. None == equal
+    # weight (stationary estimate).
+    ewma_halflife: int | None = None
 
 
 @dataclass(frozen=True)
@@ -137,17 +142,36 @@ class MarketSimulator:
         self._rng = random.Random(seed)
 
     # --- parameter estimation ------------------------------------------------
-    def estimate_params(self, bars: Sequence[Bar]) -> tuple[float, float]:
+    def estimate_params(
+        self, bars: Sequence[Bar], *, halflife: int | None = None
+    ) -> tuple[float, float]:
         """Estimate per-bar log-return drift ``mu`` and volatility ``sigma``.
 
-        Returns ``(0.0, 0.0)`` if there are too few bars to estimate.
+        With ``halflife`` (in bars) the estimate is **recency-weighted**: each
+        older return's weight decays by ½ every ``halflife`` bars, so the model
+        tracks the live regime rather than averaging stale history. Without it,
+        every bar is weighted equally. Returns ``(0.0, 0.0)`` on too few bars.
         """
         closes = [b.close for b in bars]
         rets = log_returns(closes)
         if len(rets) < 2:
             return 0.0, 0.0
+        if halflife and halflife > 0:
+            return self._ewma_params(rets, halflife)
         mu = sum(rets) / len(rets)
         var = sum((r - mu) ** 2 for r in rets) / (len(rets) - 1)
+        return mu, var**0.5
+
+    @staticmethod
+    def _ewma_params(rets: Sequence[float], halflife: int) -> tuple[float, float]:
+        """Recency-weighted drift/vol: weight ``decay**age`` with decay=½^(1/HL)."""
+        decay = 0.5 ** (1.0 / halflife)
+        n = len(rets)
+        # Newest return (index n-1) gets weight 1; each older bar decays.
+        weights = [decay ** (n - 1 - i) for i in range(n)]
+        wsum = sum(weights)
+        mu = sum(w * r for w, r in zip(weights, rets, strict=True)) / wsum
+        var = sum(w * (r - mu) ** 2 for w, r in zip(weights, rets, strict=True)) / wsum
         return mu, var**0.5
 
     # --- engines -------------------------------------------------------------
@@ -212,10 +236,14 @@ class MarketSimulator:
         config: SimulationConfig | None = None,
         *,
         symbol: str = "",
+        spot_price: float | None = None,
     ) -> SimulationResult | None:
         """Fit to ``bars`` and run a Monte-Carlo projection per ``config``.
 
-        Returns ``None`` if the history is too short to start a path.
+        ``spot_price`` overrides the starting price with a *live* value (e.g. the
+        current quote mid) so projections are anchored to the market right now
+        rather than the last completed bar's close. Returns ``None`` if the
+        history is too short to start a path.
         """
         cfg = config or SimulationConfig()
         if cfg.seed is not None:
@@ -223,7 +251,7 @@ class MarketSimulator:
         closes = [b.close for b in bars]
         if not closes:
             return None
-        start_price = closes[-1]
+        start_price = spot_price if spot_price and spot_price > 0 else closes[-1]
 
         if cfg.method == "bootstrap":
             from aoa.simulation.trends import simple_returns
@@ -232,7 +260,7 @@ class MarketSimulator:
                 start_price, simple_returns(closes), cfg.horizon, cfg.n_paths, cfg.block_size
             )
         else:
-            mu, sigma = self.estimate_params(bars)
+            mu, sigma = self.estimate_params(bars, halflife=cfg.ewma_halflife)
             paths = self.gbm_paths(start_price, mu, sigma, cfg.horizon, cfg.n_paths)
 
         return self._summarize(symbol, cfg.method, start_price, cfg.horizon, paths)
