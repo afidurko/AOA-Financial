@@ -205,15 +205,35 @@ def _library() -> dict[str, Scenario]:
 
 
 SCENARIO_LIBRARY: dict[str, Scenario] = _library()
+_historical_merged = False
+
+
+def _ensure_historical() -> None:
+    """Fold the real historical tapes into the library on first access.
+
+    Done lazily rather than at import time to avoid a circular import:
+    ``historical`` imports :class:`Scenario` from this module, so it cannot be
+    imported while this module is still being defined.
+    """
+    global _historical_merged
+    if _historical_merged:
+        return
+    from aoa.simulation.historical import HISTORICAL_TAPES
+
+    for name, scenario in HISTORICAL_TAPES.items():
+        SCENARIO_LIBRARY.setdefault(name, scenario)
+    _historical_merged = True
 
 
 def list_scenarios() -> list[Scenario]:
-    """All built-in scenarios."""
+    """All built-in scenarios (stylized + real historical tapes)."""
+    _ensure_historical()
     return list(SCENARIO_LIBRARY.values())
 
 
 def get_scenario(name: str) -> Scenario:
     """Fetch a built-in scenario by name (raises ``KeyError`` if unknown)."""
+    _ensure_historical()
     try:
         return SCENARIO_LIBRARY[name]
     except KeyError as exc:

@@ -6,6 +6,11 @@ projections — both random (:class:`~aoa.simulation.simulator.MarketSimulator`)
 and deterministic scenario replays (:mod:`~aoa.simulation.scenarios`).
 """
 
+from aoa.simulation.historical import (
+    HISTORICAL_TAPES,
+    get_historical,
+    historical_scenarios,
+)
 from aoa.simulation.live import LiveMarketTracker, LiveUpdate
 from aoa.simulation.scenarios import (
     SCENARIO_LIBRARY,
@@ -47,6 +52,10 @@ __all__ = [
     "get_scenario",
     "extract_scenario",
     "synthesize",
+    # historical tapes
+    "HISTORICAL_TAPES",
+    "historical_scenarios",
+    "get_historical",
     # simulator
     "MarketSimulator",
     "SimulationConfig",

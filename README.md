@@ -86,10 +86,17 @@ distribution (vol, skew, fat-tailedness), a labeled regime (`bull` / `bear` /
 `choppy_volatile` / `sideways` …), and every drawdown deeper than a threshold
 (depth, duration, whether it recovered).
 
-**2. Scenario library** (`aoa.simulation.scenarios`) — reproducible, stylized
-recreations of well-known episodes (1987, 2008, the 2020 COVID crash, the 2022
-rate shock, melt-ups, V-recoveries, …), each a calibrated path of daily returns.
-You can also **extract** a scenario from any window of real bars to replay it
+**2. Scenario library** (`aoa.simulation.scenarios` + `aoa.simulation.historical`)
+— two kinds of named stress scenarios:
+
+- **Stylized** (`[synth]`) — reproducible, *seeded* recreations of well-known
+  episodes (1987, 2008, the 2020 COVID crash, the 2022 rate shock, melt-ups,
+  V-recoveries, …), each calibrated to its headline drawdown/duration/vol.
+- **Real historical tapes** (`[real]`) — the *actual* daily-return sequences of a
+  major index across famous windows (1929, 1987, Oct-2008, Feb–Mar-2020), taken
+  from public closes. These reproduce history's exact path, gap-downs and all.
+
+You can also **extract** a scenario from any window of live bars to replay it
 against a current position.
 
 **3. Monte-Carlo simulator** (`aoa.simulation.simulator`) — fits a return process

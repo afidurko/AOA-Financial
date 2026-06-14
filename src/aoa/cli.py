@@ -234,11 +234,12 @@ def cmd_simulate(
 
 
 def cmd_scenarios(cfg: Config) -> int:
-    print("Built-in stress scenarios:\n")
-    print(f"  {'name':<22}{'days':>5}{'return':>10}{'maxDD':>9}  description")
-    for s in list_scenarios():
+    print("Built-in stress scenarios ([real] = actual historical daily returns):\n")
+    print(f"  {'name':<26}{'kind':>7}{'days':>5}{'return':>10}{'maxDD':>9}  description")
+    for s in sorted(list_scenarios(), key=lambda x: ("actual" in x.tags, x.name)):
+        kind = "[real]" if "actual" in s.tags else "[synth]"
         print(
-            f"  {s.name:<22}{s.horizon_days:>5}{s.total_return_pct:>9.1f}%"
+            f"  {s.name:<26}{kind:>7}{s.horizon_days:>5}{s.total_return_pct:>9.1f}%"
             f"{s.max_drawdown_pct:>8.1f}%  {s.description}"
         )
     return 0
