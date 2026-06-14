@@ -14,6 +14,7 @@ from typing import List, Optional
 
 from ..databases.store import Bar, MarketStore, Security
 from .synthetic import SyntheticGenerator
+from .fundamentals_feed import fetch_fundamentals, FIELDS as _FUND_FIELDS
 
 _STOOQ_URL = "https://stooq.com/q/d/l/?s={sym}.us&i=d"
 
@@ -46,14 +47,39 @@ def _try_stooq(ticker: str, timeout: float = 8.0) -> Optional[List[Bar]]:
         return None
 
 
+def refresh_fundamentals(store: MarketStore, ticker: str, *,
+                         provider: Optional[str] = None,
+                         asof: Optional[str] = None) -> dict:
+    """Fetch (live or synthetic) fundamentals and upsert them into the store.
+
+    Returns the result dict from :func:`fetch_fundamentals` (includes the
+    ``provider`` actually used). Never raises on network failure — it falls
+    back to synthetic.
+    """
+    ticker = ticker.upper()
+    result = fetch_fundamentals(ticker, provider=provider)
+    if asof is None:
+        bars = store.get_bars(ticker, limit=1)
+        asof = bars[-1].date if bars else date.today().isoformat()
+    payload = {k: result.get(k) for k in _FUND_FIELDS}
+    store.upsert_fundamentals(ticker, asof, payload)
+    return result
+
+
 def ingest_ticker(store: MarketStore, ticker: str, *, end: date | None = None,
-                  prefer_live: bool = False, refresh: bool = False) -> dict:
+                  prefer_live: bool = False, refresh: bool = False,
+                  live_fundamentals: bool = False,
+                  fundamentals_provider: Optional[str] = None) -> dict:
     """Ensure ``ticker`` has history in the store.
 
-    Returns a small report dict: source used, number of bars, sector.
+    Returns a small report dict: source used, number of bars, sector. When
+    ``live_fundamentals`` is set, fundamentals are (re)fetched from the
+    configured provider after price ingest.
     """
     ticker = ticker.upper()
     if store.has_prices(ticker) and not refresh:
+        if live_fundamentals:
+            refresh_fundamentals(store, ticker, provider=fundamentals_provider)
         existing = store.get_bars(ticker)
         sec = store.get_security(ticker)
         return {"ticker": ticker, "source": sec.source if sec else "cached",
@@ -87,6 +113,9 @@ def ingest_ticker(store: MarketStore, ticker: str, *, end: date | None = None,
             listed_on=bars[0].date, source=source, meta={"live": True}))
 
     n = store.insert_bars(ticker, bars)
+    if live_fundamentals:
+        refresh_fundamentals(store, ticker, provider=fundamentals_provider,
+                             asof=bars[-1].date)
     return {"ticker": ticker, "source": source, "bars": n,
             "sector": sector, "cached": False}
 

@@ -268,6 +268,88 @@ class PandasTests(unittest.TestCase):
         store.close(); tmp.cleanup()
 
 
+class FundamentalsFeedTests(unittest.TestCase):
+    """Provider normalisation + fallback, with the network fully mocked."""
+
+    def setUp(self):
+        from aoa_financial.ingest import fundamentals_feed as FF
+        self.FF = FF
+        # Isolate provider-selection env between tests.
+        for k in ("AOA_FUNDAMENTALS_PROVIDER", "ALPHAVANTAGE_API_KEY",
+                  "FMP_API_KEY", "FINNHUB_API_KEY"):
+            os.environ.pop(k, None)
+
+    def test_to_float_handles_junk(self):
+        f = self.FF._to_float
+        self.assertIsNone(f("None")); self.assertIsNone(f("-"))
+        self.assertIsNone(f("")); self.assertIsNone(f(None))
+        self.assertEqual(f("28.4"), 28.4); self.assertEqual(f("0"), 0.0)
+
+    def test_alphavantage_normalize(self):
+        raw = {"Symbol": "AAPL", "PERatio": "30.5", "PriceToBookRatio": "45",
+               "DividendYield": "0.0044", "QuarterlyRevenueGrowthYOY": "0.08",
+               "ProfitMargin": "0.25", "ReturnOnEquityTTM": "1.5"}
+        p = self.FF.AlphaVantageProvider()
+        p._raw = lambda t: raw          # bypass network
+        data = p.fetch("AAPL")
+        self.assertEqual(data["pe_ratio"], 30.5)
+        self.assertEqual(data["profit_margin"], 0.25)
+        self.assertIsNone(data["debt_to_equity"])
+        self.assertEqual(set(data), set(self.FF.FIELDS))
+
+    def test_fmp_normalize(self):
+        raw = {"peRatioTTM": 25, "priceToBookRatioTTM": 8,
+               "dividendYieldTTM": 0.012, "netProfitMarginTTM": 0.18,
+               "debtEquityRatioTTM": 1.4, "returnOnEquityTTM": 0.3,
+               "freeCashFlowPerShareTTM": 5.2}
+        p = self.FF.FMPProvider()
+        p._raw = lambda t: raw
+        data = p.fetch("AAPL")
+        self.assertEqual(data["debt_to_equity"], 1.4)
+        self.assertEqual(data["free_cash_flow"], 5.2)
+
+    def test_empty_raw_returns_none(self):
+        p = self.FF.AlphaVantageProvider()
+        p._raw = lambda t: None
+        self.assertIsNone(p.fetch("AAPL"))
+
+    def test_get_json_no_network_returns_none(self):
+        # Simulate a provider whose HTTP call fails -> falls back to synthetic.
+        self.FF._REGISTRY  # touch
+        orig = self.FF._get_json
+        self.FF._get_json = lambda *a, **k: None
+        try:
+            os.environ["ALPHAVANTAGE_API_KEY"] = "dummy"
+            out = self.FF.fetch_fundamentals("AAPL", provider="alphavantage")
+            self.assertEqual(out["provider"], "synthetic")
+            self.assertIn("pe_ratio", out)
+        finally:
+            self.FF._get_json = orig
+            os.environ.pop("ALPHAVANTAGE_API_KEY", None)
+
+    def test_synthetic_always_available(self):
+        out = self.FF.fetch_fundamentals("AAPL", provider="synthetic")
+        self.assertEqual(out["provider"], "synthetic")
+        self.assertTrue(all(k in out for k in self.FF.FIELDS))
+
+    def test_provider_autoselect(self):
+        # No keys -> synthetic.
+        self.assertEqual(self.FF.get_provider().name, "synthetic")
+        os.environ["FMP_API_KEY"] = "x"
+        self.assertEqual(self.FF.get_provider().name, "fmp")
+        os.environ.pop("FMP_API_KEY", None)
+
+    def test_refresh_fundamentals_persists(self):
+        from aoa_financial.ingest.loaders import refresh_fundamentals
+        tmp = tempfile.TemporaryDirectory()
+        store = MarketStore(os.path.join(tmp.name, "m.db"))
+        ingest_ticker(store, "AAA")
+        res = refresh_fundamentals(store, "AAA", provider="synthetic")
+        self.assertEqual(res["provider"], "synthetic")
+        self.assertIsNotNone(store.latest_fundamentals("AAA"))
+        store.close(); tmp.cleanup()
+
+
 class SwarmTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

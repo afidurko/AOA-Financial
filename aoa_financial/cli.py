@@ -23,7 +23,10 @@ from typing import List, Optional
 
 from .config import Config
 from .databases.store import MarketStore
-from .ingest.loaders import ingest_ticker, ingest_universe
+from .ingest.loaders import (ingest_ticker, ingest_universe,
+                             refresh_fundamentals)
+from .ingest.fundamentals_feed import get_provider
+from .analysis import fundamentals as FA
 from .analysis import forecast as FC
 from .analysis import regimes as RG
 from .analysis.reverse_engineer import reverse_engineer
@@ -67,6 +70,8 @@ def cmd_ingest(args, config: Config) -> int:
 def cmd_analyze(args, config: Config) -> int:
     with _store(config) as store:
         _ensure_ingested(store, args.ticker, args.live)
+        if getattr(args, "live_fundamentals", False):
+            refresh_fundamentals(store, args.ticker, provider=args.fund_provider)
         decision = analyze_ticker(store, args.ticker, config=config,
                                   horizon=args.horizon,
                                   use_llm=not args.no_llm, persist=not args.no_persist)
@@ -110,6 +115,29 @@ def cmd_reverse(args, config: Config) -> int:
             print(json.dumps(res.to_dict(), indent=2))
         else:
             _print_reverse(res)
+    return 0
+
+
+def cmd_fundamentals(args, config: Config) -> int:
+    with _store(config) as store:
+        _ensure_ingested(store, args.ticker, args.live)
+        if args.refresh or store.latest_fundamentals(args.ticker) is None:
+            res = refresh_fundamentals(store, args.ticker, provider=args.provider)
+            print(f"fundamentals source: {res['provider']}")
+        fund = store.latest_fundamentals(args.ticker)
+        score = FA.score(fund)
+        if args.json:
+            print(json.dumps({"ticker": args.ticker, "fundamentals": fund,
+                              "score": score.to_dict()}, indent=2, default=str))
+        else:
+            print(f"\n{args.ticker} fundamentals")
+            for k in ("pe_ratio", "pb_ratio", "dividend_yield", "revenue_growth",
+                      "profit_margin", "debt_to_equity", "roe", "free_cash_flow"):
+                v = fund.get(k) if fund else None
+                print(f"  {k:16s} {'n/a' if v is None else f'{v:.4g}'}")
+            print(f"\n  composite score: {score.composite:+.3f}")
+            for note in score.notes:
+                print(f"    - {note}")
     return 0
 
 
@@ -160,6 +188,8 @@ def cmd_swarm(args, config: Config) -> int:
     with _store(config) as store:
         for t in tickers:
             _ensure_ingested(store, t, args.live)
+            if getattr(args, "live_fundamentals", False):
+                refresh_fundamentals(store, t, provider=args.fund_provider)
             try:
                 d = analyze_ticker(store, t, config=config, horizon=args.horizon,
                                    use_llm=not args.no_llm, run_id=run_id,
@@ -253,6 +283,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="skip the LLM analyst agent")
         sp.add_argument("--no-persist", action="store_true",
                         help="do not write results to the database")
+        sp.add_argument("--live-fundamentals", action="store_true",
+                        help="fetch fundamentals from a live provider first")
+        sp.add_argument("--fund-provider",
+                        help="fundamentals provider override "
+                             "(alphavantage|fmp|finnhub|synthetic)")
         if ticker:
             sp.add_argument("ticker", help="ticker symbol")
         if tickers:
@@ -270,6 +305,14 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(sub.add_parser("regime", help="infer current regime"), ticker=True)
     add_common(sub.add_parser("reverse", help="reverse-engineer trend drivers"),
                ticker=True)
+    sp = sub.add_parser("fundamentals", help="fetch & score fundamentals "
+                        "(live provider or synthetic)")
+    sp.add_argument("ticker")
+    sp.add_argument("--provider", choices=["alphavantage", "fmp", "finnhub",
+                    "synthetic"], help="force a specific provider")
+    sp.add_argument("--refresh", action="store_true", help="re-fetch")
+    sp.add_argument("--json", action="store_true")
+
     sp = sub.add_parser("frame", help="vectorised indicator panel (pandas)")
     sp.add_argument("ticker")
     sp.add_argument("--tail", type=int, default=10, help="rows to display")
@@ -291,7 +334,7 @@ def build_parser() -> argparse.ArgumentParser:
 _HANDLERS = {
     "init": cmd_init, "ingest": cmd_ingest, "analyze": cmd_analyze,
     "forecast": cmd_forecast, "regime": cmd_regime, "reverse": cmd_reverse,
-    "frame": cmd_frame, "corr": cmd_corr,
+    "fundamentals": cmd_fundamentals, "frame": cmd_frame, "corr": cmd_corr,
     "swarm": cmd_swarm, "demo": cmd_demo,
 }
 

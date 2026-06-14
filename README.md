@@ -60,6 +60,10 @@ python -m aoa_financial frame AAPL --csv aapl_indicators.csv
 # 7. Cross-sectional return-correlation matrix (pandas)
 python -m aoa_financial corr AAPL MSFT XOM JPM KO --window 252
 
+# 8. Fetch & score real fundamentals (live provider if a key is set)
+python -m aoa_financial fundamentals AAPL
+python -m aoa_financial fundamentals AAPL --provider fmp --refresh
+
 # Or the full guided demo:
 python examples/run_demo.py
 ```
@@ -150,6 +154,32 @@ always gets a meaningful "analyst" vote. Force offline with
 
 ---
 
+## Live fundamentals feed
+
+By default fundamentals are synthetic (generated alongside price history). To
+pull **real** company fundamentals, set an API key for any supported provider —
+the feed (`ingest/fundamentals_feed.py`) auto-selects whichever key is present
+and normalises the response to the store's schema (P/E, P/B, dividend yield,
+revenue growth, profit margin, debt/equity, ROE, free cash flow):
+
+| Provider | Env var | Endpoint |
+|----------|---------|----------|
+| Alpha Vantage | `ALPHAVANTAGE_API_KEY` | `OVERVIEW` |
+| Financial Modeling Prep | `FMP_API_KEY` | `ratios-ttm` |
+| Finnhub | `FINNHUB_API_KEY` | `stock/metric` |
+
+```bash
+export FMP_API_KEY=...                       # or ALPHAVANTAGE_API_KEY / FINNHUB_API_KEY
+python -m aoa_financial fundamentals AAPL --refresh
+python -m aoa_financial analyze AAPL --live-fundamentals      # use live data in the decision
+```
+
+Force a provider with `--provider` (or `AOA_FUNDAMENTALS_PROVIDER`). **Every
+failure mode is safe:** no key, no network, a rate-limit, or an unknown symbol
+transparently falls back to the synthetic generator, so the pipeline never
+breaks. All provider parsing is unit-tested with the network mocked — no live
+calls are made in the test suite.
+
 ## The swarm decision engine
 
 Each specialist agent (`swarm/agents.py`) converts one analysis slice into a
@@ -210,7 +240,8 @@ analysis model, and the full swarm pipeline with persistence.
 aoa_financial/
   config.py                 # central configuration
   databases/                # SQLite schema + data-access layer
-  ingest/                   # synthetic generator + live loaders
+  ingest/                   # synthetic generator, Stooq loader,
+                            #   provider-agnostic live fundamentals feed
   analysis/                 # technical, fundamentals, forecast, regimes,
                             #   factors, sentiment, reverse_engineer
   analysis/frames.py        # optional pandas layer: DataFrame/CSV IO,

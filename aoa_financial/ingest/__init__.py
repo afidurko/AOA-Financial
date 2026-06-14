@@ -8,6 +8,10 @@ Two interchangeable sources implement the same contract (return a list of
                      to the synthetic generator when the network is down.
 """
 from .synthetic import SyntheticGenerator
-from .loaders import ingest_ticker, ingest_universe
+from .loaders import (ingest_ticker, ingest_universe, ingest_dataframe,
+                      refresh_fundamentals)
+from .fundamentals_feed import fetch_fundamentals, get_provider
 
-__all__ = ["SyntheticGenerator", "ingest_ticker", "ingest_universe"]
+__all__ = ["SyntheticGenerator", "ingest_ticker", "ingest_universe",
+           "ingest_dataframe", "refresh_fundamentals", "fetch_fundamentals",
+           "get_provider"]

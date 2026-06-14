@@ -25,5 +25,11 @@ pandas>=1.5              # enables analysis/frames.py: DataFrame & CSV IO, a
                          # commands. The core never imports it.
 
 # --- Optional live market-data feeds --------------------------------------
-requests>=2.28           # used by the Stooq CSV loader; synthetic data
-                         # generator is used when the network is unavailable.
+requests>=2.28           # used by the Stooq price loader and the live
+                         # fundamentals feed (Alpha Vantage / FMP / Finnhub,
+                         # selected by env-var API key). Synthetic data and
+                         # fundamentals are used when the network / key is
+                         # unavailable, so nothing here is required.
+#
+# Fundamentals provider keys (set whichever you have; optional):
+#   ALPHAVANTAGE_API_KEY   FMP_API_KEY   FINNHUB_API_KEY
