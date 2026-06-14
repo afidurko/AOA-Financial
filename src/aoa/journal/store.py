@@ -39,3 +39,15 @@ class Journal:
             except json.JSONDecodeError:
                 continue
         return out
+
+    def read_all(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        out = []
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return out
+

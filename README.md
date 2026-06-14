@@ -132,7 +132,14 @@ aoa status     # show account, positions, market clock
 aoa run        # run ONE analysis → decision → execution cycle
 aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
 aoa journal -n 30   # tail the decision/trade journal
+aoa report     # activity summary (from journal) + live P&L snapshot
 ```
+
+`aoa report` combines journal-derived **activity** (cycles, candidates, orders,
+re-entry skips, and the top reasons proposals were risk-blocked) with a live
+**P&L snapshot** — open-position unrealized P&L and the day's P&L versus the
+persisted baseline. The live half is best-effort and is skipped with a note if
+the broker isn't reachable, so the activity summary still works offline.
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.

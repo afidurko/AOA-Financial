@@ -6,6 +6,7 @@ Commands:
   aoa run       Run a single analysis→decision→execution cycle.
   aoa loop      Run cycles continuously on the configured cadence.
   aoa journal   Print the tail of the decision/trade journal.
+  aoa report    Summarize activity (from the journal) and live P&L.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
+from aoa.reporting import position_pnl, summarize_journal
 from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
@@ -169,6 +171,55 @@ def cmd_journal(cfg: Config, n: int) -> int:
     return 0
 
 
+def cmd_report(cfg: Config) -> int:
+    summary = summarize_journal(Journal().read_all())
+    print("=== Activity (from journal) ===")
+    if summary.cycles == 0:
+        print("No cycles recorded yet.")
+    else:
+        print(f"Cycles: {summary.cycles}  ({summary.first_ts} → {summary.last_ts})")
+        print(f"Candidates analyzed: {summary.candidates_total}")
+        print(
+            f"Orders submitted: {summary.orders_submitted} "
+            f"{summary.orders_by_side or ''} | dry-run: {summary.dry_runs} | "
+            f"errors: {summary.errors} | re-entry skips: {summary.reentry_skips}"
+        )
+        if summary.blocked:
+            print(f"Risk-blocked proposals: {len(summary.blocked)}")
+            for reason, count in sorted(
+                summary.blocked_reason_counts.items(), key=lambda kv: -kv[1]
+            )[:5]:
+                print(f"  {count:>3}× {reason}")
+
+    # Live P&L snapshot (best effort — needs broker connectivity).
+    print("\n=== Live P&L snapshot ===")
+    try:
+        broker = build_broker(cfg)
+        acct = broker.get_account()
+        positions = broker.get_positions()
+        state = StateStore(cfg.state_path)
+        baseline = state.starting_equity_for_today(acct.equity)
+        unsettled = state.unsettled_cash()
+        pnl = position_pnl(positions)
+        print(
+            f"Equity ${acct.equity:,.2f} | day baseline ${baseline:,.2f} | "
+            f"day P/L ${acct.equity - baseline:+,.2f}"
+        )
+        print(
+            f"Open positions: {pnl.n} | unrealized P/L ${pnl.unrealized_pl:+,.2f} "
+            f"({pnl.winners} up / {pnl.losers} down)"
+        )
+        if pnl.best:
+            print(f"  best:  {pnl.best[0]} ${pnl.best[1]:+,.2f}")
+        if pnl.worst:
+            print(f"  worst: {pnl.worst[0]} ${pnl.worst[1]:+,.2f}")
+        if unsettled:
+            print(f"Unsettled proceeds: ${unsettled:,.2f}")
+    except BrokerError as exc:
+        print(f"(live snapshot unavailable: {exc})")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -178,6 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("loop", help="Run cycles continuously.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
+    sub.add_parser("report", help="Summarize activity and live P&L.")
 
     args = parser.parse_args(argv)
     cfg = Config.from_env()
@@ -193,6 +245,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_loop(cfg)
         if args.command == "journal":
             return cmd_journal(cfg, args.n)
+        if args.command == "report":
+            return cmd_report(cfg)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
