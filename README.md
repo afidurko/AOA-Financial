@@ -21,6 +21,15 @@ of technical / fundamental / forecasting / regime / factor models,
 > simulation paths, and the results match the pure-Python path to machine
 > precision (locked by parity tests). `pip install numpy` to enable; nothing
 > else changes.
+>
+> **pandas DataFrame layer:** an optional tabular front-end
+> (`analysis/frames.py`) provides DataFrame/CSV IO with the SQLite store, a
+> one-pass **vectorised indicator suite** (SMA/EMA/RSI/MACD/Bollinger/ATR/
+> returns/vol/drawdown as columns), a wide cross-ticker close-price panel, and
+> a return-correlation matrix. Its indicators are held in **parity** with the
+> scalar `analysis/technical.py` by the test-suite. It is imported only on
+> demand — the stdlib core never depends on it. `pip install pandas` enables
+> the `frame` and `corr` commands and `ingest_dataframe()`.
 
 ---
 
@@ -43,6 +52,13 @@ python -m aoa_financial forecast MSFT --horizon 21
 
 # 5. Rank decisions across many names
 python -m aoa_financial swarm AAPL MSFT XOM JPM KO
+
+# 6. Vectorised indicator panel (pandas) — print tail or export CSV
+python -m aoa_financial frame AAPL --tail 10
+python -m aoa_financial frame AAPL --csv aapl_indicators.csv
+
+# 7. Cross-sectional return-correlation matrix (pandas)
+python -m aoa_financial corr AAPL MSFT XOM JPM KO --window 252
 
 # Or the full guided demo:
 python examples/run_demo.py
@@ -197,6 +213,8 @@ aoa_financial/
   ingest/                   # synthetic generator + live loaders
   analysis/                 # technical, fundamentals, forecast, regimes,
                             #   factors, sentiment, reverse_engineer
+  analysis/frames.py        # optional pandas layer: DataFrame/CSV IO,
+                            #   vectorised indicators, correlation panel
   llm/                      # Claude Opus 4.8 analyst (+ offline fallback)
   swarm/                    # specialist agents + decision aggregator
   cli.py / __main__.py      # command-line interface

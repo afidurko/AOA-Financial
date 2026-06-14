@@ -17,6 +17,13 @@ numpy>=1.24              # vectorised math: when installed, the analysis core
                          # full 1960-to-date series). A bit-for-bit-equivalent
                          # pure-Python path is used when numpy is absent.
 
+# --- Optional tabular / DataFrame layer -----------------------------------
+pandas>=1.5              # enables analysis/frames.py: DataFrame & CSV IO, a
+                         # vectorised indicator suite (kept in parity with the
+                         # scalar indicators), cross-ticker panels and a
+                         # correlation matrix, plus the `frame`/`corr` CLI
+                         # commands. The core never imports it.
+
 # --- Optional live market-data feeds --------------------------------------
 requests>=2.28           # used by the Stooq CSV loader; synthetic data
                          # generator is used when the network is unavailable.

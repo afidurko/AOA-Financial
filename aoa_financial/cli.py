@@ -113,6 +113,46 @@ def cmd_reverse(args, config: Config) -> int:
     return 0
 
 
+def cmd_frame(args, config: Config) -> int:
+    from .analysis import frames
+    if not frames.HAS_PANDAS:
+        print("pandas not installed. Run: pip install pandas", file=sys.stderr)
+        return 1
+    with _store(config) as store:
+        _ensure_ingested(store, args.ticker, args.live)
+        df = frames.indicator_frame(frames.store_frame(store, args.ticker))
+        if args.csv:
+            df.to_csv(args.csv)
+            print(f"wrote {len(df):,} rows x {df.shape[1]} cols -> {args.csv}")
+        else:
+            cols = ["close", "sma_50", "sma_200", "rsi_14", "macd_hist",
+                    "bb_pct_b", "atr_14", "vol_252", "drawdown"]
+            import pandas as pd
+            with pd.option_context("display.width", 160,
+                                   "display.max_columns", None):
+                print(df[cols].tail(args.tail).round(3))
+    return 0
+
+
+def cmd_corr(args, config: Config) -> int:
+    from .analysis import frames
+    if not frames.HAS_PANDAS:
+        print("pandas not installed. Run: pip install pandas", file=sys.stderr)
+        return 1
+    tickers = args.tickers or config.default_universe
+    with _store(config) as store:
+        for t in tickers:
+            _ensure_ingested(store, t, args.live)
+        corr = frames.correlation_matrix(store, tickers, window=args.window)
+        if args.csv:
+            corr.to_csv(args.csv)
+            print(f"wrote correlation matrix -> {args.csv}")
+        else:
+            print(f"Return correlation (last {args.window} sessions):\n")
+            print(corr.round(2))
+    return 0
+
+
 def cmd_swarm(args, config: Config) -> int:
     tickers = args.tickers or config.default_universe
     run_id = f"run-{datetime.now(timezone.utc):%Y%m%dT%H%M%S}"
@@ -230,6 +270,17 @@ def build_parser() -> argparse.ArgumentParser:
     add_common(sub.add_parser("regime", help="infer current regime"), ticker=True)
     add_common(sub.add_parser("reverse", help="reverse-engineer trend drivers"),
                ticker=True)
+    sp = sub.add_parser("frame", help="vectorised indicator panel (pandas)")
+    sp.add_argument("ticker")
+    sp.add_argument("--tail", type=int, default=10, help="rows to display")
+    sp.add_argument("--csv", help="write the full indicator frame to a CSV path")
+
+    sp = sub.add_parser("corr", help="return-correlation matrix (pandas)")
+    sp.add_argument("tickers", nargs="*")
+    sp.add_argument("--window", type=int, default=252,
+                    help="lookback in trading days")
+    sp.add_argument("--csv", help="write the matrix to a CSV path")
+
     add_common(sub.add_parser("swarm", help="rank decisions across tickers"),
                tickers=True)
     add_common(sub.add_parser("demo", help="end-to-end demonstration"),
@@ -240,6 +291,7 @@ def build_parser() -> argparse.ArgumentParser:
 _HANDLERS = {
     "init": cmd_init, "ingest": cmd_ingest, "analyze": cmd_analyze,
     "forecast": cmd_forecast, "regime": cmd_regime, "reverse": cmd_reverse,
+    "frame": cmd_frame, "corr": cmd_corr,
     "swarm": cmd_swarm, "demo": cmd_demo,
 }
 

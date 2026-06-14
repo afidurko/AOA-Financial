@@ -209,6 +209,65 @@ class AnalysisTests(unittest.TestCase):
         self.assertTrue(res.inferences and res.assumptions)
 
 
+class PandasTests(unittest.TestCase):
+    """The vectorised pandas indicator suite must agree with technical.py."""
+
+    @classmethod
+    def setUpClass(cls):
+        from aoa_financial.analysis import frames as FR
+        cls.FR = FR
+        if not FR.HAS_PANDAS:
+            raise unittest.SkipTest("pandas not installed")
+        cls.bars = SyntheticGenerator().generate("PDX", end=date(2015, 1, 1)).bars
+        cls.df = FR.bars_to_frame(cls.bars)
+
+    def test_roundtrip(self):
+        bars2 = self.FR.frame_to_bars(self.df)
+        self.assertEqual(len(bars2), len(self.bars))
+        self.assertEqual(bars2[0].date, self.bars[0].date)
+        self.assertAlmostEqual(bars2[-1].close, self.bars[-1].close, places=4)
+
+    def test_indicator_parity_with_scalar(self):
+        snap = TA.snapshot(self.bars)
+        ind = self.FR.indicator_frame(self.df)
+        last = self.FR.latest_indicators(self.df)
+        # Exact rolling stats.
+        self.assertAlmostEqual(last["sma_50"], snap.sma_50, places=6)
+        self.assertAlmostEqual(last["sma_200"], snap.sma_200, places=6)
+        self.assertAlmostEqual(last["mom_252"], snap.mom_252d, places=6)
+        self.assertEqual(bool(last["golden_cross"]), bool(snap.golden_cross))
+        # Recursive indicators converge over a long series.
+        self.assertAlmostEqual(last["rsi_14"], snap.rsi_14, places=3)
+        self.assertAlmostEqual(last["macd_hist"], snap.macd_hist, places=3)
+        self.assertAlmostEqual(last["bb_pct_b"], snap.bollinger_pct_b, places=4)
+        self.assertAlmostEqual(last["atr_14"], snap.atr_14, places=2)
+        self.assertAlmostEqual(last["vol_252"], snap.annualized_vol, places=4)
+        # max drawdown == minimum of the running-drawdown column.
+        self.assertAlmostEqual(ind["drawdown"].min(), snap.max_drawdown, places=6)
+
+    def test_correlation_panel(self):
+        tmp = tempfile.TemporaryDirectory()
+        store = MarketStore(os.path.join(tmp.name, "m.db"))
+        for t in ("AAA", "BBB", "CCC"):
+            ingest_ticker(store, t)
+        panel = self.FR.close_panel(store, ["AAA", "BBB", "CCC"])
+        self.assertEqual(list(panel.columns), ["AAA", "BBB", "CCC"])
+        corr = self.FR.correlation_matrix(store, ["AAA", "BBB", "CCC"], window=252)
+        self.assertEqual(corr.shape, (3, 3))
+        self.assertAlmostEqual(corr.loc["AAA", "AAA"], 1.0, places=6)
+        store.close(); tmp.cleanup()
+
+    def test_ingest_dataframe(self):
+        from aoa_financial.ingest.loaders import ingest_dataframe
+        tmp = tempfile.TemporaryDirectory()
+        store = MarketStore(os.path.join(tmp.name, "m.db"))
+        rep = ingest_dataframe(store, "EXT", self.df, sector="Tech")
+        self.assertEqual(rep["bars"], len(self.bars))
+        self.assertTrue(store.has_prices("EXT"))
+        self.assertEqual(store.get_security("EXT").sector, "Tech")
+        store.close(); tmp.cleanup()
+
+
 class SwarmTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

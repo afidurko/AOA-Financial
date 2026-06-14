@@ -94,3 +94,26 @@ def ingest_ticker(store: MarketStore, ticker: str, *, end: date | None = None,
 def ingest_universe(store: MarketStore, tickers: List[str], *,
                     prefer_live: bool = False) -> List[dict]:
     return [ingest_ticker(store, t, prefer_live=prefer_live) for t in tickers]
+
+
+def ingest_dataframe(store: MarketStore, ticker: str, df, *,
+                     sector: str = "Unknown", name: Optional[str] = None) -> dict:
+    """Ingest an external pandas DataFrame (OHLCV, DatetimeIndex) into the store.
+
+    Lets callers bring their own data — a CSV, a vendor feed, a research panel —
+    and have it analysed by the rest of the engine identically to synthetic or
+    Stooq history. Requires the optional pandas layer.
+    """
+    from ..analysis.frames import frame_to_bars, HAS_PANDAS
+    if not HAS_PANDAS:
+        raise RuntimeError("pandas is required for ingest_dataframe")
+    ticker = ticker.upper()
+    bars = frame_to_bars(df)
+    if not bars:
+        raise ValueError("empty dataframe")
+    store.upsert_security(Security(
+        ticker=ticker, name=name or ticker, sector=sector,
+        listed_on=bars[0].date, source="dataframe", meta={"imported": True}))
+    n = store.insert_bars(ticker, bars)
+    return {"ticker": ticker, "source": "dataframe", "bars": n, "sector": sector,
+            "cached": False}
