@@ -24,6 +24,9 @@ journal/*.jsonl
 data_cache/
 *.log
 
+# Learned low-rank adapter state
+.aoa/
+
 # OS / editor
 .DS_Store
 .idea/

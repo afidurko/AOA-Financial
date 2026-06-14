@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from pathlib import Path
 
+from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
@@ -30,8 +32,33 @@ def build_llm(cfg: Config) -> LLMClient:
     return LLMClient(cfg.anthropic_api_key, model=cfg.model, effort=cfg.effort)
 
 
+def build_signal_adapter(cfg: Config) -> SignalAdapter | None:
+    if not cfg.adapt_enabled:
+        return None
+    return SignalAdapter.load_or_new(
+        cfg.adapt_path,
+        rank=cfg.adapt_rank,
+        alpha=cfg.adapt_alpha,
+        lr=cfg.adapt_lr,
+    )
+
+
+def save_signal_adapter(cfg: Config, adapter: SignalAdapter | None) -> None:
+    if adapter is None:
+        return
+    path = Path(cfg.adapt_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    adapter.save(path)
+
+
 def build_orchestrator(cfg: Config) -> Orchestrator:
-    return Orchestrator(cfg, build_broker(cfg), build_llm(cfg), Journal())
+    return Orchestrator(
+        cfg,
+        build_broker(cfg),
+        build_llm(cfg),
+        Journal(),
+        signal_adapter=build_signal_adapter(cfg),
+    )
 
 
 # --------------------------------------------------------------------- output
@@ -95,6 +122,15 @@ def cmd_doctor(cfg: Config) -> int:
     except LLMError as exc:
         print(f"  ✗ LLM init failed: {exc}")
         return 1
+    if cfg.adapt_enabled:
+        adapter = build_signal_adapter(cfg)
+        print(
+            f"  ✓ Low-rank signal adaptation ON "
+            f"(rank={cfg.adapt_rank}, alpha={cfg.adapt_alpha}, "
+            f"updates so far={adapter.updates if adapter else 0}, path={cfg.adapt_path})"
+        )
+    else:
+        print("  · Low-rank signal adaptation OFF (set AOA_ADAPT_ENABLED=true to enable).")
     return 0
 
 
@@ -126,6 +162,7 @@ def cmd_run(cfg: Config) -> int:
         print("Market is closed. Running analysis anyway (orders may queue/reject).")
     result = orch.run_cycle()
     _print_cycle(result)
+    save_signal_adapter(cfg, orch.signal_adapter)
     return 0
 
 
@@ -140,6 +177,7 @@ def cmd_loop(cfg: Config) -> int:
             if orch.broker.is_market_open():
                 result = orch.run_cycle()
                 _print_cycle(result)
+                save_signal_adapter(cfg, orch.signal_adapter)
             else:
                 print("Market closed — sleeping.")
             time.sleep(cfg.cycle_seconds)

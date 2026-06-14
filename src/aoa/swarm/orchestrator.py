@@ -21,6 +21,7 @@ import math
 from dataclasses import dataclass, field
 from datetime import date
 
+from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.agents.base import Direction, Signal, TradeProposal
 from aoa.agents.fundamental import FundamentalAgent
 from aoa.agents.options import OptionsStrategistAgent
@@ -52,12 +53,19 @@ class Orchestrator:
         broker: Broker,
         llm: LLMClient,
         journal: Journal | None = None,
+        signal_adapter: SignalAdapter | None = None,
     ) -> None:
         self.config = config
         self.broker = broker
         self.llm = llm
         self.journal = journal or Journal()
         self.market = MarketDataService(broker)
+
+        # Optional low-rank online adaptation of agent signals. When present,
+        # raw agent convictions are recalibrated before they flow downstream,
+        # and learned across cycles from each symbol's realized return.
+        self.signal_adapter = signal_adapter
+        self._adapt_pending: dict[str, dict] = {}
 
         # Agents.
         self.scanner = ScannerAgent(llm)
@@ -185,12 +193,32 @@ class Orchestrator:
 
     def _analyze_candidates(self, bb: Blackboard) -> list[dict]:
         per_symbol: list[dict] = []
+        new_pending: dict[str, dict] = {}
+        n_learned = 0
+        n_adapted = 0
         for cand in bb.candidates:
             symbol = cand.get("symbol", "").upper()
             snap = bb.snapshots.get(symbol) or self.market.snapshot(symbol)
+            price = (snap.quote.mid if snap.quote else None) or (
+                snap.technicals.get("last_close") if snap.technicals else None
+            )
 
             tech = self.technical.analyze(snap)
             fund = self.fundamental.analyze(snap)
+
+            # Low-rank adaptation: learn from last cycle's call, then recalibrate.
+            if self.signal_adapter is not None:
+                n_learned += self._learn_from_prior(symbol, price)
+                # Remember this cycle's *raw* signals to score next time.
+                if price:
+                    new_pending[symbol] = {
+                        "price": price,
+                        "signals": [_pending_entry(tech), _pending_entry(fund)],
+                    }
+                tech = self.signal_adapter.adapt_signal(tech)
+                fund = self.signal_adapter.adapt_signal(fund)
+                n_adapted += sum("adapted" in s.tags for s in (tech, fund))
+
             bb.add_signal(tech)
             bb.add_signal(fund)
 
@@ -202,9 +230,6 @@ class Orchestrator:
 
             # Options idea when there is a corroborated directional view.
             combined_dir, combined_conv = _combine(tech, fund)
-            price = (snap.quote.mid if snap.quote else None) or (
-                snap.technicals.get("last_close") if snap.technicals else None
-            )
             if (
                 combined_dir is not Direction.NEUTRAL
                 and combined_conv >= 0.55
@@ -222,7 +247,38 @@ class Orchestrator:
                         k: v for k, v in idea.items() if not k.startswith("_")
                     }
             per_symbol.append(entry)
+
+        if self.signal_adapter is not None:
+            self._adapt_pending = new_pending
+            self.journal.record(
+                "adapt.applied",
+                {
+                    "signals_adapted": n_adapted,
+                    "outcomes_learned": n_learned,
+                    "total_updates": self.signal_adapter.updates,
+                },
+            )
         return per_symbol
+
+    def _learn_from_prior(self, symbol: str, price: float | None) -> int:
+        """Score the previous cycle's signals for ``symbol`` against the realized
+        return implied by the price move, and update the adapter. Returns the
+        number of outcomes learned from."""
+        prior = self._adapt_pending.get(symbol)
+        if not prior or not price or not prior.get("price"):
+            return 0
+        realized = (price - prior["price"]) / prior["price"]
+        learned = 0
+        for s in prior["signals"]:
+            self.signal_adapter.record_outcome(
+                agent=s["agent"],
+                direction=s["direction"],
+                conviction=s["conviction"],
+                realized_return=realized,
+                horizon=s["horizon"],
+            )
+            learned += 1
+        return learned
 
     def _materialize_proposals(self, raw: list[dict], bb: Blackboard) -> list[TradeProposal]:
         proposals: list[TradeProposal] = []
@@ -294,6 +350,16 @@ class Orchestrator:
                     )
                 )
         return proposals
+
+
+def _pending_entry(signal: Signal) -> dict:
+    """The minimal record of a raw signal needed to score it next cycle."""
+    return {
+        "agent": signal.source,
+        "direction": signal.direction.value,
+        "conviction": signal.conviction,
+        "horizon": signal.horizon,
+    }
 
 
 def _combine(tech: Signal, fund: Signal) -> tuple[Direction, float]:
