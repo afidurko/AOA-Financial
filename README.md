@@ -1,0 +1,196 @@
+# AOA-Financial
+
+A deep stock-market **analysis, forecasting, and decision engine**. It builds
+its own databases of market history (back to **June 1960**), runs a quant stack
+of technical / fundamental / forecasting / regime / factor models,
+**reverse-engineers the latent drivers** behind a stock's trend, layers a
+**Claude Opus 4.8** analyst on top, and fuses everything through a **multi-agent
+"swarm"** into a sized BUY / HOLD / SELL decision.
+
+> **Design principle:** the entire core runs on the **Python standard library
+> alone** — no numpy, pandas, or network required. `anthropic`, `numpy`, and
+> live data feeds are *optional accelerators* that are detected at runtime and
+> used when present, with graceful fallback otherwise. This makes the system
+> reproducible and runnable anywhere.
+
+---
+
+## Quick start
+
+```bash
+# No install needed — pure stdlib. (Optional: pip install -r requirements.txt)
+
+# 1. Build the DB and ingest the default universe (synthetic history to 1960)
+python -m aoa_financial init
+
+# 2. Deep analysis + swarm decision for one name
+python -m aoa_financial analyze AAPL
+
+# 3. Reverse-engineer the forces driving a trend
+python -m aoa_financial reverse XOM
+
+# 4. Probabilistic forecast
+python -m aoa_financial forecast MSFT --horizon 21
+
+# 5. Rank decisions across many names
+python -m aoa_financial swarm AAPL MSFT XOM JPM KO
+
+# Or the full guided demo:
+python examples/run_demo.py
+```
+
+Add `--live` to prefer real history from Stooq before falling back to the
+synthetic generator. Add `--json` to any command for machine-readable output.
+
+---
+
+## Architecture
+
+```
+                ┌─────────────────────────────────────────────────────────┐
+                │                    swarm/  (decision)                    │
+                │   technical · fundamental · forecast · regime ·          │
+                │   sentiment · LLM   →  weighted-confidence vote  →       │
+                │              BUY / HOLD / SELL  + position size          │
+                └───────────────▲─────────────────────────▲───────────────┘
+                                │                         │
+                ┌───────────────┴───────────┐   ┌─────────┴───────────────┐
+                │        analysis/           │   │          llm/           │
+                │  technical · fundamentals  │   │   ClaudeAnalyst         │
+                │  forecast · regimes ·      │──▶│   (Opus 4.8, adaptive   │
+                │  factors · sentiment ·     │   │   thinking + structured │
+                │  reverse_engineer          │   │   output) ⇄ offline     │
+                └───────────────▲────────────┘   └─────────────────────────┘
+                                │
+                ┌───────────────┴────────────┐   ┌─────────────────────────┐
+                │        ingest/             │   │      databases/         │
+                │  synthetic (to 1960) ·     │──▶│  SQLite: prices,        │
+                │  loaders (Stooq, live)     │   │  fundamentals,          │
+                └────────────────────────────┘   │  sentiment, regimes,    │
+                                                 │  signals, decisions     │
+                                                 └─────────────────────────┘
+```
+
+### Layers
+
+| Layer | Module | What it does |
+|-------|--------|--------------|
+| **Databases** | `databases/` | SQLite store (`schema.sql`) with typed DAL for prices, fundamentals, sentiment, inferred regimes, per-agent signals and final decisions. |
+| **Ingest** | `ingest/` | `SyntheticGenerator` — deterministic regime-switching GBM producing full OHLCV history back to **1960‑06‑01** for *any* ticker. `loaders` add an optional Stooq CSV feed with automatic offline fallback. |
+| **Analysis** | `analysis/` | Technical indicators (SMA/EMA/RSI/MACD/Bollinger/ATR/vol/drawdown), fundamental scoring, an **ensemble forecaster** (Monte-Carlo + trend regression + EWMA), **regime inference** (bull/recovery/sideways/correction/bear), a **linear factor model** (momentum/reversal/trend/volatility/market), lexicon sentiment, and the **reverse-engineering** synthesis. |
+| **LLM** | `llm/` | `ClaudeAnalyst` turns the quant evidence into a structured investment view via **Claude Opus 4.8**. Falls back to a deterministic offline analyst when no API key / SDK. |
+| **Swarm** | `swarm/` | Independent specialist agents each emit a directional signal; the swarm aggregates by **weight × confidence**, penalises disagreement, and sizes a portfolio weight. |
+
+---
+
+## Reverse-engineering market trends
+
+`analysis/reverse_engineer.py` is the synthesis the brief asks for. Given a
+price history it:
+
+1. **Fits a factor model** of next-day returns on engineered factors
+   (momentum, short-term reversal, trend, volatility, optional market beta) and
+   reads off the dominant drivers and explained variance (R²).
+2. **Decomposes** realised performance into a *trend (drift)* component and a
+   *risk (volatility)* component, yielding a Sharpe-like `trend/risk` read.
+3. **Infers the current regime** and blends a robust **sentiment** reading.
+4. Synthesises a single forward-looking **bias score** in `[-1, 1]`.
+5. Emits explicit **inferences** (what the data implies) and **assumptions**
+   (what must hold for the read to be valid) — so every conclusion is auditable.
+
+```bash
+python -m aoa_financial reverse AAPL
+```
+
+---
+
+## The Claude analyst
+
+The `llm/` layer sends the *computed quant evidence* (not raw prices) to
+**Claude Opus 4.8** and asks for a disciplined investment view returned as
+**structured JSON** (thesis, action, conviction, confidence, drivers, risks).
+It uses adaptive thinking, high effort, and streaming — see
+`llm/analyst.py`. To enable the live analyst:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+pip install anthropic
+python -m aoa_financial analyze AAPL          # now uses Claude
+```
+
+Without a key it transparently uses a deterministic offline analyst that
+reaches the same kind of conclusion from the same dashboard, so the swarm
+always gets a meaningful "analyst" vote. Force offline with
+`AOA_FORCE_OFFLINE=1`.
+
+---
+
+## The swarm decision engine
+
+Each specialist agent (`swarm/agents.py`) converts one analysis slice into a
+signal `(score ∈ [-1,1], confidence ∈ [0,1])`. The aggregator
+(`swarm/decision.py`) computes:
+
+* **conviction** = Σ(weight × confidence × score) / Σ(weight × confidence)
+* **confidence** = mean agent confidence, shrunk by signal **dispersion**
+  (disagreement lowers confidence)
+* **target weight** = `|conviction| × confidence`, capped at 15% per name,
+  only for BUYs
+
+Agent weights are configurable in `config.py` (`swarm_weights`).
+
+---
+
+## Configuration
+
+All knobs live in `aoa_financial/config.py` and can be overridden with `AOA_`
+environment variables, e.g.:
+
+```bash
+export AOA_DATA_DIR=/tmp/market
+export AOA_LLM_MODEL=claude-opus-4-8
+export AOA_LLM_EFFORT=high
+```
+
+---
+
+## Tests
+
+```bash
+python -m unittest discover -s tests -v     # 17 tests, stdlib only, offline
+```
+
+The suite covers the numeric primitives (incl. an OLS sanity check), the
+synthetic generator's determinism and length, the store round-trip, every
+analysis model, and the full swarm pipeline with persistence.
+
+---
+
+## Data & honesty notes
+
+* **Synthetic history is synthetic.** It has realistic *structure* (regimes,
+  macro cycles, fat-tailed shocks) so the models have something genuine to
+  discover, but it is **not** real market data and must not be used for actual
+  trading. Use `--live` for real Stooq history where available.
+* Daily-return factor R² is naturally tiny — daily returns are close to noise.
+  The engine reflects this honestly: low explanatory power lowers confidence
+  rather than being hidden.
+* This is research/educational tooling, **not investment advice**.
+
+---
+
+## Project layout
+
+```
+aoa_financial/
+  config.py                 # central configuration
+  databases/                # SQLite schema + data-access layer
+  ingest/                   # synthetic generator + live loaders
+  analysis/                 # technical, fundamentals, forecast, regimes,
+                            #   factors, sentiment, reverse_engineer
+  llm/                      # Claude Opus 4.8 analyst (+ offline fallback)
+  swarm/                    # specialist agents + decision aggregator
+  cli.py / __main__.py      # command-line interface
+tests/test_core.py          # stdlib test suite
+examples/run_demo.py        # end-to-end demonstration
+```

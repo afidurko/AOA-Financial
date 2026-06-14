@@ -1,0 +1,17 @@
+# Core runtime: NONE required. The entire engine runs on the Python 3.9+
+# standard library (sqlite3, statistics, math, json, datetime) so it works in
+# any environment, online or offline.
+#
+# The packages below are OPTIONAL accelerators. The system detects them at
+# runtime and uses them when present, falling back to pure-Python otherwise.
+
+# --- LLM deep-analysis layer (Claude) -------------------------------------
+anthropic>=0.40.0        # enables the live Claude Opus 4.8 analyst; offline
+                         # mock analyst is used when this is absent.
+
+# --- Optional numerical acceleration --------------------------------------
+numpy>=1.24              # vectorised math (pure-Python fallback otherwise)
+
+# --- Optional live market-data feeds --------------------------------------
+requests>=2.28           # used by the Stooq CSV loader; synthetic data
+                         # generator is used when the network is unavailable.
