@@ -24,6 +24,9 @@ journal/*.jsonl
 data_cache/
 *.log
 
+# Personal financial profile (private — never commit real financial data)
+profile/
+
 # OS / editor
 .DS_Store
 .idea/

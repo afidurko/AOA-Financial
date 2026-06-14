@@ -1,11 +1,16 @@
 """Command-line interface for the AOA Financial swarm.
 
-Commands:
+Trading swarm:
   aoa doctor    Validate configuration & connectivity.
   aoa status    Show account, positions, and market clock.
   aoa run       Run a single analysis→decision→execution cycle.
   aoa loop      Run cycles continuously on the configured cadence.
   aoa journal   Print the tail of the decision/trade journal.
+
+Certified financial assistant:
+  aoa profile   Show your financial profile (use `init` to scaffold one).
+  aoa plan      Generate a full written financial plan.
+  aoa advise    Chat with your fiduciary financial assistant.
 """
 
 from __future__ import annotations
@@ -13,7 +18,10 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from pathlib import Path
 
+from aoa.advisor.advisor import DISCLAIMER, FinancialAdvisor
+from aoa.advisor.profile import FinancialProfile, sample_profile
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
@@ -32,6 +40,13 @@ def build_llm(cfg: Config) -> LLMClient:
 
 def build_orchestrator(cfg: Config) -> Orchestrator:
     return Orchestrator(cfg, build_broker(cfg), build_llm(cfg), Journal())
+
+
+def build_advisor(cfg: Config, profile: FinancialProfile) -> FinancialAdvisor:
+    # The advisor works fine with no brokerage; attach one only if configured so it
+    # can read live positions for portfolio context.
+    broker = build_broker(cfg) if cfg.has_brokerage_creds else None
+    return FinancialAdvisor(build_llm(cfg), profile, broker=broker, journal=Journal())
 
 
 # --------------------------------------------------------------------- output
@@ -148,6 +163,80 @@ def cmd_loop(cfg: Config) -> int:
     return 0
 
 
+# ----------------------------------------------------- certified financial assistant
+def _load_profile(cfg: Config) -> FinancialProfile | None:
+    path = Path(cfg.profile_path)
+    if not path.exists():
+        print(
+            f"No financial profile at {path}.\n"
+            "Create a starter one with:  aoa profile init"
+        )
+        return None
+    return FinancialProfile.load(path)
+
+
+def cmd_profile(cfg: Config, action: str) -> int:
+    path = Path(cfg.profile_path)
+    if action == "init":
+        if path.exists():
+            print(f"Profile already exists at {path} (not overwriting).")
+            return 1
+        prof = sample_profile()
+        prof.save(path)
+        print(f"Wrote a sample profile to {path}. Edit it to reflect your finances.")
+        return 0
+
+    prof = _load_profile(cfg)
+    if prof is None:
+        return 1
+    print(f"Financial profile for {prof.name} (age {prof.age}, retire at {prof.retirement_age})")
+    print(f"  Net worth:        ${prof.net_worth:,.0f}")
+    print(f"  Total assets:     ${prof.total_assets:,.0f}")
+    print(f"  Total debts:      ${prof.total_liabilities:,.0f}")
+    print(f"  Liquid savings:   ${prof.liquid_savings:,.0f}")
+    print(f"  Monthly take-home:${prof.monthly_take_home:,.0f}  expenses ${prof.monthly_expenses:,.0f}")
+    if prof.completeness():
+        print("  Missing: " + ", ".join(prof.completeness()))
+    return 0
+
+
+def cmd_plan(cfg: Config) -> int:
+    prof = _load_profile(cfg)
+    if prof is None:
+        return 1
+    advisor = build_advisor(cfg, prof)
+    print("Generating your financial plan…\n")
+    result = advisor.plan()
+    print(result["reply"])
+    print(f"\n— tools used: {', '.join(result['tools_used']) or 'none'}")
+    print(f"\n{DISCLAIMER}")
+    return 0
+
+
+def cmd_advise(cfg: Config) -> int:
+    prof = _load_profile(cfg)
+    if prof is None:
+        return 1
+    advisor = build_advisor(cfg, prof)
+    print(f"Your certified financial assistant is ready (profile: {prof.name}).")
+    print(f"{DISCLAIMER}\nType your question, or 'exit' to quit.\n")
+    history: list[dict] = []
+    while True:
+        try:
+            msg = input("you> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+        if not msg:
+            continue
+        if msg.lower() in {"exit", "quit", ":q"}:
+            break
+        result = advisor.chat(msg, history=history)
+        history = result["messages"]
+        print(f"\nadvisor> {result['reply']}\n")
+    return 0
+
+
 def cmd_journal(cfg: Config, n: int) -> int:
     entries = Journal().tail(n)
     if not entries:
@@ -168,6 +257,14 @@ def main(argv: list[str] | None = None) -> int:
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
 
+    pp = sub.add_parser("profile", help="Show or scaffold your financial profile.")
+    pp.add_argument(
+        "action", nargs="?", default="show", choices=["show", "init"],
+        help="'show' (default) prints your profile; 'init' writes a sample one.",
+    )
+    sub.add_parser("plan", help="Generate a full written financial plan.")
+    sub.add_parser("advise", help="Chat with your fiduciary financial assistant.")
+
     args = parser.parse_args(argv)
     cfg = Config.from_env()
 
@@ -182,6 +279,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_loop(cfg)
         if args.command == "journal":
             return cmd_journal(cfg, args.n)
+        if args.command == "profile":
+            return cmd_profile(cfg, args.action)
+        if args.command == "plan":
+            return cmd_plan(cfg)
+        if args.command == "advise":
+            return cmd_advise(cfg)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

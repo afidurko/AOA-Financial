@@ -110,6 +110,52 @@ orders** — the recommended way to watch the swarm reason before letting it tra
 
 ---
 
+## Certified financial assistant
+
+Alongside the trader, the repo ships an **autonomous, fiduciary financial
+assistant** — a CFP-style advisor you can talk to. Where the swarm *places trades*,
+the assistant *gives advice*: it reasons over your whole financial picture (cash
+flow, emergency fund, debt, retirement, asset allocation, tax-advantaged accounts)
+and tells you what it would do and why.
+
+It is **agentic and grounded**: every number it states comes from a deterministic,
+unit-tested calculator it *calls as a tool* — it is forbidden from doing arithmetic
+in its head. This keeps the math correct and auditable, exactly like the trading
+swarm keeps binding risk logic out of the LLM.
+
+```
+                      ┌──────────────────────────────────────────┐
+  your question ────▶ │  FinancialAdvisor  (fiduciary CFP persona)│
+                      │  agentic tool-use loop over Claude         │
+                      └───────────────┬──────────────────────────┘
+                                      │ calls tools (never guesses numbers)
+            ┌─────────────────────────┼─────────────────────────────┐
+            ▼                         ▼                              ▼
+   net worth / savings    debt payoff (avalanche vs       retirement projection,
+   emergency fund          snowball), allocation drift,    contribution room,
+                           [+ live portfolio if a broker is configured]
+```
+
+### Use it
+
+```bash
+aoa profile init     # scaffold profile/financial_profile.json — then edit it
+aoa profile          # show your net worth, cash flow, debts at a glance
+aoa plan             # generate a full written financial plan
+aoa advise           # chat with your assistant ("how fast can I be debt-free?")
+```
+
+The assistant needs only `ANTHROPIC_API_KEY`. Your profile is a private JSON file
+(git-ignored); if Alpaca keys are present it can also read your live positions for
+portfolio context. It is an **educational tool, not a licensed advisor** — it gives
+no individualized tax/legal/insurance advice and never promises returns.
+
+> ⚠️ The 401(k)/IRA/HSA contribution limits in `aoa.advisor.planning` are dated
+> data (2025 confirmed, 2026 per announced COLA). Verify against current IRS
+> figures before relying on them.
+
+---
+
 ## Project layout
 
 ```
@@ -119,6 +165,8 @@ src/aoa/
   data/                # market-data assembly + pure-Python indicators
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
   agents/              # scanner, technical, fundamental, options, portfolio, risk
+  advisor/             # certified financial assistant: profile, planning math,
+                       #   tools (Claude tool-use), and the advisor agent
   swarm/               # blackboard + orchestrator (the cycle)
   risk/                # deterministic cash-account guardrails
   execution/           # proposal → broker order
