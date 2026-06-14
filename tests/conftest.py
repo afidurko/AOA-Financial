@@ -38,6 +38,7 @@ class FakeBroker(Broker):
             options_level=options_level,
         )
         self._positions: list[Position] = []
+        self._open_orders: list[Order] = []
         self.submitted: list[OrderRequest] = []
         self.market_open = True
 
@@ -104,8 +105,11 @@ class FakeBroker(Broker):
             asset_class=request.asset_class,
         )
 
+    def set_open_orders(self, orders: list[Order]) -> None:
+        self._open_orders = orders
+
     def list_orders(self, status: str = "open") -> list[Order]:
-        return []
+        return list(self._open_orders)
 
     def cancel_order(self, order_id: str) -> None:
         pass

@@ -62,7 +62,9 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 - **No equity shorting** — a sell is only allowed to close an existing long.
 - **No naked short options** — only covered calls / cash-secured puts.
-- **Per-position cap** (`AOA_MAX_POSITION_PCT`).
+- **Per-position cap** (`AOA_MAX_POSITION_PCT`) — counts your **existing** holding
+  in that name (equity + options on the same underlying) plus anything already
+  approved this cycle, so a name can't be accumulated past the cap across cycles.
 - **Options-book cap** (`AOA_MAX_OPTIONS_PCT`).
 - **Minimum settled-cash buffer** (`AOA_MIN_CASH_BUFFER_PCT`).
 - **Daily-loss kill switch** (`AOA_MAX_DAILY_LOSS_PCT`) — halts new risk, still allows exits.
@@ -70,6 +72,18 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 These are pure functions of the proposal/account/limits — no LLM in the loop — so
 they cannot be "talked around" by a model.
+
+### Protective exits & re-entry guard
+
+- **Every equity entry ships with a protective stop.** New long entries are
+  submitted as a broker **bracket/OTO** order carrying a stop-loss (and a
+  take-profit) so the stop persists between cycles. The stop is the technical
+  agent's suggested level, falling back to a 1.5×ATR stop, then a fixed 8% stop —
+  there is always one. (Long options are inherently defined-risk, so they don't
+  carry a separate stop.)
+- **Re-entry guard.** The swarm never opens a new position in a name it already
+  holds or already has a working (unfilled) order on — preventing duplicate and
+  stacked orders. Exits are always still allowed.
 
 ---
 

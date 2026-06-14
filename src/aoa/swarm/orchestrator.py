@@ -78,9 +78,13 @@ class Orchestrator:
         notes: list[str] = []
         self.market.clear_cache()
 
-        # 1) Account & positions.
+        # 1) Account, positions, and working orders.
         bb.account = self.broker.get_account()
         bb.positions = self.broker.get_positions()
+        try:
+            bb.open_orders = self.broker.list_orders("open")
+        except Exception:  # noqa: BLE001 — never let an order-list hiccup halt a cycle
+            bb.open_orders = []
         self._update_starting_equity(bb.account.equity)
         self.journal.record(
             "cycle.start",
@@ -227,12 +231,25 @@ class Orchestrator:
     def _materialize_proposals(self, raw: list[dict], bb: Blackboard) -> list[TradeProposal]:
         proposals: list[TradeProposal] = []
         pos_by_symbol = {p.symbol: p for p in bb.positions}
+        # Re-entry guard: names we already hold or have a working order on. New
+        # buys into these are skipped so the swarm never stacks duplicates or
+        # double-orders a name that already has an unfilled order.
+        held_or_pending = {p.symbol for p in bb.positions if p.qty != 0}
+        held_or_pending |= {o.symbol for o in bb.open_orders}
+
         for item in raw:
             symbol = item.get("symbol", "").upper()
             instrument = item.get("instrument", "equity")
             side = Side(item.get("side", "buy"))
             target = float(item.get("target_notional", 0) or 0)
             if target <= 0 and side is Side.BUY:
+                continue
+
+            if side is Side.BUY and symbol in held_or_pending:
+                self.journal.record(
+                    "proposal.skipped",
+                    {"symbol": symbol, "reason": "existing position or pending order"},
+                )
                 continue
 
             if instrument == "option":
@@ -280,6 +297,10 @@ class Orchestrator:
                     qty = math.floor(target / price)
                     if qty <= 0:
                         continue
+                # Protective exits for new long entries (attached as a broker bracket).
+                stop_price, take_profit = (None, None)
+                if side is Side.BUY:
+                    stop_price, take_profit = self._protective_levels(symbol, price, bb)
                 proposals.append(
                     TradeProposal(
                         symbol=symbol,
@@ -291,9 +312,43 @@ class Orchestrator:
                         rationale=item.get("rationale", ""),
                         est_price=price,
                         limit_price=_marketable_limit(price, side),
+                        stop_price=stop_price,
+                        take_profit_price=take_profit,
                     )
                 )
         return proposals
+
+    def _protective_levels(
+        self, symbol: str, price: float, bb: Blackboard
+    ) -> tuple[float, float]:
+        """Derive a protective stop and take-profit for a new long.
+
+        Preference order for the stop: the technical agent's suggested stop, then
+        an ATR-based stop (1.5×ATR), then a fixed 8% stop. The take-profit uses
+        nearby resistance when available, otherwise a 2R target. There is ALWAYS
+        a protective stop on an equity entry.
+        """
+        tech = next(
+            (s for s in bb.signals_for(symbol) if s.source == "technical"), None
+        )
+        levels = tech.key_levels if tech else {}
+        snap = bb.snapshots.get(symbol)
+        atr = (snap.technicals.get("atr_14") if snap and snap.technicals else None) or 0.0
+
+        stop = levels.get("stop")
+        if not (isinstance(stop, (int, float)) and 0 < stop < price):
+            stop = (price - 1.5 * atr) if atr > 0 else price * 0.92
+        # Final safety: a long's stop must sit below entry.
+        if stop >= price:
+            stop = price * 0.92
+
+        resistance = levels.get("resistance")
+        if isinstance(resistance, (int, float)) and resistance > price:
+            take_profit = float(resistance)
+        else:
+            take_profit = price + 2 * (price - stop)  # 2R target
+
+        return round(float(stop), 2), round(float(take_profit), 2)
 
 
 def _combine(tech: Signal, fund: Signal) -> tuple[Direction, float]:

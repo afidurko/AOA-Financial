@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from aoa.agents.base import Signal, TradeProposal
-from aoa.brokerage.models import Account, OptionContract, Position
+from aoa.brokerage.models import Account, OptionContract, Order, Position
 from aoa.data.market_data import SymbolSnapshot
 
 
@@ -18,6 +18,7 @@ from aoa.data.market_data import SymbolSnapshot
 class Blackboard:
     account: Account | None = None
     positions: list[Position] = field(default_factory=list)
+    open_orders: list[Order] = field(default_factory=list)
     universe: list[str] = field(default_factory=list)
     snapshots: dict[str, SymbolSnapshot] = field(default_factory=dict)
     candidates: list[dict] = field(default_factory=list)

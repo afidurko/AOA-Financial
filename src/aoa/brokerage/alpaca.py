@@ -244,6 +244,21 @@ class AlpacaBroker(Broker):
             payload["limit_price"] = str(request.limit_price)
         if request.client_order_id:
             payload["client_order_id"] = request.client_order_id
+
+        # Attach protective legs as a bracket/OTO. Alpaca supports these on
+        # equities only; option orders carry their defined risk in the structure
+        # itself (long premium is capped loss), so we skip protective legs there.
+        if request.is_protected and request.asset_class is AssetClass.EQUITY:
+            has_tp = request.take_profit_price is not None
+            has_sl = request.stop_loss_price is not None
+            payload["order_class"] = "bracket" if (has_tp and has_sl) else "oto"
+            # Protective legs must outlive the cycle, so the order is GTC.
+            payload["time_in_force"] = "gtc"
+            if has_tp:
+                payload["take_profit"] = {"limit_price": str(request.take_profit_price)}
+            if has_sl:
+                payload["stop_loss"] = {"stop_price": str(request.stop_loss_price)}
+
         d = self._trading("POST", "/v2/orders", json=payload)
         assert isinstance(d, dict)
         return _order_from_payload(d)

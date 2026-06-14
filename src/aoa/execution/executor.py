@@ -11,7 +11,14 @@ from dataclasses import dataclass, field
 
 from aoa.agents.base import TradeProposal
 from aoa.brokerage.base import Broker, BrokerError
-from aoa.brokerage.models import Order, OrderRequest, OrderType, TimeInForce
+from aoa.brokerage.models import (
+    AssetClass,
+    Order,
+    OrderRequest,
+    OrderType,
+    Side,
+    TimeInForce,
+)
 from aoa.journal.store import Journal
 
 
@@ -76,6 +83,8 @@ class Executor:
     def _to_request(prop: TradeProposal) -> OrderRequest:
         # Use a marketable limit when we have a price estimate, otherwise market.
         order_type = OrderType.LIMIT if prop.limit_price else OrderType.MARKET
+        # Protective legs only attach to opening equity buys.
+        is_entry = prop.side is Side.BUY and prop.asset_class is AssetClass.EQUITY
         return OrderRequest(
             symbol=prop.symbol,
             qty=prop.qty,
@@ -84,6 +93,8 @@ class Executor:
             order_type=order_type,
             time_in_force=TimeInForce.DAY,
             limit_price=prop.limit_price,
+            stop_loss_price=prop.stop_price if is_entry else None,
+            take_profit_price=prop.take_profit_price if is_entry else None,
             client_order_id=f"aoa-{uuid.uuid4().hex[:16]}",
             rationale=prop.rationale,
         )
@@ -97,4 +108,6 @@ def _request_ctx(r: OrderRequest) -> dict:
         "asset_class": r.asset_class.value,
         "order_type": r.order_type.value,
         "limit_price": r.limit_price,
+        "stop_loss_price": r.stop_loss_price,
+        "take_profit_price": r.take_profit_price,
     }

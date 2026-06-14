@@ -116,3 +116,36 @@ def test_per_cycle_order_cap():
     props = [_buy(symbol=f"S{i}", qty=1, price=100) for i in range(4)]
     guards.evaluate_cycle(props, _account(), [], starting_equity=100_000)
     assert sum(p.approved for p in props) == 2
+
+
+def test_position_cap_counts_existing_holding():
+    # Already hold $9k of AAPL (9% of $100k). A further $2k buy => 11% > 10% cap.
+    guards = RiskGuards(RiskLimits(max_position_pct=0.10))
+    pos = make_position("AAPL", qty=90, price=100.0)  # market_value $9,000
+    buy = _buy(symbol="AAPL", qty=20, price=100)  # $2,000
+    guards.evaluate_cycle([buy], _account(), [pos], starting_equity=100_000)
+    assert buy.approved is False
+    assert any("per-position cap" in n for n in buy.risk_notes)
+
+
+def test_position_cap_rolls_equity_and_options_under_one_name():
+    # $9.9k of AAPL equity + a $200 AAPL option both count under name "AAPL".
+    guards = RiskGuards(RiskLimits(max_position_pct=0.10))
+    pos = make_position("AAPL", qty=99, price=100.0)  # $9,900
+    opt = TradeProposal(
+        symbol="AAPL250117C00100000", asset_class=AssetClass.OPTION, side=Side.BUY,
+        qty=1, rationale="add", est_price=2.0, underlying="AAPL",  # $200 notional
+    )
+    guards.evaluate_cycle([opt], _account(), [pos], starting_equity=100_000)
+    assert opt.approved is False
+    assert any("AAPL" in n and "per-position cap" in n for n in opt.risk_notes)
+
+
+def test_second_buy_same_name_in_cycle_blocked():
+    # Two $6k buys of the same name in one cycle => second pushes past 10% cap.
+    guards = RiskGuards(RiskLimits(max_position_pct=0.10))
+    first = _buy(symbol="AAPL", qty=60, price=100)  # $6,000
+    second = _buy(symbol="AAPL", qty=60, price=100)  # +$6,000 => $12k > $10k
+    guards.evaluate_cycle([first, second], _account(), [], starting_equity=100_000)
+    assert first.approved is True
+    assert second.approved is False

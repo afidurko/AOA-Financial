@@ -59,6 +59,11 @@ class RiskGuards:
         )
         approved_count = 0
         min_cash = self.limits.min_cash_buffer_pct * account.equity
+        # Exposure already on the book per "name" (equity symbol or option
+        # underlying), so the per-position cap counts what we already hold and
+        # anything approved earlier in this same cycle — preventing a name from
+        # being accumulated past the cap across cycles.
+        name_exposure = _exposure_by_name(positions)
 
         for prop in proposals:
             notes: list[str] = []
@@ -99,13 +104,17 @@ class RiskGuards:
             # --- Sizing checks (only for opening buys) ----------------------
             if ok and prop.side is Side.BUY:
                 notional = prop.est_notional
-                # Per-position cap.
+                name = _name_of(prop)
+                existing = name_exposure.get(name, 0.0)
+                # Per-position cap, counting existing + already-approved exposure.
                 pos_cap = self.limits.max_position_pct * account.equity
-                if notional > pos_cap:
+                if existing + notional > pos_cap:
                     ok = False
                     notes.append(
-                        f"Rejected: position notional {notional:.0f} exceeds per-position "
-                        f"cap {pos_cap:.0f} ({self.limits.max_position_pct:.0%} of equity)."
+                        f"Rejected: total exposure to {name} "
+                        f"{existing + notional:.0f} (existing {existing:.0f} + new "
+                        f"{notional:.0f}) exceeds per-position cap {pos_cap:.0f} "
+                        f"({self.limits.max_position_pct:.0%} of equity)."
                     )
                 # Options book cap.
                 if ok and prop.asset_class is AssetClass.OPTION:
@@ -128,6 +137,7 @@ class RiskGuards:
                         )
                 if ok:
                     buy_notional += notional
+                    name_exposure[name] = existing + notional
                     if prop.asset_class is AssetClass.OPTION:
                         options_notional += notional
 
@@ -137,6 +147,28 @@ class RiskGuards:
                 approved_count += 1
 
         return proposals
+
+
+def _underlying_of_symbol(symbol: str, asset_class: AssetClass) -> str:
+    """The trading 'name' a symbol rolls up to: the equity ticker for equities,
+    the OCC root for options."""
+    if asset_class is AssetClass.OPTION and len(symbol) > 15:
+        return symbol[:-15]
+    return symbol
+
+
+def _name_of(prop: TradeProposal) -> str:
+    if prop.asset_class is AssetClass.OPTION:
+        return prop.underlying or _underlying_of_symbol(prop.symbol, prop.asset_class)
+    return prop.symbol
+
+
+def _exposure_by_name(positions: list[Position]) -> dict[str, float]:
+    exposure: dict[str, float] = {}
+    for p in positions:
+        name = _underlying_of_symbol(p.symbol, p.asset_class)
+        exposure[name] = exposure.get(name, 0.0) + abs(p.market_value)
+    return exposure
 
 
 def _is_exit(prop: TradeProposal, pos_by_symbol: dict[str, Position]) -> bool:
