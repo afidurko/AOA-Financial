@@ -1,11 +1,14 @@
 """Command-line interface for the AOA Financial swarm.
 
 Commands:
-  aoa doctor    Validate configuration & connectivity.
-  aoa status    Show account, positions, and market clock.
-  aoa run       Run a single analysis→decision→execution cycle.
-  aoa loop      Run cycles continuously on the configured cadence.
-  aoa journal   Print the tail of the decision/trade journal.
+  aoa doctor     Validate configuration & connectivity.
+  aoa status     Show account, positions, and market clock.
+  aoa run        Run a single analysis→decision→execution cycle.
+  aoa loop       Run cycles continuously on the configured cadence.
+  aoa journal    Print the tail of the decision/trade journal.
+  aoa analyze    Analyze the historical trend of a symbol.
+  aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
+  aoa scenarios  List the built-in stress-scenario library.
 """
 
 from __future__ import annotations
@@ -19,6 +22,9 @@ from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
+from aoa.simulation.scenarios import extract_scenario, list_scenarios
+from aoa.simulation.simulator import MarketSimulator, SimulationConfig
+from aoa.simulation.trends import analyze_trends
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
 
@@ -148,6 +154,94 @@ def cmd_loop(cfg: Config) -> int:
     return 0
 
 
+def cmd_analyze(cfg: Config, symbol: str, timeframe: str, limit: int) -> int:
+    broker = build_broker(cfg)
+    bars = broker.get_bars(symbol, timeframe, limit)
+    analysis = analyze_trends(bars, symbol)
+    if analysis is None:
+        print(f"Not enough history for {symbol.upper()} ({len(bars)} bars).")
+        return 1
+    a = analysis
+    print(f"=== Trend analysis: {a.symbol} ({a.n_bars} {timeframe} bars) ===")
+    print(
+        f"Price ${a.start_price:,.2f} → ${a.end_price:,.2f}  "
+        f"({a.total_return_pct:+.2f}% total, {a.cagr_pct:+.2f}% CAGR)"
+    )
+    print(
+        f"Trend: {a.trend.upper()} (slope {a.slope_pct_per_bar:+.3f}%/bar, "
+        f"R²={a.r_squared})  |  Regime: {a.regime}"
+    )
+    r = a.returns
+    print(
+        f"Daily return: mean {r.mean_daily_pct:+.3f}%  vol {r.std_daily_pct:.3f}%  "
+        f"(ann. {r.annualized_vol_pct:.1f}%)  skew {r.skew:+.2f}  kurt {r.excess_kurtosis:+.2f}"
+    )
+    print(
+        f"Best/worst day: {r.best_day_pct:+.2f}% / {r.worst_day_pct:+.2f}%  "
+        f"up-days {r.positive_day_ratio:.0%}"
+    )
+    print(
+        f"Drawdown: max {a.max_drawdown_pct:.2f}%  current {a.current_drawdown_pct:.2f}%"
+    )
+    if a.drawdowns:
+        print("\nNotable drawdowns (≥10%), deepest first:")
+        for d in a.drawdowns[:5]:
+            tag = "recovered" if d.recovered else "ongoing"
+            print(
+                f"  {d.depth_pct:>7.2f}%  bars {d.peak_index}→{d.trough_index} "
+                f"({d.length_bars} long, {tag})"
+            )
+    return 0
+
+
+def cmd_simulate(
+    cfg: Config, symbol: str, method: str, paths: int, horizon: int, seed: int | None
+) -> int:
+    broker = build_broker(cfg)
+    bars = broker.get_bars(symbol, "1Day", 252)
+    sim = MarketSimulator(seed=seed)
+    cfg_sim = SimulationConfig(
+        method=method, horizon=horizon, n_paths=paths, seed=seed
+    )
+    result = sim.simulate(bars, cfg_sim, symbol=symbol)
+    if result is None:
+        print(f"Not enough history to simulate {symbol.upper()}.")
+        return 1
+    print(f"=== Monte-Carlo simulation: {result.symbol} ===")
+    print(result.summary())
+
+    # Stress-test the same starting price against the historical scenario library.
+    stresses = sim.stress_test(result.start_price, list_scenarios())
+    print(f"\n=== Scenario stress test (from ${result.start_price:,.2f}) ===")
+    print(f"  {'scenario':<22}{'days':>5}{'return':>10}{'maxDD':>9}{'ending':>12}")
+    for s in sorted(stresses, key=lambda x: x.total_return_pct):
+        print(
+            f"  {s.scenario:<22}{s.horizon_days:>5}{s.total_return_pct:>9.1f}%"
+            f"{s.max_drawdown_pct:>8.1f}%{s.ending_price:>12,.2f}"
+        )
+
+    # Also replay the symbol's own most-recent window as a scenario.
+    own = extract_scenario(bars, f"{symbol.upper()}_recent_{horizon}d", start=-horizon - 1)
+    if own is not None:
+        replay = sim.replay_scenario(result.start_price, own)
+        print(
+            f"\nReplay of {symbol.upper()}'s own last {own.horizon_days} bars "
+            f"from current price → ${replay[-1]:,.2f} ({own.total_return_pct:+.1f}%)"
+        )
+    return 0
+
+
+def cmd_scenarios(cfg: Config) -> int:
+    print("Built-in stress scenarios:\n")
+    print(f"  {'name':<22}{'days':>5}{'return':>10}{'maxDD':>9}  description")
+    for s in list_scenarios():
+        print(
+            f"  {s.name:<22}{s.horizon_days:>5}{s.total_return_pct:>9.1f}%"
+            f"{s.max_drawdown_pct:>8.1f}%  {s.description}"
+        )
+    return 0
+
+
 def cmd_journal(cfg: Config, n: int) -> int:
     entries = Journal().tail(n)
     if not entries:
@@ -168,6 +262,22 @@ def main(argv: list[str] | None = None) -> int:
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
 
+    ap = sub.add_parser("analyze", help="Analyze the historical trend of a symbol.")
+    ap.add_argument("symbol", help="Ticker to analyze, e.g. AAPL.")
+    ap.add_argument("--timeframe", default="1Day", help="Bar timeframe (default 1Day).")
+    ap.add_argument("--limit", type=int, default=252, help="Number of bars (default 252).")
+
+    sp = sub.add_parser("simulate", help="Monte-Carlo + scenario stress-test a symbol.")
+    sp.add_argument("symbol", help="Ticker to simulate, e.g. AAPL.")
+    sp.add_argument(
+        "--method", choices=["gbm", "bootstrap"], default="gbm", help="Simulation engine."
+    )
+    sp.add_argument("--paths", type=int, default=1000, help="Number of Monte-Carlo paths.")
+    sp.add_argument("--horizon", type=int, default=21, help="Bars to project forward.")
+    sp.add_argument("--seed", type=int, default=None, help="Random seed (reproducibility).")
+
+    sub.add_parser("scenarios", help="List the built-in stress-scenario library.")
+
     args = parser.parse_args(argv)
     cfg = Config.from_env()
 
@@ -182,6 +292,14 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_loop(cfg)
         if args.command == "journal":
             return cmd_journal(cfg, args.n)
+        if args.command == "analyze":
+            return cmd_analyze(cfg, args.symbol, args.timeframe, args.limit)
+        if args.command == "simulate":
+            return cmd_simulate(
+                cfg, args.symbol, args.method, args.paths, args.horizon, args.seed
+            )
+        if args.command == "scenarios":
+            return cmd_scenarios(cfg)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

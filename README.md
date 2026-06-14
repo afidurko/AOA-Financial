@@ -73,6 +73,52 @@ they cannot be "talked around" by a model.
 
 ---
 
+## Market-trend analysis & scenario simulation
+
+Alongside the live trading swarm, the `aoa.simulation` package analyzes **past**
+market behavior and recreates plausible **future** scenarios — entirely offline,
+with **no LLM and no orders**. It's pure-Python (no numpy/pandas) and fully
+seedable, so every result is reproducible.
+
+**1. Trend analysis** (`aoa.simulation.trends`) — characterizes a bar history:
+trend direction & strength (regression slope + R²), CAGR, the full daily-return
+distribution (vol, skew, fat-tailedness), a labeled regime (`bull` / `bear` /
+`choppy_volatile` / `sideways` …), and every drawdown deeper than a threshold
+(depth, duration, whether it recovered).
+
+**2. Scenario library** (`aoa.simulation.scenarios`) — reproducible, stylized
+recreations of well-known episodes (1987, 2008, the 2020 COVID crash, the 2022
+rate shock, melt-ups, V-recoveries, …), each a calibrated path of daily returns.
+You can also **extract** a scenario from any window of real bars to replay it
+against a current position.
+
+**3. Monte-Carlo simulator** (`aoa.simulation.simulator`) — fits a return process
+to history and projects many forward paths:
+
+- **GBM** — geometric Brownian motion from the estimated drift/vol (smooth, parametric).
+- **Block bootstrap** — resamples contiguous blocks of real returns, preserving
+  fat tails and short-run autocorrelation.
+- **Scenario replay / stress test** — deterministically applies any scenario to
+  the current price.
+
+The simulator summarizes the outcome distribution: expected return, P(profit),
+ending-price percentiles (p5…p95), and **95% VaR / CVaR**.
+
+```python
+from aoa.simulation import analyze_trends, MarketSimulator, SimulationConfig, list_scenarios
+
+bars = broker.get_bars("AAPL", "1Day", 252)
+print(analyze_trends(bars, "AAPL").to_dict())
+
+sim = MarketSimulator(seed=1)
+result = sim.simulate(bars, SimulationConfig(method="gbm", horizon=21, n_paths=5000), symbol="AAPL")
+print(result.summary())
+for s in sim.stress_test(result.start_price, list_scenarios()):
+    print(s.scenario, s.total_return_pct, s.max_drawdown_pct)
+```
+
+---
+
 ## Install
 
 ```bash
@@ -103,6 +149,12 @@ aoa status     # show account, positions, market clock
 aoa run        # run ONE analysis → decision → execution cycle
 aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
 aoa journal -n 30   # tail the decision/trade journal
+
+# Market-trend analysis & scenario simulation (no LLM, no orders):
+aoa analyze AAPL                       # characterize the historical trend & drawdowns
+aoa simulate AAPL --paths 5000 --seed 1   # Monte-Carlo forward paths + scenario stress test
+aoa simulate AAPL --method bootstrap   # block-bootstrap (keeps fat tails) instead of GBM
+aoa scenarios                          # list the built-in stress-scenario library
 ```
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
@@ -117,6 +169,7 @@ src/aoa/
   config.py            # env-driven configuration + risk limits
   brokerage/           # broker abstraction (base) + Alpaca impl + neutral models
   data/                # market-data assembly + pure-Python indicators
+  simulation/          # trend analysis, scenario library, Monte-Carlo simulator
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
   agents/              # scanner, technical, fundamental, options, portfolio, risk
   swarm/               # blackboard + orchestrator (the cycle)
