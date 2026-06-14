@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Sequence
 
 from ..databases.store import Bar
 from . import series as S
+from . import _backend as _b
 
 
 @dataclass
@@ -44,6 +45,12 @@ def build_factor_panel(
 ) -> Dict[str, List[float]]:
     """Construct aligned factor columns and the target (next-day return)."""
     closes = [b.close for b in bars]
+
+    # Fast path: vectorised rolling statistics when numpy is available. The
+    # benchmark-only (non-market) columns are computed in one shot.
+    if _b.HAS_NUMPY and benchmark is None:
+        return _b.factor_columns(closes)
+
     rets = [0.0] + S.log_returns(closes)  # align length to closes
     n = len(closes)
 

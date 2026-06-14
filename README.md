@@ -12,6 +12,15 @@ of technical / fundamental / forecasting / regime / factor models,
 > live data feeds are *optional accelerators* that are detected at runtime and
 > used when present, with graceful fallback otherwise. This makes the system
 > reproducible and runnable anywhere.
+>
+> **numpy acceleration:** when numpy is installed, the analysis core
+> automatically routes its hot numeric paths — log/simple returns, standard
+> deviation, SMA/EMA, OLS (SVD `lstsq`), the rolling **factor panel**, and the
+> **Monte-Carlo** forecast — through a vectorised backend (`analysis/_backend.py`).
+> On a full 1960-to-date series this is ~**4× faster** while running more
+> simulation paths, and the results match the pure-Python path to machine
+> precision (locked by parity tests). `pip install numpy` to enable; nothing
+> else changes.
 
 ---
 

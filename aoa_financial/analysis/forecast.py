@@ -20,6 +20,7 @@ from typing import Dict, List, Sequence
 
 from ..config import TRADING_DAYS_PER_YEAR
 from . import series as S
+from . import _backend as _b
 
 
 @dataclass
@@ -71,15 +72,20 @@ def _monte_carlo(closes: Sequence[float], horizon: int, sims: int = 2000,
     look = rets[-min(len(rets), 504):]   # ~2y of daily returns
     mu = S.mean(look)
     sigma = S.stdev(look) or 1e-4
-    rng = random.Random(seed)
     last = closes[-1]
-    finals: List[float] = []
-    for _ in range(sims):
-        logp = math.log(last)
-        for _ in range(horizon):
-            logp += rng.gauss(mu, sigma)
-        finals.append(math.exp(logp))
-    finals.sort()
+    if _b.HAS_NUMPY:
+        # Vectorised: simulate every path at once (and afford more paths).
+        finals = _b.monte_carlo_finals(last, mu, sigma, horizon,
+                                       max(sims, 10000), seed)
+    else:
+        rng = random.Random(seed)
+        finals = []
+        for _ in range(sims):
+            logp = math.log(last)
+            for _ in range(horizon):
+                logp += rng.gauss(mu, sigma)
+            finals.append(math.exp(logp))
+        finals.sort()
 
     def pct(p: float) -> float:
         idx = min(len(finals) - 1, max(0, int(p * len(finals))))

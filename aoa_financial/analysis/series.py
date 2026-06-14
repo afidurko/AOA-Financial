@@ -9,9 +9,12 @@ import math
 from typing import List, Optional, Sequence, Tuple
 
 from ..config import TRADING_DAYS_PER_YEAR
+from . import _backend as _b
 
 
 def log_returns(prices: Sequence[float]) -> List[float]:
+    if _b.HAS_NUMPY:
+        return _b.log_returns(prices)
     out = []
     for a, b in zip(prices, prices[1:]):
         if a > 0 and b > 0:
@@ -20,6 +23,8 @@ def log_returns(prices: Sequence[float]) -> List[float]:
 
 
 def simple_returns(prices: Sequence[float]) -> List[float]:
+    if _b.HAS_NUMPY:
+        return _b.simple_returns(prices)
     return [(b / a - 1.0) for a, b in zip(prices, prices[1:]) if a > 0]
 
 
@@ -28,6 +33,8 @@ def mean(xs: Sequence[float]) -> float:
 
 
 def stdev(xs: Sequence[float]) -> float:
+    if _b.HAS_NUMPY:
+        return _b.stdev(xs)
     n = len(xs)
     if n < 2:
         return 0.0
@@ -71,6 +78,8 @@ def max_drawdown(prices: Sequence[float]) -> float:
 
 
 def sma(xs: Sequence[float], window: int) -> List[Optional[float]]:
+    if _b.HAS_NUMPY:
+        return _b.sma(xs, window)
     out: List[Optional[float]] = []
     s = 0.0
     from collections import deque
@@ -86,6 +95,8 @@ def sma(xs: Sequence[float], window: int) -> List[Optional[float]]:
 def ema(xs: Sequence[float], window: int) -> List[Optional[float]]:
     if not xs:
         return []
+    if _b.HAS_NUMPY:
+        return _b.ema(xs, window)
     k = 2.0 / (window + 1.0)
     out: List[Optional[float]] = [None] * len(xs)
     prev: Optional[float] = None
@@ -123,8 +134,10 @@ def ols(X: List[List[float]], y: List[float]) -> Tuple[List[float], float]:
     ``X`` is a list of rows (each row a feature vector, intercept NOT added
     automatically). Returns ``(coefficients, r_squared)``. Solves
     ``(XᵀX) b = Xᵀy`` with Gaussian elimination + ridge fallback for
-    near-singular systems.
+    near-singular systems. With numpy present, an SVD-based ``lstsq`` is used.
     """
+    if _b.HAS_NUMPY:
+        return _b.ols(X, y)
     n = len(X)
     if n == 0:
         return [], 0.0

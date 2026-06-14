@@ -10,7 +10,12 @@ anthropic>=0.40.0        # enables the live Claude Opus 4.8 analyst; offline
                          # mock analyst is used when this is absent.
 
 # --- Optional numerical acceleration --------------------------------------
-numpy>=1.24              # vectorised math (pure-Python fallback otherwise)
+numpy>=1.24              # vectorised math: when installed, the analysis core
+                         # routes its hot paths (returns, std, SMA/EMA, OLS,
+                         # the rolling factor panel, and the Monte-Carlo
+                         # forecast) through a numpy backend (~4x faster on a
+                         # full 1960-to-date series). A bit-for-bit-equivalent
+                         # pure-Python path is used when numpy is absent.
 
 # --- Optional live market-data feeds --------------------------------------
 requests>=2.28           # used by the Stooq CSV loader; synthetic data

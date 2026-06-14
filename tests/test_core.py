@@ -54,6 +54,67 @@ class SeriesTests(unittest.TestCase):
         self.assertIsNotNone(S.sma(xs, 10)[-1])
 
 
+class BackendParityTests(unittest.TestCase):
+    """The numpy and pure-Python numeric backends must agree."""
+
+    def setUp(self):
+        from aoa_financial.analysis import _backend as B
+        self.B = B
+        if not B.HAS_NUMPY:
+            self.skipTest("numpy not installed; only pure-Python path available")
+        self.prices = [b.close for b in
+                       SyntheticGenerator().generate("PAR", end=date(1985, 1, 1)).bars]
+
+    def _pure(self, fn, *a, **k):
+        # Run a series.py function with numpy disabled to get the pure path.
+        from aoa_financial.analysis import _backend as B
+        saved = B.HAS_NUMPY
+        B.HAS_NUMPY = False
+        try:
+            return fn(*a, **k)
+        finally:
+            B.HAS_NUMPY = saved
+
+    def test_log_returns_parity(self):
+        npv = S.log_returns(self.prices)
+        pure = self._pure(S.log_returns, self.prices)
+        self.assertEqual(len(npv), len(pure))
+        for x, y in zip(npv[:200], pure[:200]):
+            self.assertAlmostEqual(x, y, places=9)
+
+    def test_stdev_parity(self):
+        rets = S.log_returns(self.prices)
+        self.assertAlmostEqual(S.stdev(rets), self._pure(S.stdev, rets), places=9)
+
+    def test_sma_ema_parity(self):
+        for fn in (S.sma, S.ema):
+            npv = fn(self.prices, 50)
+            pure = self._pure(fn, self.prices, 50)
+            self.assertEqual(len(npv), len(pure))
+            self.assertAlmostEqual(npv[-1], pure[-1], places=6)
+
+    def test_factor_panel_parity(self):
+        from aoa_financial.ingest.synthetic import SyntheticGenerator
+        from aoa_financial.analysis import factors as FAC
+        bars = SyntheticGenerator().generate("FPAR", end=date(2010, 1, 1)).bars
+        npp = FAC.build_factor_panel(bars)
+        pure = self._pure(FAC.build_factor_panel, bars)
+        self.assertEqual(set(npp), set(pure))
+        for col in npp:
+            self.assertEqual(len(npp[col]), len(pure[col]))
+            for a, b2 in zip(npp[col][:500], pure[col][:500]):
+                self.assertAlmostEqual(a, b2, places=9)
+
+    def test_ols_parity(self):
+        X = [[1.0, float(i), float(i * i)] for i in range(120)]
+        y = [2 + 0.5 * i - 0.01 * i * i for i in range(120)]
+        cnp, r2np = S.ols(X, y)
+        cpu, r2pu = self._pure(S.ols, X, y)
+        for a, b2 in zip(cnp, cpu):
+            self.assertAlmostEqual(a, b2, places=4)
+        self.assertAlmostEqual(r2np, r2pu, places=6)
+
+
 class SyntheticTests(unittest.TestCase):
     def test_deterministic_and_long(self):
         gen = SyntheticGenerator(epoch_start=date(1960, 6, 1))
