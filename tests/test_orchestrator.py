@@ -9,20 +9,21 @@ from aoa.journal.store import Journal
 from aoa.swarm.orchestrator import Orchestrator, _combine, _marketable_limit
 
 
-def _config(dry_run=False):
+def _config(tmp_path, dry_run=False):
     return Config(
         anthropic_api_key="x",
         alpaca_key_id="x",
         alpaca_secret_key="x",
         universe=("AAPL",),
         dry_run=dry_run,
+        state_path=str(tmp_path / "state.json"),
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
     )
 
 
 def test_full_cycle_submits_order(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=False), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path), fake_broker, fake_llm, journal)
 
     result = orch.run_cycle()
 
@@ -43,7 +44,7 @@ def test_full_cycle_submits_order(fake_broker, fake_llm, tmp_path):
 
 def test_dry_run_submits_nothing(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path, dry_run=True), fake_broker, fake_llm, journal)
 
     result = orch.run_cycle()
 
@@ -54,7 +55,7 @@ def test_dry_run_submits_nothing(fake_broker, fake_llm, tmp_path):
 
 def test_journal_records_cycle(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path, dry_run=True), fake_broker, fake_llm, journal)
     orch.run_cycle()
     events = {e["event"] for e in journal.tail(50)}
     assert "cycle.start" in events

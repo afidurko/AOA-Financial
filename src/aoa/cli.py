@@ -19,6 +19,7 @@ from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
+from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
 
@@ -101,11 +102,21 @@ def cmd_doctor(cfg: Config) -> int:
 def cmd_status(cfg: Config) -> int:
     broker = build_broker(cfg)
     acct = broker.get_account()
+    state = StateStore(cfg.state_path)
+    unsettled = state.unsettled_cash()
+    effective = max(0.0, acct.settled_cash - unsettled)
     print(f"Mode: {cfg.trading_mode} | Broker: {broker.name}")
     print(
         f"Equity ${acct.equity:,.2f} | cash ${acct.cash:,.2f} | "
         f"settled ${acct.settled_cash:,.2f} | options L{acct.options_level}"
     )
+    print(
+        f"Unsettled (tracked) ${unsettled:,.2f} | "
+        f"effective available ${effective:,.2f}"
+    )
+    baseline = state.starting_equity_for_today(acct.equity)
+    daily_pl = acct.equity - baseline
+    print(f"Day baseline ${baseline:,.2f} | day P/L ${daily_pl:+,.2f}")
     print(f"Market open: {broker.is_market_open()}")
     positions = broker.get_positions()
     if not positions:

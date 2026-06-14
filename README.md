@@ -66,12 +66,27 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
   in that name (equity + options on the same underlying) plus anything already
   approved this cycle, so a name can't be accumulated past the cap across cycles.
 - **Options-book cap** (`AOA_MAX_OPTIONS_PCT`).
-- **Minimum settled-cash buffer** (`AOA_MIN_CASH_BUFFER_PCT`).
+- **Minimum settled-cash buffer** (`AOA_MIN_CASH_BUFFER_PCT`), measured against
+  **effective settled cash** (broker cash minus locally-tracked unsettled sale
+  proceeds — see below).
 - **Daily-loss kill switch** (`AOA_MAX_DAILY_LOSS_PCT`) — halts new risk, still allows exits.
 - **Per-cycle order cap** (`AOA_MAX_ORDERS_PER_CYCLE`).
 
 These are pure functions of the proposal/account/limits — no LLM in the loop — so
 they cannot be "talked around" by a model.
+
+### Settlement & persistent state
+
+State that must survive process restarts lives in a small JSON file
+(`AOA_STATE_PATH`, default `journal/state.json`):
+
+- **Daily-loss baseline.** The equity the day started at is persisted, so an
+  intraday restart can't silently disarm the kill switch by resetting the
+  baseline.
+- **Settlement ledger (good-faith-violation avoidance).** Cash accounts settle
+  T+1. When the swarm sells, the proceeds are recorded as *unsettled* until the
+  next business day and subtracted from the cash the swarm treats as available —
+  so it won't redeploy unsettled proceeds and trip a good-faith violation.
 
 ### Protective exits & re-entry guard
 

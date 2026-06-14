@@ -18,8 +18,7 @@ Pipeline per cycle:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
-from datetime import date
+from dataclasses import dataclass, field, replace
 
 from aoa.agents.base import Direction, Signal, TradeProposal
 from aoa.agents.fundamental import FundamentalAgent
@@ -35,6 +34,7 @@ from aoa.data.market_data import MarketDataService
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
+from aoa.state import StateStore
 from aoa.swarm.blackboard import Blackboard
 
 
@@ -66,10 +66,11 @@ class Orchestrator:
         self.options = OptionsStrategistAgent(llm, broker)
         self.portfolio = PortfolioManagerAgent(llm)
         self.risk = RiskManagerAgent(llm, config.risk)
-        self.executor = Executor(broker, self.journal, dry_run=config.dry_run)
-
-        # Daily-loss tracking.
-        self._equity_day: date | None = None
+        # Persistent state: daily-loss baseline + settlement ledger.
+        self.state = StateStore(config.state_path)
+        self.executor = Executor(
+            broker, self.journal, dry_run=config.dry_run, state=self.state
+        )
         self._starting_equity: float = 0.0
 
     # ------------------------------------------------------------------ cycle
@@ -79,19 +80,29 @@ class Orchestrator:
         self.market.clear_cache()
 
         # 1) Account, positions, and working orders.
-        bb.account = self.broker.get_account()
+        raw_account = self.broker.get_account()
         bb.positions = self.broker.get_positions()
         try:
             bb.open_orders = self.broker.list_orders("open")
         except Exception:  # noqa: BLE001 — never let an order-list hiccup halt a cycle
             bb.open_orders = []
-        self._update_starting_equity(bb.account.equity)
+
+        # Persisted daily-loss baseline (survives restarts so the kill switch
+        # stays armed) and unsettled proceeds carved out of available cash so we
+        # never spend unsettled funds (good-faith-violation avoidance).
+        self._starting_equity = self.state.starting_equity_for_today(raw_account.equity)
+        unsettled = self.state.unsettled_cash()
+        effective_settled = max(0.0, raw_account.settled_cash - unsettled)
+        bb.account = replace(raw_account, settled_cash=effective_settled)
+
         self.journal.record(
             "cycle.start",
             {
                 "mode": self.config.trading_mode,
                 "equity": bb.account.equity,
-                "settled_cash": bb.account.settled_cash,
+                "settled_cash_raw": raw_account.settled_cash,
+                "unsettled_cash": unsettled,
+                "settled_cash_effective": effective_settled,
                 "starting_equity": self._starting_equity,
                 "n_positions": len(bb.positions),
             },
@@ -175,12 +186,6 @@ class Orchestrator:
         return CycleResult(blackboard=bb, execution=report, notes=notes)
 
     # --------------------------------------------------------------- helpers
-    def _update_starting_equity(self, equity: float) -> None:
-        today = date.today()
-        if self._equity_day != today:
-            self._equity_day = today
-            self._starting_equity = equity
-
     def _resolve_universe(self) -> list[str]:
         if self.config.universe:
             return list(self.config.universe)
