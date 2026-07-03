@@ -6,7 +6,7 @@ Pipeline per cycle:
 2. Resolve the trading universe (config list or broker's most-actives).
 3. Build market-data snapshots (quotes, bars, indicators).
 4. Scanner shortlists candidates.
-5. Technical + fundamental agents emit signals per candidate.
+5. Fetch Alpaca news for candidates; technical + fundamental agents emit signals.
 6. Options strategist proposes structures where conviction is directional.
 7. Portfolio manager synthesizes everything into target trades.
 8. Convert targets to share/contract quantities.
@@ -32,6 +32,7 @@ from aoa.brokerage.base import Broker
 from aoa.brokerage.models import AssetClass, Side
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
+from aoa.data.news import NewsService
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
@@ -58,6 +59,11 @@ class Orchestrator:
         self.llm = llm
         self.journal = journal or Journal()
         self.market = MarketDataService(broker)
+        self.news = NewsService(
+            broker,
+            limit_per_symbol=config.news_limit,
+            lookback_hours=config.news_lookback_hours,
+        )
 
         # Agents.
         self.scanner = ScannerAgent(llm)
@@ -77,6 +83,7 @@ class Orchestrator:
         bb = Blackboard()
         notes: list[str] = []
         self.market.clear_cache()
+        self.news.clear_cache()
 
         # 1) Account & positions.
         bb.account = self.broker.get_account()
@@ -185,12 +192,15 @@ class Orchestrator:
 
     def _analyze_candidates(self, bb: Blackboard) -> list[dict]:
         per_symbol: list[dict] = []
+        symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
+        news_by_symbol = self.news.fetch(symbols) if symbols else {}
+
         for cand in bb.candidates:
             symbol = cand.get("symbol", "").upper()
             snap = bb.snapshots.get(symbol) or self.market.snapshot(symbol)
 
             tech = self.technical.analyze(snap)
-            fund = self.fundamental.analyze(snap)
+            fund = self.fundamental.analyze(snap, news=news_by_symbol.get(symbol, []))
             bb.add_signal(tech)
             bb.add_signal(fund)
 

@@ -76,6 +76,10 @@ class Config:
     universe: tuple[str, ...] = ()
     cycle_seconds: int = 900
 
+    # News (Alpaca market-data feed)
+    news_limit: int = 5
+    news_lookback_hours: int = 72
+
     # Execution
     dry_run: bool = False
 
@@ -109,6 +113,8 @@ class Config:
             alpaca_live=_bool("ALPACA_LIVE", False),
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
+            news_limit=_int("AOA_NEWS_LIMIT", 5),
+            news_lookback_hours=_int("AOA_NEWS_LOOKBACK_HOURS", 72),
             dry_run=_bool("AOA_DRY_RUN", False),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),

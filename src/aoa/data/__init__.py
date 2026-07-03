@@ -8,8 +8,10 @@ from aoa.data.indicators import (
     rsi,
     sma,
     technical_snapshot,
+    volume_metrics,
 )
 from aoa.data.market_data import MarketDataService, SymbolSnapshot
+from aoa.data.news import NewsService
 
 __all__ = [
     "sma",
@@ -19,6 +21,8 @@ __all__ = [
     "atr",
     "bollinger_bands",
     "technical_snapshot",
+    "volume_metrics",
     "MarketDataService",
+    "NewsService",
     "SymbolSnapshot",
 ]

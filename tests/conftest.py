@@ -15,6 +15,7 @@ from aoa.brokerage.models import (
     Account,
     AssetClass,
     Bar,
+    NewsItem,
     OptionContract,
     OptionType,
     Order,
@@ -74,6 +75,20 @@ class FakeBroker(Broker):
 
     def get_most_active(self, limit: int = 25) -> list[str]:
         return ["AAPL", "MSFT", "NVDA"][:limit]
+
+    def get_news(self, symbols: list[str], *, limit: int = 50, lookback_hours: int = 72):
+        items = []
+        for sym in symbols:
+            items.append(
+                NewsItem(
+                    headline=f"{sym.upper()} beats expectations in latest quarter",
+                    summary="Synthetic headline for tests.",
+                    source="test",
+                    symbols=(sym.upper(),),
+                    published_at=datetime.now(timezone.utc),
+                )
+            )
+        return items[:limit]
 
     def get_option_chain(self, underlying, expiration=None, option_type=None):
         otype = OptionType.CALL if (option_type or "call") == "call" else OptionType.PUT

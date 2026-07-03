@@ -143,7 +143,8 @@ canned-response fake LLM — no network, no API keys, no real orders.
 ## Extending
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
-- **Add a news feed**: wire it into `FundamentalAgent` (its prompt is the integration point).
+- **Add a news feed**: headlines are fetched from Alpaca's market-data news API
+  and passed to `FundamentalAgent` each cycle (tune via `AOA_NEWS_*` in `.env`).
 - **Add an agent**: subclass `aoa.agents.base.Agent` and call it from the `Orchestrator`.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 

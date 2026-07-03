@@ -142,6 +142,22 @@ def pct_change(values: Sequence[float], lookback: int) -> float | None:
     return round((values[-1] / values[-lookback - 1] - 1) * 100, 2)
 
 
+def volume_metrics(bars: Sequence[Bar], window: int = 20) -> dict[str, float | None]:
+    """Latest bar volume vs a trailing average (unusual-activity signal)."""
+    if not bars:
+        return {"latest_volume": None, "avg_volume_20d": None, "volume_ratio": None}
+    volumes = [b.volume for b in bars]
+    latest = volumes[-1]
+    tail = volumes[-window:] if len(volumes) >= window else volumes
+    avg = sum(tail) / len(tail)
+    ratio = round(latest / avg, 2) if avg > 0 else None
+    return {
+        "latest_volume": round(latest, 0),
+        "avg_volume_20d": round(avg, 0),
+        "volume_ratio": ratio,
+    }
+
+
 def technical_snapshot(bars: Sequence[Bar]) -> dict:
     """Compute a compact dict of indicators from a bar history.
 
@@ -164,5 +180,6 @@ def technical_snapshot(bars: Sequence[Bar]) -> dict:
         "realized_vol_20d": realized_volatility(closes),
         "return_5d_pct": pct_change(closes, 5),
         "return_20d_pct": pct_change(closes, 20),
+        "volume": volume_metrics(bars),
         "n_bars": len(bars),
     }

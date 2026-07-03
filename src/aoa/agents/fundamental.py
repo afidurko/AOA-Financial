@@ -1,10 +1,8 @@
 """Fundamental / catalyst agent.
 
-Without a paid news feed this agent reasons about *known structural context* and
-*event risk* (e.g. proximity to typical earnings windows, sector posture, and the
-character of the recent move) rather than fabricating headlines. It is explicitly
-instructed never to invent specific news it cannot verify. If a news/web-search
-tool is wired in later, this agent's prompt is the natural integration point.
+Uses live headlines from the broker's Alpaca news feed when available. The agent
+is instructed to cite only headlines present in its prompt and never fabricate
+news it cannot verify.
 """
 
 from __future__ import annotations
@@ -12,6 +10,7 @@ from __future__ import annotations
 import json
 
 from aoa.agents.base import Agent, Direction, Signal
+from aoa.brokerage.models import NewsItem
 from aoa.data.market_data import SymbolSnapshot
 
 _SCHEMA = {
@@ -30,17 +29,16 @@ _SCHEMA = {
 class FundamentalAgent(Agent):
     name = "fundamental"
     system_prompt = (
-        "You are a fundamental & catalyst analyst supporting a trading swarm. You do "
-        "NOT have a live news feed, so you must NOT invent specific headlines, "
-        "earnings dates, or numbers. Instead, reason qualitatively about structural "
-        "context: the company's sector and its current posture, the character of the "
-        "recent price move (trend vs spike), and general event risk (e.g. that "
-        "single-stock names carry earnings/guidance risk that broad ETFs do not). "
-        "Flag elevated event risk so the risk manager can size conservatively. When "
-        "you lack information, say so and lean neutral."
+        "You are a fundamental & catalyst analyst supporting a trading swarm. You "
+        "may receive verified news headlines from an Alpaca news feed. Only cite "
+        "headlines that appear in the provided news context — never invent specific "
+        "headlines, earnings dates, or numbers. Combine news with structural "
+        "context (sector posture, character of the recent move) and flag elevated "
+        "event risk so the risk manager can size conservatively. When news is "
+        "absent or inconclusive, say so and lean neutral."
     )
 
-    def analyze(self, snap: SymbolSnapshot) -> Signal:
+    def analyze(self, snap: SymbolSnapshot, *, news: list[NewsItem] | None = None) -> Signal:
         if snap.error:
             return Signal(
                 symbol=snap.symbol,
@@ -49,11 +47,13 @@ class FundamentalAgent(Agent):
                 conviction=0.0,
                 rationale=f"No data ({snap.error}).",
             )
+        news_ctx = [item.to_context() for item in (news or [])]
         prompt = (
             f"Symbol: {snap.symbol}\n"
-            f"Recent technical context: {json.dumps(snap.technicals, default=str)}\n\n"
+            f"Recent technical context: {json.dumps(snap.technicals, default=str)}\n"
+            f"Verified news headlines (may be empty): {json.dumps(news_ctx, default=str)}\n\n"
             "Give your qualitative fundamental/catalyst read and event-risk "
-            "assessment as JSON. Remember: do not fabricate specific news."
+            "assessment as JSON. Cite only headlines from the news context above."
         )
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
         return Signal(

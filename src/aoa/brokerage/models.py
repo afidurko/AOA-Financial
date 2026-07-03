@@ -69,6 +69,27 @@ class Bar:
 
 
 @dataclass(frozen=True)
+class NewsItem:
+    """A single market-news headline from the broker's news feed."""
+
+    headline: str
+    summary: str
+    source: str
+    symbols: tuple[str, ...]
+    published_at: datetime | None = None
+    url: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "headline": self.headline,
+            "summary": self.summary,
+            "source": self.source,
+            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "url": self.url or None,
+        }
+
+
+@dataclass(frozen=True)
 class Position:
     symbol: str
     asset_class: AssetClass
