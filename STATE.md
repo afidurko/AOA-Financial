@@ -1,6 +1,6 @@
 # Loop State — AOA-Financial
 
-Last run: 2026-07-03 21:16 UTC (Cursor Cloud Agent, loop-triage L1 report-only)
+Last run: 2026-07-03 21:17 UTC (rebase onto main; loop-triage L1)
 
 ## High Priority (loop is acting or waiting on human)
 
@@ -10,7 +10,7 @@ Last run: 2026-07-03 21:16 UTC (Cursor Cloud Agent, loop-triage L1 report-only)
 
 ## Watch List
 
-- **PR #20 branch drift** — `cursor/loop-engineering-87f6` is **3 commits behind** `main` (workloop team-review merges landed since branch cut). Rebase or merge `main` before marking PR ready.
+- **PR #20 rebased onto main** — branch is current as of 2026-07-03 21:17 UTC. CI re-run pending after force-push.
 - **Bob health import sweep** — `test_team.py` fails locally without `[web]` extra (`aoa.web.app: No module named 'fastapi'`). CI passes with full deps. Suggest documenting `pip install -e ".[dev,web]"` or making web import optional in code audit.
 - **Runtime env partial** — `.env` still missing; `data/paper-dry/journal/aoa.jsonl` has test-run entries (20 lines) but no configured keys for live `aoa run` / `aoa loop`.
 - **GitHub Actions Node 20 deprecation** — CI emits deprecation warnings (`actions/checkout@v4`, `actions/setup-python@v5` forced to Node 24). No failures yet; plan action upgrades.
