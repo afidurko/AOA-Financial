@@ -1,0 +1,17 @@
+[Unit]
+Description=AOA Financial trading swarm loop
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aoa
+WorkingDirectory=/opt/aoa-financial
+EnvironmentFile=/opt/aoa-financial/.env
+Environment=AOA_JOURNAL_PATH=/var/lib/aoa/journal/aoa.jsonl
+ExecStart=/opt/aoa-financial/.venv/bin/aoa loop
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
