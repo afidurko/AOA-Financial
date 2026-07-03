@@ -7,10 +7,10 @@ both the **information source** (quotes, bars, option chains, account, positions
 and the **order executor**. Every agent reasons with **Claude** (`claude-opus-4-8`).
 
 > ⚠️ **This software can place real orders with real money.** It defaults to
-> live trading when live Alpaca credentials are configured (`ALPACA_LIVE=true`).
-> Hard, deterministic risk guardrails always apply, but **you are responsible for
-> any trades it makes.** Start in the paper sandbox. Nothing here is financial
-> advice.
+> **paper trading** (`ALPACA_LIVE=false`). Set `ALPACA_LIVE=true` only when you
+> intentionally route orders to a live account. Hard, deterministic risk
+> guardrails always apply, but **you are responsible for any trades it makes.**
+> Start in the paper sandbox. Nothing here is financial advice.
 
 ---
 
@@ -90,16 +90,21 @@ Requires Python 3.10+.
 cp .env.example .env
 # Edit .env: set ANTHROPIC_API_KEY and your Alpaca keys.
 # Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
+# Optional market-data tuning:
+#   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
+#   ALPACA_BAR_ADJUSTMENT=split   # raw | split | dividend | all | spin-off
 ```
 
-Get free Alpaca paper keys at <https://alpaca.markets>. Options trading requires
-options approval on the account (the swarm checks `options_level`).
+Get free Alpaca **Trading API** paper keys (`PK...`) at <https://alpaca.markets>.
+These are **not** the same as Broker API OAuth credentials (`authx.alpaca.markets`).
+Options trading requires options approval on the account (the swarm checks `options_level`).
 
 ## Run
 
 ```bash
-aoa doctor     # validate config + check broker/LLM connectivity
-aoa status     # show account, positions, market clock
+aoa doctor            # validate config + check broker/LLM connectivity
+aoa doctor --offline  # validate config only (no network)
+aoa status            # show account, positions, market clock
 aoa run        # run ONE analysis → decision → execution cycle
 aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
 aoa journal -n 30   # tail the decision/trade journal
@@ -134,6 +139,7 @@ touching agent or orchestration code.
 ## Test
 
 ```bash
+ruff check .
 pytest
 ```
 

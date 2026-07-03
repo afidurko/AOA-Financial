@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from aoa.brokerage.alpaca import AlpacaBroker, _bars_from_rows
+from aoa.brokerage.base import BrokerError
 from aoa.data.market_data import MarketDataService
 
 
@@ -144,3 +145,41 @@ def test_market_data_service_uses_batch_bars(fake_broker):
     assert len(calls) == 1
     assert set(calls[0]) == {"AAPL", "MSFT", "NVDA"}
     assert all(len(snaps[s].bars) == 30 for s in snaps)
+
+
+def test_api_error_401_includes_trading_key_hint():
+    broker = AlpacaBroker("key", "secret", live=False)
+    err = broker._api_error(
+        "GET",
+        "https://data.alpaca.markets/v2/stocks/bars",
+        401,
+        "unauthorized",
+    )
+    assert "PK..." in str(err)
+    assert "authx.alpaca.markets" in str(err)
+
+
+def test_invalid_data_feed_rejected_at_init():
+    try:
+        AlpacaBroker("key", "secret", live=False, data_feed="not-a-feed")
+    except BrokerError as exc:
+        assert "Invalid Alpaca data feed" in str(exc)
+    else:
+        raise AssertionError("expected BrokerError")
+
+
+def test_request_rejects_non_json_response():
+    broker = AlpacaBroker("key", "secret", live=False)
+    response = MagicMock()
+    response.status_code = 200
+    response.content = b"not-json"
+    response.text = "not-json"
+    response.json.side_effect = ValueError("bad json")
+    broker._client.request = MagicMock(return_value=response)  # type: ignore[method-assign]
+
+    try:
+        broker._request("GET", "https://data.alpaca.markets/v2/stocks/bars")
+    except BrokerError as exc:
+        assert "non-JSON" in str(exc)
+    else:
+        raise AssertionError("expected BrokerError")

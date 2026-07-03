@@ -34,6 +34,9 @@ TRADING_LIVE = "https://api.alpaca.markets"
 TRADING_PAPER = "https://paper-api.alpaca.markets"
 DATA_BASE = "https://data.alpaca.markets"
 
+_VALID_DATA_FEEDS = frozenset({"sip", "iex", "boats", "otc"})
+_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
+
 
 def _parse_ts(value: str | None) -> datetime | None:
     if not value:
@@ -88,6 +91,16 @@ class AlpacaBroker(Broker):
         self._trading_base = TRADING_LIVE if live else TRADING_PAPER
         self._data_feed = data_feed.strip().lower()
         self._bar_adjustment = bar_adjustment.strip().lower() or "split"
+        if self._data_feed and self._data_feed not in _VALID_DATA_FEEDS:
+            raise BrokerError(
+                f"Invalid Alpaca data feed {self._data_feed!r}; "
+                f"expected one of {', '.join(sorted(_VALID_DATA_FEEDS))}."
+            )
+        if self._bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+            raise BrokerError(
+                f"Invalid bar adjustment {self._bar_adjustment!r}; "
+                f"expected one of {', '.join(sorted(_VALID_BAR_ADJUSTMENTS))}."
+            )
         headers = {
             "APCA-API-KEY-ID": key_id,
             "APCA-API-SECRET-KEY": secret_key,
@@ -96,18 +109,38 @@ class AlpacaBroker(Broker):
         self._client = httpx.Client(headers=headers, timeout=timeout)
 
     # --- low-level helpers ---------------------------------------------------
+    def _api_error(self, method: str, url: str, status: int, text: str) -> BrokerError:
+        detail = text[:400]
+        msg = f"Alpaca API {status} for {method} {url}: {detail}"
+        if status == 401:
+            msg += (
+                " Hint: Trading and market data require ALPACA_API_KEY_ID and "
+                "ALPACA_API_SECRET_KEY (PK... keys from the Alpaca paper/live "
+                "dashboard). Broker API OAuth (authx.alpaca.markets) is a "
+                "different product and will not work here."
+            )
+        elif status == 403 and "data.alpaca.markets" in url:
+            msg += (
+                " Hint: your data subscription may not include the requested feed "
+                "(try ALPACA_DATA_FEED=iex)."
+            )
+        return BrokerError(msg)
+
     def _request(self, method: str, url: str, **kwargs) -> dict | list:
         try:
             resp = self._client.request(method, url, **kwargs)
         except httpx.HTTPError as exc:  # network error
             raise BrokerError(f"Alpaca network error: {exc}") from exc
         if resp.status_code >= 400:
-            raise BrokerError(
-                f"Alpaca API {resp.status_code} for {method} {url}: {resp.text[:400]}"
-            )
+            raise self._api_error(method, url, resp.status_code, resp.text)
         if not resp.content:
             return {}
-        return resp.json()
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise BrokerError(
+                f"Alpaca returned non-JSON for {method} {url}: {resp.text[:200]}"
+            ) from exc
 
     def _trading(self, method: str, path: str, **kwargs) -> dict | list:
         return self._request(method, f"{self._trading_base}{path}", **kwargs)
@@ -127,7 +160,8 @@ class AlpacaBroker(Broker):
     # --- account & positions -------------------------------------------------
     def get_account(self) -> Account:
         d = self._trading("GET", "/v2/account")
-        assert isinstance(d, dict)
+        if not isinstance(d, dict):
+            raise BrokerError("Alpaca account response was not an object.")
         return Account(
             equity=_f(d.get("equity")),
             cash=_f(d.get("cash")),
@@ -300,7 +334,8 @@ class AlpacaBroker(Broker):
         if request.client_order_id:
             payload["client_order_id"] = request.client_order_id
         d = self._trading("POST", "/v2/orders", json=payload)
-        assert isinstance(d, dict)
+        if not isinstance(d, dict):
+            raise BrokerError("Alpaca order response was not an object.")
         return _order_from_payload(d)
 
     def list_orders(self, status: str = "open") -> list[Order]:

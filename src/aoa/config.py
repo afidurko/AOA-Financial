@@ -49,6 +49,10 @@ def _int(name: str, default: int) -> int:
         return default
 
 
+_VALID_DATA_FEEDS = frozenset({"", "sip", "iex", "boats", "otc"})
+_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     """Hard guardrails. Orders violating any of these are rejected outright."""
@@ -132,6 +136,14 @@ class Config:
             problems.append(
                 "ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY are not set — "
                 "no market data or order execution is possible."
+            )
+        if self.alpaca_data_feed and self.alpaca_data_feed not in _VALID_DATA_FEEDS - {""}:
+            problems.append(
+                "ALPACA_DATA_FEED must be one of: sip, iex, boats, otc (or leave blank)."
+            )
+        if self.alpaca_bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+            problems.append(
+                "ALPACA_BAR_ADJUSTMENT must be one of: raw, split, dividend, all, spin-off."
             )
         r = self.risk
         if not 0 < r.max_position_pct <= 1:

@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import json
 
-from aoa.agents.base import Agent, Direction, Signal
+from aoa.agents.base import Agent, Direction, Signal, clamp_conviction, parse_direction
 from aoa.data.market_data import SymbolSnapshot
+from aoa.llm.client import LLMError
 
 _SCHEMA = {
     "type": "object",
@@ -55,12 +56,21 @@ class FundamentalAgent(Agent):
             "Give your qualitative fundamental/catalyst read and event-risk "
             "assessment as JSON. Remember: do not fabricate specific news."
         )
-        r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        try:
+            r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        except LLMError as exc:
+            return Signal(
+                symbol=snap.symbol,
+                source=self.name,
+                direction=Direction.NEUTRAL,
+                conviction=0.0,
+                rationale=f"LLM unavailable ({exc}).",
+            )
         return Signal(
             symbol=snap.symbol,
             source=self.name,
-            direction=Direction(r["direction"]),
-            conviction=max(0.0, min(1.0, float(r["conviction"]))),
-            rationale=r["rationale"],
+            direction=parse_direction(r.get("direction")),
+            conviction=clamp_conviction(r.get("conviction")),
+            rationale=r.get("rationale", "No rationale provided."),
             tags=["fundamental", f"event_risk:{r.get('event_risk', 'medium')}"],
         )

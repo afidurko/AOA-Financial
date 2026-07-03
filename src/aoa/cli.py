@@ -78,7 +78,7 @@ def _print_cycle(result: CycleResult) -> None:
 
 
 # --------------------------------------------------------------------- commands
-def cmd_doctor(cfg: Config) -> int:
+def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print(f"AOA Financial — trading mode: {cfg.trading_mode.upper()}")
     problems = cfg.validate()
     if problems:
@@ -87,6 +87,9 @@ def cmd_doctor(cfg: Config) -> int:
             print(f"  ✗ {p}")
         return 1
     print("  ✓ Configuration looks complete.")
+    if offline:
+        print("  ✓ Offline mode — skipped broker and LLM connectivity checks.")
+        return 0
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
@@ -177,7 +180,12 @@ def cmd_journal(cfg: Config, n: int) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("doctor", help="Validate configuration & connectivity.")
+    doctor = sub.add_parser("doctor", help="Validate configuration & connectivity.")
+    doctor.add_argument(
+        "--offline",
+        action="store_true",
+        help="Validate config only; skip live broker and LLM checks.",
+    )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single swarm cycle.")
     sub.add_parser("loop", help="Run cycles continuously.")
@@ -189,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "doctor":
-            return cmd_doctor(cfg)
+            return cmd_doctor(cfg, offline=getattr(args, "offline", False))
         if args.command == "status":
             return cmd_status(cfg)
         if args.command == "run":
