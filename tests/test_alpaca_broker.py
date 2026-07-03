@@ -6,56 +6,53 @@ from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 import pytest
+from alpaca.common.exceptions import APIError
+from requests import Response
+from requests.exceptions import HTTPError
 
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.base import BrokerError
+from aoa.brokerage.models import Bar
 from aoa.cli import cmd_doctor
 from aoa.config import Config
 
 
-def _bars_payload() -> dict:
-    return {
-        "bars": [
-            {
-                "t": "2024-01-02T00:00:00Z",
-                "o": 100.0,
-                "h": 101.0,
-                "l": 99.0,
-                "c": 100.5,
-                "v": 1000,
-            }
-        ]
-    }
+def _api_error(status_code: int, body: str = '{"message":"forbidden"}') -> APIError:
+    response = Response()
+    response.status_code = status_code
+    return APIError(body, HTTPError(response=response))
 
 
-def _ok_response(payload: dict | list) -> MagicMock:
-    resp = MagicMock()
-    resp.status_code = 200
-    resp.content = b"{}"
-    resp.json.return_value = payload
-    return resp
+def _sample_bar() -> Bar:
+    return Bar(
+        timestamp=datetime(2024, 1, 2, tzinfo=timezone.utc),
+        open=100.0,
+        high=101.0,
+        low=99.0,
+        close=100.5,
+        volume=1000.0,
+    )
 
 
 def test_verify_stock_bars_success():
     broker = AlpacaBroker("key-id", "secret-key")
-    broker._client.request = MagicMock(return_value=_ok_response(_bars_payload()))
+    bar_set = MagicMock()
+    bar_set.__getitem__.return_value = [_sample_bar()]
+    broker._stock_data.get_stock_bars = MagicMock(return_value=bar_set)
 
     bar = broker.verify_stock_bars("AAPL", limit=1)
 
     assert bar.close == 100.5
     assert bar.timestamp == datetime(2024, 1, 2, tzinfo=timezone.utc)
-    call = broker._client.request.call_args
-    assert call.args[0] == "GET"
-    assert call.args[1] == "https://data.alpaca.markets/v2/stocks/AAPL/bars"
-    assert call.kwargs["params"]["limit"] == 1
+    broker._stock_data.get_stock_bars.assert_called_once()
+    request = broker._stock_data.get_stock_bars.call_args.args[0]
+    assert request.symbol_or_symbols == "AAPL"
+    assert request.limit == 1
 
 
 def test_verify_stock_bars_auth_failure():
-    resp = MagicMock()
-    resp.status_code = 403
-    resp.text = '{"message":"forbidden"}'
     broker = AlpacaBroker("bad-key", "bad-secret")
-    broker._client.request = MagicMock(return_value=resp)
+    broker._stock_data.get_stock_bars = MagicMock(side_effect=_api_error(403))
 
     with pytest.raises(BrokerError, match="403"):
         broker.verify_stock_bars("AAPL")
@@ -63,7 +60,9 @@ def test_verify_stock_bars_auth_failure():
 
 def test_verify_stock_bars_empty_response():
     broker = AlpacaBroker("key-id", "secret-key")
-    broker._client.request = MagicMock(return_value=_ok_response({"bars": []}))
+    bar_set = MagicMock()
+    bar_set.__getitem__.return_value = []
+    broker._stock_data.get_stock_bars = MagicMock(return_value=bar_set)
 
     with pytest.raises(BrokerError, match="returned no data"):
         broker.verify_stock_bars("AAPL")
@@ -75,10 +74,7 @@ def test_cmd_doctor_reports_stock_bars_check(monkeypatch):
     broker.name = "alpaca-paper"
     broker.get_account.return_value.equity = 50_000.0
     broker.is_market_open.return_value = True
-    broker.verify_stock_bars.return_value.timestamp = datetime(
-        2024, 1, 2, tzinfo=timezone.utc
-    )
-    broker.verify_stock_bars.return_value.close = 190.12
+    broker.verify_stock_bars.return_value = _sample_bar()
     monkeypatch.setattr("aoa.cli.build_broker", lambda _cfg: broker)
     monkeypatch.setattr("aoa.cli.build_llm", lambda _cfg: MagicMock())
 
