@@ -12,6 +12,7 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
+  aoa workloop   Run the autonomous discover→merge improvement loop.
 """
 
 from __future__ import annotations
@@ -36,6 +37,9 @@ from aoa.simulation.trends import analyze_trends
 from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
+from aoa.workloop.models import STAGE_ORDER
+from aoa.workloop.orchestrator import WorkloopOrchestrator
+from aoa.workloop.scheduler import build_scheduler
 
 
 def build_broker(cfg: Config) -> Broker:
@@ -540,6 +544,126 @@ def cmd_journal(cfg: Config, n: int) -> int:
     return 0
 
 
+def _print_workloop_result(result, *, approver: str = "Aaron") -> None:
+    run = result.run
+    print("\n=== Work-loop summary ===")
+    print(f"Run: {run.run_id} | stage: {run.stage} | status: {run.status}")
+    if run.discovered:
+        kinds = sorted({s.get('kind', '') for s in run.discovered})
+        print(f"Discovered {len(run.discovered)} source(s): {', '.join(kinds)}")
+    if run.adaptations:
+        actions = run.adaptations[-1].get("actions", [])
+        if actions:
+            print("Recommended adaptations:")
+            for action in actions:
+                print(f"  • {action}")
+    if run.proposal:
+        print(f"Proposal: {run.proposal.get('summary', '')}")
+    if run.approval:
+        print(
+            f"Approval: {run.approval.get('approver')} at {run.approval.get('approved_at', 'n/a')}"
+        )
+    if run.verify:
+        flag = "PASS" if run.verify.get("passed") else "FAIL"
+        print(f"Verify: {flag}")
+    if run.upgrade:
+        flag = "OK" if run.upgrade.get("ok", True) else "FAIL"
+        print(f"Upgrade: {flag}")
+    if run.reverify:
+        flag = "PASS" if run.reverify.get("passed") else "FAIL"
+        print(f"Re-verify: {flag}")
+    if run.merge:
+        print(f"Merge: {run.merge.get('message', '')}")
+    if run.error:
+        print(f"Note: {run.error}")
+    for note in run.notes:
+        print(f"  - {note}")
+    if result.halted and run.status == "awaiting_approval":
+        print(f"\nAwaiting approval from {approver}. Run: aoa workloop approve")
+
+
+def cmd_workloop_run(
+    cfg: Config,
+    *,
+    from_stage: str | None,
+    dry_run: bool,
+    resume: bool,
+) -> int:
+    if not cfg.workloop_enabled:
+        print("Work-loop is disabled (AOA_WORKLOOP_ENABLED=false).")
+        return 1
+    orch = WorkloopOrchestrator(cfg)
+    print(f"Work-loop at {cfg.workloop_path}")
+    result = orch.run(from_stage=from_stage, dry_run=dry_run, resume=resume)
+    _print_workloop_result(result, approver=cfg.workloop_approver)
+    if result.run.status == "failed":
+        return 1
+    if result.halted:
+        return 2
+    return 0
+
+
+def cmd_workloop_status(cfg: Config) -> int:
+    orch = WorkloopOrchestrator(cfg)
+    run = orch.status()
+    sched = build_scheduler(cfg).state()
+    print(f"Scheduler: iteration={sched.iteration} status={sched.status}")
+    if sched.last_completed_at:
+        print(f"Last completed: {sched.last_completed_run_id} at {sched.last_completed_at}")
+    if sched.next_run_at:
+        print(f"Next run scheduled: {sched.next_run_at}")
+    if run is None:
+        print("No active work-loop run.")
+        return 0
+    print(f"Run: {run.run_id}")
+    print(f"Stage: {run.stage}")
+    print(f"Status: {run.status}")
+    if run.iteration:
+        print(f"Iteration: {run.iteration}")
+    if run.previous_run_id:
+        print(f"Previous run: {run.previous_run_id}")
+    if run.error:
+        print(f"Error: {run.error}")
+    return 0
+
+
+def cmd_workloop_loop(cfg: Config, *, dry_run: bool) -> int:
+    if not cfg.workloop_enabled:
+        print("Work-loop is disabled (AOA_WORKLOOP_ENABLED=false).")
+        return 1
+    scheduler = build_scheduler(cfg)
+    print(
+        f"Work-loop scheduler at {cfg.workloop_path} "
+        f"(interval={cfg.workloop_interval_seconds}s). Ctrl-C to stop."
+    )
+    try:
+        scheduler.run_forever(dry_run=dry_run)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    return 0
+
+
+def cmd_workloop_approve(cfg: Config, *, approver: str, note: str) -> int:
+    orch = WorkloopOrchestrator(cfg)
+    approval = orch.approve(approver=approver, note=note)
+    print(
+        f"Recorded approval from {approval['approver']} for run {approval['run_id']}."
+    )
+    return 0
+
+
+def cmd_workloop_log(cfg: Config, n: int) -> int:
+    from aoa.workloop.store import WorkloopStore
+
+    entries = WorkloopStore(cfg.workloop_path).tail(n)
+    if not entries:
+        print("Work-loop log is empty.")
+        return 0
+    for e in entries:
+        print(f"{e.get('ts', '')}  {e.get('event', '')}")
+    return 0
+
+
 def cmd_serve(cfg: Config) -> int:
     try:
         import uvicorn
@@ -658,6 +782,45 @@ def main(argv: list[str] | None = None) -> int:
         "--halflife", type=int, default=63, help="Recency half-life (bars) for adaptation."
     )
 
+    wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
+    wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
+    wl_run = wl_sub.add_parser("run", help="Run the work loop.")
+    wl_run.add_argument(
+        "--from",
+        dest="from_stage",
+        choices=list(STAGE_ORDER),
+        help="Start at a specific stage.",
+    )
+    wl_run.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Bypass approval and skip execute/upgrade/merge side effects.",
+    )
+    wl_run.add_argument(
+        "--resume",
+        action="store_true",
+        help="Resume the last saved run (e.g. after approval).",
+    )
+    wl_loop = wl_sub.add_parser(
+        "loop",
+        help="Run work loops continuously at AOA_WORKLOOP_INTERVAL_SECONDS.",
+    )
+    wl_loop.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Bypass approval and skip execute/upgrade/merge side effects.",
+    )
+    wl_sub.add_parser("status", help="Show the current work-loop run state.")
+    wl_approve = wl_sub.add_parser("approve", help="Record approver sign-off.")
+    wl_approve.add_argument(
+        "--approver",
+        default=None,
+        help="Approver name (defaults to AOA_WORKLOOP_APPROVER).",
+    )
+    wl_approve.add_argument("--note", default="", help="Optional approval note.")
+    wl_log = wl_sub.add_parser("log", help="Tail the work-loop audit log.")
+    wl_log.add_argument("-n", type=int, default=20, help="Number of entries to show.")
+
     args = parser.parse_args(argv)
     cfg = Config.from_env()
 
@@ -699,6 +862,23 @@ def main(argv: list[str] | None = None) -> int:
                 args.paths,
                 args.halflife,
             )
+        if args.command == "workloop":
+            if args.workloop_command == "run":
+                return cmd_workloop_run(
+                    cfg,
+                    from_stage=getattr(args, "from_stage", None),
+                    dry_run=getattr(args, "dry_run", False),
+                    resume=getattr(args, "resume", False),
+                )
+            if args.workloop_command == "loop":
+                return cmd_workloop_loop(cfg, dry_run=getattr(args, "dry_run", False))
+            if args.workloop_command == "status":
+                return cmd_workloop_status(cfg)
+            if args.workloop_command == "approve":
+                approver = args.approver or cfg.workloop_approver
+                return cmd_workloop_approve(cfg, approver=approver, note=args.note)
+            if args.workloop_command == "log":
+                return cmd_workloop_log(cfg, args.n)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
