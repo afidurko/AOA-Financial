@@ -55,12 +55,26 @@ class FundamentalAgent(Agent):
             "Give your qualitative fundamental/catalyst read and event-risk "
             "assessment as JSON. Remember: do not fabricate specific news."
         )
-        r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        r = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "direction": "neutral",
+                "conviction": 0.0,
+                "event_risk": "medium",
+                "rationale": "LLM unavailable; defaulting to neutral.",
+            },
+        )
+        try:
+            direction = Direction(r.get("direction", "neutral"))
+        except ValueError:
+            direction = Direction.NEUTRAL
         return Signal(
             symbol=snap.symbol,
             source=self.name,
-            direction=Direction(r["direction"]),
-            conviction=max(0.0, min(1.0, float(r["conviction"]))),
-            rationale=r["rationale"],
+            direction=direction,
+            conviction=max(0.0, min(1.0, float(r.get("conviction", 0.0)))),
+            rationale=r.get("rationale", "No rationale provided."),
             tags=["fundamental", f"event_risk:{r.get('event_risk', 'medium')}"],
         )

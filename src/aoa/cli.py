@@ -90,10 +90,12 @@ def cmd_doctor(cfg: Config) -> int:
         print(f"  ✗ Broker check failed: {exc}")
         return 1
     try:
-        build_llm(cfg)
+        llm = build_llm(cfg)
         print("  ✓ LLM client initialized.")
+        llm.ping()
+        print(f"  ✓ LLM reachable (model={cfg.model}).")
     except LLMError as exc:
-        print(f"  ✗ LLM init failed: {exc}")
+        print(f"  ✗ LLM check failed: {exc}")
         return 1
     return 0
 
@@ -120,13 +122,19 @@ def cmd_status(cfg: Config) -> int:
     return 0
 
 
+def _cycle_exit_code(result: CycleResult) -> int:
+    if result.execution and result.execution.errors:
+        return 1
+    return 0
+
+
 def cmd_run(cfg: Config) -> int:
     orch = build_orchestrator(cfg)
     if not orch.broker.is_market_open():
         print("Market is closed. Running analysis anyway (orders may queue/reject).")
     result = orch.run_cycle()
     _print_cycle(result)
-    return 0
+    return _cycle_exit_code(result)
 
 
 def cmd_loop(cfg: Config) -> int:
@@ -140,6 +148,8 @@ def cmd_loop(cfg: Config) -> int:
             if orch.broker.is_market_open():
                 result = orch.run_cycle()
                 _print_cycle(result)
+                if _cycle_exit_code(result):
+                    print("Cycle finished with execution errors.", file=sys.stderr)
             else:
                 print("Market closed — sleeping.")
             time.sleep(cfg.cycle_seconds)

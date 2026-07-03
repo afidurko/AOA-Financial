@@ -85,7 +85,16 @@ class OptionsStrategistAgent(Agent):
             "Propose at most one cash-account options structure as JSON. If nothing "
             "is attractive, set strategy to 'none'."
         )
-        r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        r = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "strategy": "none",
+                "rationale": "LLM unavailable.",
+                "conviction": 0.0,
+            },
+        )
         if r.get("strategy") in (None, "none"):
             return None
         # Resolve the chosen contract for downstream sizing/pricing.

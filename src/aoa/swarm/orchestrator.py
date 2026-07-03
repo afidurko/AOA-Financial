@@ -28,7 +28,7 @@ from aoa.agents.portfolio import PortfolioManagerAgent
 from aoa.agents.risk import RiskManagerAgent
 from aoa.agents.scanner import ScannerAgent
 from aoa.agents.technical import TechnicalAgent
-from aoa.brokerage.base import Broker
+from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import AssetClass, Side
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
@@ -94,7 +94,13 @@ class Orchestrator:
         )
 
         # 2) Universe.
-        bb.universe = self._resolve_universe()
+        try:
+            bb.universe = self._resolve_universe()
+        except BrokerError as exc:
+            msg = f"Failed to resolve trading universe: {exc}"
+            notes.append(msg)
+            self.journal.record("broker.error", {"op": "resolve_universe", "error": str(exc)})
+            return CycleResult(blackboard=bb, notes=notes)
         if not bb.universe:
             notes.append("Empty universe — nothing to analyze.")
             return CycleResult(blackboard=bb, notes=notes)
@@ -110,7 +116,8 @@ class Orchestrator:
             # Still run the PM on existing positions to consider exits.
 
         # 5 & 6) Per-candidate analysis.
-        per_symbol = self._analyze_candidates(bb)
+        per_symbol, analysis_notes = self._analyze_candidates(bb)
+        notes.extend(analysis_notes)
         if not per_symbol and bb.positions:
             per_symbol = self._positions_for_exit_review(bb)
 
@@ -193,8 +200,9 @@ class Orchestrator:
         active = self.broker.get_most_active(limit=25)
         return active
 
-    def _analyze_candidates(self, bb: Blackboard) -> list[dict]:
+    def _analyze_candidates(self, bb: Blackboard) -> tuple[list[dict], list[str]]:
         per_symbol: list[dict] = []
+        notes: list[str] = []
         for cand in bb.candidates:
             symbol = cand.get("symbol", "").upper()
             snap = bb.snapshots.get(symbol) or self.market.snapshot(symbol)
@@ -222,7 +230,16 @@ class Orchestrator:
                 and bb.account
                 and bb.account.options_level >= 2
             ):
-                idea = self.options.propose(symbol, combined_dir, combined_conv, price)
+                try:
+                    idea = self.options.propose(symbol, combined_dir, combined_conv, price)
+                except BrokerError as exc:
+                    msg = f"Option chain unavailable for {symbol}: {exc}"
+                    notes.append(msg)
+                    self.journal.record(
+                        "broker.error",
+                        {"op": "get_option_chain", "symbol": symbol, "error": str(exc)},
+                    )
+                    idea = None
                 if idea:
                     contract = idea.pop("_contract", None)
                     if contract is not None:
@@ -232,7 +249,7 @@ class Orchestrator:
                         k: v for k, v in idea.items() if not k.startswith("_")
                     }
             per_symbol.append(entry)
-        return per_symbol
+        return per_symbol, notes
 
     def _positions_for_exit_review(self, bb: Blackboard) -> list[dict]:
         """When the scanner finds nothing, still give the PM context on open positions."""

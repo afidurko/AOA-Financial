@@ -26,6 +26,17 @@ def test_validate_clean_config():
     assert cfg.validate() == []
 
 
+def test_validate_rejects_bad_effort():
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        effort="turbo",
+    )
+    problems = cfg.validate()
+    assert any("AOA_EFFORT" in p for p in problems)
+
+
 def test_from_env_parses_universe(monkeypatch):
     monkeypatch.setenv("AOA_UNIVERSE", "aapl, msft ,nvda")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")

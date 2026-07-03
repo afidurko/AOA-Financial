@@ -64,7 +64,7 @@ class RiskLimits:
 class Config:
     # LLM
     anthropic_api_key: str = ""
-    model: str = "claude-opus-4-8"
+    model: str = "claude-sonnet-4-20250514"
     effort: str = "high"
 
     # Brokerage
@@ -102,7 +102,7 @@ class Config:
         )
         return cls(
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            model=os.environ.get("AOA_MODEL", "claude-opus-4-8"),
+            model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
             alpaca_key_id=os.environ.get("ALPACA_API_KEY_ID", ""),
             alpaca_secret_key=os.environ.get("ALPACA_API_SECRET_KEY", ""),
@@ -134,4 +134,15 @@ class Config:
             problems.append("AOA_MAX_POSITION_PCT must be in (0, 1].")
         if not 0 <= r.min_cash_buffer_pct < 1:
             problems.append("AOA_MIN_CASH_BUFFER_PCT must be in [0, 1).")
+        if not 0 < r.max_options_pct <= 1:
+            problems.append("AOA_MAX_OPTIONS_PCT must be in (0, 1].")
+        if not 0 < r.max_daily_loss_pct <= 1:
+            problems.append("AOA_MAX_DAILY_LOSS_PCT must be in (0, 1].")
+        if r.max_orders_per_cycle < 1:
+            problems.append("AOA_MAX_ORDERS_PER_CYCLE must be >= 1.")
+        valid_effort = {"low", "medium", "high", "xhigh", "max"}
+        if self.effort not in valid_effort:
+            problems.append(
+                f"AOA_EFFORT must be one of {sorted(valid_effort)} (got {self.effort!r})."
+            )
         return problems

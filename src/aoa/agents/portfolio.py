@@ -85,4 +85,12 @@ class PortfolioManagerAgent(Agent):
             f"Propose at most {max_new_positions} new trades (plus any exits). "
             "Return JSON."
         )
-        return self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        return self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "proposals": [],
+                "portfolio_commentary": "LLM unavailable; no trades proposed.",
+            },
+        )

@@ -111,3 +111,22 @@ def test_daily_equity_baseline_persists_across_restarts(fake_broker, fake_llm, t
     orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
     orch.run_cycle()
     assert orch._starting_equity == 100_000.0
+
+
+def test_universe_broker_error_surfaces_in_notes(fake_broker, fake_llm, tmp_path):
+    from dataclasses import replace
+
+    from aoa.brokerage.base import BrokerError
+
+    def boom(limit=25):
+        raise BrokerError("screener unavailable")
+
+    fake_broker.get_most_active = boom
+    journal = Journal(tmp_path / "j.jsonl")
+    cfg = replace(_config(dry_run=True), universe=())
+    orch = Orchestrator(cfg, fake_broker, fake_llm, journal)
+
+    result = orch.run_cycle()
+
+    assert result.blackboard.universe == []
+    assert any("Failed to resolve trading universe" in n for n in result.notes)

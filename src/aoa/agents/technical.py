@@ -50,7 +50,17 @@ class TechnicalAgent(Agent):
             f"Technicals: {json.dumps(snap.technicals, default=str)}\n\n"
             "Return your technical read as JSON."
         )
-        r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        r = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "direction": "neutral",
+                "conviction": 0.0,
+                "horizon": "swing",
+                "rationale": "LLM unavailable; defaulting to neutral.",
+            },
+        )
         levels = {}
         if r.get("support") is not None:
             levels["support"] = r["support"]
@@ -58,12 +68,16 @@ class TechnicalAgent(Agent):
             levels["resistance"] = r["resistance"]
         if r.get("stop_suggestion") is not None:
             levels["stop"] = r["stop_suggestion"]
+        try:
+            direction = Direction(r.get("direction", "neutral"))
+        except ValueError:
+            direction = Direction.NEUTRAL
         return Signal(
             symbol=snap.symbol,
             source=self.name,
-            direction=Direction(r["direction"]),
-            conviction=_clamp(r["conviction"]),
-            rationale=r["rationale"],
+            direction=direction,
+            conviction=_clamp(r.get("conviction", 0.0)),
+            rationale=r.get("rationale", "No rationale provided."),
             horizon=r.get("horizon", "swing"),
             key_levels=levels,
             tags=["technical"],

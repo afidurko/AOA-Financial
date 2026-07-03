@@ -177,10 +177,7 @@ class AlpacaBroker(Broker):
 
     def get_most_active(self, limit: int = 25) -> list[str]:
         params = {"by": "volume", "top": limit}
-        try:
-            d = self._data("GET", "/v1beta1/screener/stocks/most-actives", params=params)
-        except BrokerError:
-            return []
+        d = self._data("GET", "/v1beta1/screener/stocks/most-actives", params=params)
         rows = d.get("most_actives", []) if isinstance(d, dict) else []
         return [r.get("symbol", "") for r in rows if r.get("symbol")]
 
@@ -196,10 +193,7 @@ class AlpacaBroker(Broker):
             params["expiration_date"] = expiration
         if option_type:
             params["type"] = option_type  # "call" | "put"
-        try:
-            d = self._data("GET", f"/v1beta1/options/snapshots/{underlying}", params=params)
-        except BrokerError:
-            return []
+        d = self._data("GET", f"/v1beta1/options/snapshots/{underlying}", params=params)
         snapshots = d.get("snapshots", {}) if isinstance(d, dict) else {}
         oi_by_symbol = self._fetch_open_interest(underlying, expiration=expiration)
         contracts: list[OptionContract] = []
