@@ -5,6 +5,7 @@ Commands:
   aoa status    Show account, positions, and market clock.
   aoa run       Run a single analysis→decision→execution cycle.
   aoa loop      Run cycles continuously on the configured cadence.
+  aoa serve     Start the web dashboard and REST API.
   aoa journal   Print the tail of the decision/trade journal.
 """
 
@@ -17,6 +18,7 @@ import time
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
+from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
@@ -30,8 +32,20 @@ def build_llm(cfg: Config) -> LLMClient:
     return LLMClient(cfg.anthropic_api_key, model=cfg.model, effort=cfg.effort)
 
 
+def build_news(cfg: Config) -> NewsFeed:
+    if not cfg.news_enabled or not cfg.has_brokerage_creds:
+        return NullNewsFeed()
+    return AlpacaNewsFeed(cfg.alpaca_key_id, cfg.alpaca_secret_key)
+
+
 def build_orchestrator(cfg: Config) -> Orchestrator:
-    return Orchestrator(cfg, build_broker(cfg), build_llm(cfg), Journal())
+    return Orchestrator(
+        cfg,
+        build_broker(cfg),
+        build_llm(cfg),
+        Journal(cfg.journal_path),
+        build_news(cfg),
+    )
 
 
 # --------------------------------------------------------------------- output
@@ -149,12 +163,32 @@ def cmd_loop(cfg: Config) -> int:
 
 
 def cmd_journal(cfg: Config, n: int) -> int:
-    entries = Journal().tail(n)
+    entries = Journal(cfg.journal_path).tail(n)
     if not entries:
         print("Journal is empty.")
         return 0
     for e in entries:
         print(f"{e.get('ts', '')}  {e.get('event', '')}")
+    return 0
+
+
+def cmd_serve(cfg: Config) -> int:
+    try:
+        import uvicorn
+    except ImportError:
+        print(
+            "Web server requires optional dependencies. Install with: pip install -e \".[web]\"",
+            file=sys.stderr,
+        )
+        return 1
+    from aoa.web.app import create_app
+
+    app = create_app(cfg)
+    print(
+        f"AOA dashboard at http://{cfg.web_host}:{cfg.web_port}/ "
+        f"(API docs at /api/docs)"
+    )
+    uvicorn.run(app, host=cfg.web_host, port=cfg.web_port, log_level="info")
     return 0
 
 
@@ -165,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single swarm cycle.")
     sub.add_parser("loop", help="Run cycles continuously.")
+    sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
 
@@ -180,6 +215,8 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(cfg)
         if args.command == "loop":
             return cmd_loop(cfg)
+        if args.command == "serve":
+            return cmd_serve(cfg)
         if args.command == "journal":
             return cmd_journal(cfg, args.n)
     except (BrokerError, LLMError) as exc:
