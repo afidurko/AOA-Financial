@@ -69,6 +69,15 @@ class PortfolioManagerAgent(Agent):
         "quiet day.\n"
         "- Never exceed available settled cash in aggregate buy notional."
     )
+    _trading_agents_prompt = (
+        "TradingAgents mode is ON. Each symbol may include:\n"
+        "- analyst_reports: structured views from technical, fundamental, news, "
+        "and sentiment analysts\n"
+        "- research_debate: bull/bear debate with prevailing_view and conviction\n"
+        "Weight the research_debate prevailing_view and corroborated analyst "
+        "reports heavily. Down-rank names where debate conviction is low or "
+        "analysts disagree without a clear prevailing view."
+    )
 
     def decide(
         self,
@@ -78,7 +87,11 @@ class PortfolioManagerAgent(Agent):
         *,
         max_new_positions: int = 5,
         plasticity_context: str = "",
+        trading_agents_enabled: bool = False,
     ) -> dict:
+        system = self.system_prompt
+        if trading_agents_enabled:
+            system = f"{self.system_prompt}\n\n{self._trading_agents_prompt}"
         prompt = (
             f"Account: {json.dumps(account)}\n"
             f"Current positions: {json.dumps(positions, default=str)}\n"
@@ -92,7 +105,7 @@ class PortfolioManagerAgent(Agent):
             "Return JSON."
         )
         return self.structured_safe(
-            self.system_prompt,
+            system,
             prompt,
             _SCHEMA,
             {
