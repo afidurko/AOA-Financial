@@ -8,11 +8,22 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from aoa.agents.base import TradeProposal
 from aoa.brokerage.base import Broker, BrokerError
-from aoa.brokerage.models import Order, OrderRequest, OrderType, Side, TimeInForce
+from aoa.brokerage.models import (
+    AssetClass,
+    Order,
+    OrderRequest,
+    OrderType,
+    Side,
+    TimeInForce,
+)
 from aoa.journal.store import Journal
+
+if TYPE_CHECKING:
+    from aoa.state import StateStore
 
 
 @dataclass
@@ -24,10 +35,18 @@ class ExecutionReport:
 
 
 class Executor:
-    def __init__(self, broker: Broker, journal: Journal, *, dry_run: bool = False) -> None:
+    def __init__(
+        self,
+        broker: Broker,
+        journal: Journal,
+        *,
+        dry_run: bool = False,
+        state: StateStore | None = None,
+    ) -> None:
         self.broker = broker
         self.journal = journal
         self.dry_run = dry_run
+        self.state = state
 
     def execute(self, proposals: list[TradeProposal]) -> ExecutionReport:
         report = ExecutionReport(dry_run=self.dry_run)
@@ -67,6 +86,10 @@ class Executor:
                 order = self.broker.submit_order(request)
                 report.submitted.append(order)
                 open_order_keys.add(order_key)
+                # Record sale proceeds as unsettled (T+1) so the swarm does not
+                # redeploy them before settlement and trip a good-faith violation.
+                if self.state is not None and prop.side is Side.SELL:
+                    self.state.record_sale(prop.est_notional)
                 self.journal.record(
                     "order.submitted",
                     {
@@ -99,6 +122,8 @@ class Executor:
     def _to_request(prop: TradeProposal) -> OrderRequest:
         # Use a marketable limit when we have a price estimate, otherwise market.
         order_type = OrderType.LIMIT if prop.limit_price else OrderType.MARKET
+        # Protective legs only attach to opening equity buys.
+        is_entry = prop.side is Side.BUY and prop.asset_class is AssetClass.EQUITY
         return OrderRequest(
             symbol=prop.symbol,
             qty=prop.qty,
@@ -107,6 +132,8 @@ class Executor:
             order_type=order_type,
             time_in_force=TimeInForce.DAY,
             limit_price=prop.limit_price,
+            stop_loss_price=prop.stop_price if is_entry else None,
+            take_profit_price=prop.take_profit_price if is_entry else None,
             client_order_id=f"aoa-{uuid.uuid4().hex[:16]}",
             rationale=prop.rationale,
         )
@@ -120,4 +147,6 @@ def _request_ctx(r: OrderRequest) -> dict:
         "asset_class": r.asset_class.value,
         "order_type": r.order_type.value,
         "limit_price": r.limit_price,
+        "stop_loss_price": r.stop_loss_price,
+        "take_profit_price": r.take_profit_price,
     }

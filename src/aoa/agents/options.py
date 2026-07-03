@@ -13,7 +13,6 @@ import json
 from aoa.agents.base import Agent, Direction
 from aoa.brokerage.base import Broker
 from aoa.brokerage.models import OptionContract
-from aoa.llm.client import LLMError
 
 _CASH_STRATEGIES = ["long_call", "long_put", "covered_call", "cash_secured_put", "none"]
 
@@ -86,10 +85,16 @@ class OptionsStrategistAgent(Agent):
             "Propose at most one cash-account options structure as JSON. If nothing "
             "is attractive, set strategy to 'none'."
         )
-        try:
-            r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
-        except LLMError:
-            return None
+        r = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "strategy": "none",
+                "rationale": "LLM unavailable.",
+                "conviction": 0.0,
+            },
+        )
         if r.get("strategy") in (None, "none"):
             return None
         # Resolve the chosen contract for downstream sizing/pricing.

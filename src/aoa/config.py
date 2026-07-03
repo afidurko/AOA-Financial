@@ -5,6 +5,10 @@ Configuration load order (lowest → highest priority):
 1. Environment profile — ``profiles/{AOA_PROFILE or AOA_ENV}.env``
 2. Local secrets file — ``.env``
 3. Shell / process environment (always wins)
+
+Set ``AOA_PROFILE=paper-dry`` or ``AOA_ENV=paper-dry`` to pick a profile. Named
+environments also apply default ``AOA_DRY_RUN`` / ``ALPACA_LIVE`` values unless
+those variables are already set.
 """
 
 from __future__ import annotations
@@ -29,6 +33,7 @@ _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
 
 
 def _load_dotenv(path: str | os.PathLike[str]) -> None:
+    """Populate ``os.environ`` from a dotenv file using ``setdefault``."""
     p = Path(path)
     if not p.exists():
         return
@@ -58,6 +63,7 @@ def _resolve_profile_path(name: str) -> Path | None:
 
 
 def load_env_files() -> None:
+    """Load profile and local dotenv files into ``os.environ``."""
     profile_name = os.environ.get("AOA_PROFILE") or os.environ.get("AOA_ENV")
     if profile_name:
         profile_path = _resolve_profile_path(profile_name.strip())
@@ -68,8 +74,12 @@ def load_env_files() -> None:
 
 def _apply_env_defaults(env: str) -> None:
     defaults = _ENV_DEFAULTS.get(env, _ENV_DEFAULTS["paper-dry"])
-    os.environ.setdefault("AOA_DRY_RUN", "true" if defaults["dry_run"] else "false")
-    os.environ.setdefault("ALPACA_LIVE", "true" if defaults["alpaca_live"] else "false")
+    os.environ.setdefault(
+        "AOA_DRY_RUN", "true" if defaults["dry_run"] else "false"
+    )
+    os.environ.setdefault(
+        "ALPACA_LIVE", "true" if defaults["alpaca_live"] else "false"
+    )
 
 
 def _bool(name: str, default: bool = False) -> bool:
@@ -91,7 +101,8 @@ def _int(name: str, default: int) -> int:
 
 
 def data_dir_for(env: str) -> Path:
-    return Path(os.environ.get("AOA_DATA_DIR", "data")) / env
+    base = Path(os.environ.get("AOA_DATA_DIR", "data"))
+    return base / env
 
 
 def journal_path_for(env: str) -> Path:
@@ -99,6 +110,13 @@ def journal_path_for(env: str) -> Path:
     if override:
         return Path(override)
     return data_dir_for(env) / "journal" / "aoa.jsonl"
+
+
+def plasticity_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_PLASTICITY_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "journal" / "plasticity.json"
 
 
 @dataclass(frozen=True)
@@ -112,11 +130,14 @@ class RiskLimits:
 
 @dataclass(frozen=True)
 class Config:
+    # Environment
     env: str = "paper-dry"
     profile: str = ""
     data_dir: Path = field(default_factory=lambda: data_dir_for("paper-dry"))
     journal_path: Path = field(default_factory=lambda: journal_path_for("paper-dry"))
+    plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
 
+    # LLM
     anthropic_api_key: str = ""
     model: str = "claude-sonnet-4-20250514"
     effort: str = "high"
@@ -156,7 +177,23 @@ class Config:
     ntfy_topic: str = ""
     ntfy_server: str = "https://ntfy.sh"
 
+    # Persistent state (daily-loss baseline + settlement ledger).
+    state_path: str = "journal/state.json"
+
+    # Journal-driven cross-cycle memory (neuroplasticity).
+    plasticity_enabled: bool = True
+    plasticity_tail: int = 200
+    plasticity_max_lessons: int = 10
+
+    # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
+
+    # Low-rank signal adaptation (LoRA-style online conviction recalibration)
+    adapt_enabled: bool = False
+    adapt_path: str = ".aoa/signal_adapter.json"
+    adapt_rank: int = 4
+    adapt_alpha: float = 8.0
+    adapt_lr: float = 0.05
 
     @property
     def has_brokerage_creds(self) -> bool:
@@ -193,6 +230,7 @@ class Config:
             profile=os.environ.get("AOA_PROFILE", "").strip(),
             data_dir=data_dir_for(env),
             journal_path=journal_path_for(env),
+            plasticity_path=plasticity_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -221,6 +259,17 @@ class Config:
             pushover_app_token=os.environ.get("AOA_PUSHOVER_APP_TOKEN", ""),
             ntfy_topic=os.environ.get("AOA_NTFY_TOPIC", ""),
             ntfy_server=os.environ.get("AOA_NTFY_SERVER", "https://ntfy.sh"),
+            state_path=os.environ.get(
+                "AOA_STATE_PATH", str(data_dir_for(env) / "state.json")
+            ),
+            plasticity_enabled=_bool("AOA_PLASTICITY_ENABLED", True),
+            plasticity_tail=max(20, _int("AOA_PLASTICITY_TAIL", 200)),
+            plasticity_max_lessons=max(1, _int("AOA_PLASTICITY_MAX_LESSONS", 10)),
+            adapt_enabled=_bool("AOA_ADAPT_ENABLED", False),
+            adapt_path=os.environ.get("AOA_ADAPT_PATH", ".aoa/signal_adapter.json"),
+            adapt_rank=_int("AOA_ADAPT_RANK", 4),
+            adapt_alpha=_float("AOA_ADAPT_ALPHA", 8.0),
+            adapt_lr=_float("AOA_ADAPT_LR", 0.05),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

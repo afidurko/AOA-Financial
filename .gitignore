@@ -3,6 +3,13 @@
 .env.*
 !.env.example
 
+# Generated data stores (aoa_financial)
+.aoa_data/
+.aoa_demo/
+*.db
+*.db-wal
+*.db-shm
+
 # Python
 __pycache__/
 *.py[cod]
@@ -24,6 +31,9 @@ journal/*.jsonl
 data/
 data_cache/
 *.log
+
+# Learned low-rank adapter state
+.aoa/
 
 # OS / editor
 .DS_Store
