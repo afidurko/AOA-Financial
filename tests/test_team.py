@@ -7,6 +7,7 @@ from aoa.journal.store import Journal
 from aoa.team.bob import BobAgent
 from aoa.team.models import HealthStatus, TrendDirection
 from aoa.team.orchestrator import TeamOrchestrator
+from aoa.team.tom import KNOWLEDGE, TomAgent
 
 
 def _config(dry_run=True):
@@ -21,13 +22,43 @@ def _config(dry_run=True):
 
 
 def test_tom_knowledge_includes_finance_setup():
-    from aoa.team.tom import TomAgent, KNOWLEDGE
-
     assert "shashankvemuri/Finance" in KNOWLEDGE
     assert "git clone https://github.com/shashankvemuri/Finance.git" in KNOWLEDGE
+    assert "cd Finance" in KNOWLEDGE
     assert "pip install -r requirements.txt" in KNOWLEDGE
     assert TomAgent.knowledge is KNOWLEDGE
     assert "Reference knowledge:" in TomAgent.system_prompt
+    assert KNOWLEDGE in TomAgent.system_prompt
+
+
+def test_tom_passes_knowledge_to_llm(fake_llm):
+    from aoa.brokerage.models import Quote
+    from aoa.data.market_data import SymbolSnapshot
+
+    captured: list[str] = []
+
+    def capture_structured(system, prompt, schema, **kwargs):
+        captured.append(system)
+        return {
+            "direction": "up",
+            "strength": 0.5,
+            "timeframe": "swing",
+            "rationale": "test",
+            "key_observations": [],
+        }
+
+    fake_llm.structured = capture_structured
+    tom = TomAgent(fake_llm)
+    snap = SymbolSnapshot(
+        symbol="AAPL",
+        quote=Quote(symbol="AAPL", bid=99.0, ask=101.0),
+        technicals={"1Day": {"last_close": 100.0, "sma_20": 98.0}},
+    )
+    tom.analyze_symbol(snap)
+
+    assert captured
+    assert "git clone https://github.com/shashankvemuri/Finance.git" in captured[0]
+    assert "pip install -r requirements.txt" in captured[0]
 
 
 def test_bob_health_passes(fake_broker):
