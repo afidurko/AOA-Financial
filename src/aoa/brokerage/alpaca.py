@@ -174,6 +174,21 @@ class AlpacaBroker(Broker):
             )
         return bars
 
+    def verify_stock_bars(self, symbol: str = "AAPL", limit: int = 1) -> Bar:
+        """Probe the authenticated ``/v2/stocks/.../bars`` endpoint.
+
+        Unlike crypto historical data, stock bars require valid API keys. A 401/403
+        from this call usually means missing or invalid ``ALPACA_API_KEY_ID`` /
+        ``ALPACA_API_SECRET_KEY``.
+        """
+        bars = self.get_bars(symbol, timeframe="1Day", limit=limit)
+        if not bars:
+            raise BrokerError(
+                f"Stock bars API reachable but returned no data for {symbol}. "
+                "Check your market-data subscription or symbol."
+            )
+        return bars[-1]
+
     def get_most_active(self, limit: int = 25) -> list[str]:
         params = {"by": "volume", "top": limit}
         try:

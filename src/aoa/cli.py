@@ -86,6 +86,11 @@ def cmd_doctor(cfg: Config) -> int:
         acct = broker.get_account()
         print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
         print(f"  ✓ Market open: {broker.is_market_open()}")
+        latest = broker.verify_stock_bars("AAPL", limit=1)
+        print(
+            f"  ✓ Stock market data OK (AAPL daily bar "
+            f"{latest.timestamp.date()}: close ${latest.close:,.2f})."
+        )
     except BrokerError as exc:
         print(f"  ✗ Broker check failed: {exc}")
         return 1
