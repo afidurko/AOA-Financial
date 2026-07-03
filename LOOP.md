@@ -36,7 +36,8 @@ Manual equivalent: invoke the `loop-triage` skill in Agent chat on your chosen c
 
 - Max sub-agent spawns per run: 0 (L1) / 2 (L2)
 - Max tokens/day: 100k (see `loop-budget.md`)
-- Append each run to `loop-run-log.md`; use `loop-budget` skill at start/end
+- Append each run to `loop-run-log.md` (markdown table); use `loop-budget` skill at start/end
+- Safety reference: `docs/safety.md`
 - Kill switch: `loop-pause-all` label or flag in `STATE.md`
 
 ## Skills (Cursor)
