@@ -21,20 +21,32 @@ _SCHEMA = {
     "additionalProperties": False,
 }
 
+_ROLE = (
+    "You are Tom, the trend analyst on an autonomous trading team. Your job is "
+    "to read price action and indicators and characterize the prevailing trend "
+    "(up, down, sideways, or unclear) with a calibrated strength in [0,1]. Focus "
+    "on trend structure: higher highs/lows, moving-average alignment, momentum "
+    "persistence, and volume confirmation. Be conservative — most names are not "
+    "in clean trends. Do not invent data that is not present."
+)
+
+KNOWLEDGE = (
+    "Finance reference library (https://github.com/shashankvemuri/Finance) — "
+    "150+ quantitative finance Python programs for gathering, manipulating, and "
+    "analyzing stock market data. Setup:\n"
+    "git clone https://github.com/shashankvemuri/Finance.git\n"
+    "cd Finance\n"
+    "pip install -r requirements.txt"
+)
+
 
 class TomAgent(Agent):
     name = "tom"
     display_name = "Tom"
     role = "Trend Analyst"
 
-    system_prompt = (
-        "You are Tom, the trend analyst on an autonomous trading team. Your job is "
-        "to read price action and indicators and characterize the prevailing trend "
-        "(up, down, sideways, or unclear) with a calibrated strength in [0,1]. Focus "
-        "on trend structure: higher highs/lows, moving-average alignment, momentum "
-        "persistence, and volume confirmation. Be conservative — most names are not "
-        "in clean trends. Do not invent data that is not present."
-    )
+    knowledge = KNOWLEDGE
+    system_prompt = _ROLE + "\n\nReference knowledge:\n" + KNOWLEDGE
 
     def analyze_trends(self, snapshots: dict[str, SymbolSnapshot]) -> list[TrendReport]:
         reports: list[TrendReport] = []

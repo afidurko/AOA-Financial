@@ -20,6 +20,16 @@ def _config(dry_run=True):
     )
 
 
+def test_tom_knowledge_includes_finance_setup():
+    from aoa.team.tom import TomAgent, KNOWLEDGE
+
+    assert "shashankvemuri/Finance" in KNOWLEDGE
+    assert "git clone https://github.com/shashankvemuri/Finance.git" in KNOWLEDGE
+    assert "pip install -r requirements.txt" in KNOWLEDGE
+    assert TomAgent.knowledge is KNOWLEDGE
+    assert "Reference knowledge:" in TomAgent.system_prompt
+
+
 def test_bob_health_passes(fake_broker):
     bob = BobAgent(_config(), fake_broker)
     report = bob.check_health()
