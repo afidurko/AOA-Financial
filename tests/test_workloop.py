@@ -59,6 +59,20 @@ def _stub_team_review(monkeypatch, *, verdict="approve", required_approver="Aaro
     monkeypatch.setattr("aoa.workloop.stages.review_change_proposal", _fake)
 
 
+def _stub_pending_changes(monkeypatch):
+    monkeypatch.setattr(
+        "aoa.workloop.stages.build_proposal",
+        lambda _root: {
+            "branch": "main",
+            "changed_files": ["src/aoa/cli.py"],
+            "has_changes": True,
+            "summary": "1 file(s) changed on main: src/aoa/cli.py",
+            "status_porcelain": " M src/aoa/cli.py",
+            "diff_stat": " src/aoa/cli.py | 1 +\n",
+        },
+    )
+
+
 def test_discover_sources_finds_core_materials(tmp_path):
     repo = Path(__file__).resolve().parents[1]
     cfg = _config(tmp_path, journal_path=repo / "README.md")
@@ -117,6 +131,7 @@ def test_workloop_halts_at_approval_without_signoff(tmp_path, monkeypatch):
     orch = WorkloopOrchestrator(cfg, repo_root=Path(__file__).resolve().parents[1])
 
     _stub_team_review(monkeypatch)
+    _stub_pending_changes(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
 
@@ -132,6 +147,7 @@ def test_workloop_resumes_after_aaron_approves(tmp_path, monkeypatch):
     orch = WorkloopOrchestrator(cfg, repo_root=Path(__file__).resolve().parents[1])
 
     _stub_team_review(monkeypatch)
+    _stub_pending_changes(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
     monkeypatch.setattr(
@@ -202,6 +218,7 @@ def test_scheduler_polls_approval_then_resumes(tmp_path, monkeypatch):
     scheduler = WorkloopScheduler(orch, interval_seconds=60, sleep_fn=lambda _s: None)
 
     _stub_team_review(monkeypatch)
+    _stub_pending_changes(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
     monkeypatch.setattr(
@@ -292,6 +309,7 @@ def test_workloop_escalated_changes_require_user_approval(tmp_path, monkeypatch)
     cfg = _config(tmp_path, workloop_user_approver="user")
     orch = WorkloopOrchestrator(cfg, repo_root=Path(__file__).resolve().parents[1])
     _stub_team_review(monkeypatch, verdict="escalate_user", required_approver="user")
+    _stub_pending_changes(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
     monkeypatch.setattr(
