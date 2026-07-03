@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
 from aoa.agents.base import Direction, Signal, TradeProposal, parse_side
 from aoa.brokerage.base import BrokerError
@@ -316,14 +316,10 @@ class SymbolAnalysisResult:
     meshed: MeshedView
     n_learned: int = 0
     n_adapted: int = 0
-    pending: dict[str, dict] | None = None
+    pending: dict[str, dict] = field(default_factory=dict)
     options_idea: dict | None = None
     option_contract: OptionContract | None = None
     options_error: tuple[str, str] | None = None
-
-    def __post_init__(self) -> None:
-        if self.pending is None:
-            self.pending = {}
 
 
 def _compute_analysis(
