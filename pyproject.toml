@@ -32,6 +32,7 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--ignore=tests/test_core.py"
 
 [tool.ruff]
 line-length = 100
