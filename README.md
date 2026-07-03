@@ -163,9 +163,14 @@ background while the web server is up.
 ## Docker deployment
 
 ```bash
-cp .env.example .env   # fill in API keys
+cp .env.example .env   # fill in API keys; AOA_ENV selects the journal subdir
 docker compose up web  # dashboard at http://localhost:8080
 ```
+
+Both `web` and `swarm` services share the same journal via the `aoa-data` volume
+at `/app/data/{AOA_ENV}/journal/aoa.jsonl`. Set `AOA_ENV=paper-dry` in `.env`
+(or use a profile) so CLI runs on the host and containerized services write to
+the same logical environment.
 
 Run the headless trading loop as a separate daemon:
 
@@ -173,7 +178,8 @@ Run the headless trading loop as a separate daemon:
 docker compose --profile daemon up -d   # starts web + swarm services
 ```
 
-The journal is persisted in a Docker volume (`aoa-journal`).
+Runtime state is persisted in the Docker volume `aoa-data` (mapped to
+`/app/data` in containers).
 
 ---
 
@@ -189,6 +195,15 @@ sudo systemctl enable --now aoa-swarm.service  # headless loop
 ```
 
 Adjust `User`, `WorkingDirectory`, and paths in the unit files for your host.
+Create the data directory and ensure the service user can write to it:
+
+```bash
+sudo mkdir -p /var/lib/aoa/data
+sudo chown aoa:aoa /var/lib/aoa/data
+```
+
+Set `AOA_ENV` (or `AOA_PROFILE`) in `.env` so web and swarm share the same
+journal at `/var/lib/aoa/data/{AOA_ENV}/journal/aoa.jsonl`.
 
 ---
 

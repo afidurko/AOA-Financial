@@ -129,6 +129,14 @@ def test_profile_loader_applies_before_dotenv(tmp_path, monkeypatch):
     assert __import__("os").environ.get("AOA_UNIVERSE") == "TEST"
 
 
+def test_profile_journal_paths_match_env():
+    profiles_dir = Path(__file__).resolve().parents[1] / "profiles"
+    for name in ("test", "paper-dry", "paper"):
+        text = (profiles_dir / f"{name}.env").read_text()
+        assert f"AOA_ENV={name}" in text
+        assert f"AOA_JOURNAL_PATH=data/{name}/journal/aoa.jsonl" in text
+
+
 def test_shell_env_overrides_profile(tmp_path, monkeypatch):
     profiles = tmp_path / "profiles"
     profiles.mkdir()

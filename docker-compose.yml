@@ -5,11 +5,12 @@ services:
       - "${AOA_WEB_PORT:-8080}:8080"
     env_file:
       - .env
+      - profiles/docker.env
     environment:
-      AOA_JOURNAL_PATH: /app/journal/aoa.jsonl
+      AOA_JOURNAL_PATH: /app/data/${AOA_ENV:-paper-dry}/journal/aoa.jsonl
       AOA_WEB_AUTO_LOOP: "${AOA_WEB_AUTO_LOOP:-false}"
     volumes:
-      - aoa-journal:/app/journal
+      - aoa-data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -22,13 +23,14 @@ services:
     command: ["aoa", "loop"]
     env_file:
       - .env
+      - profiles/docker.env
     environment:
-      AOA_JOURNAL_PATH: /app/journal/aoa.jsonl
+      AOA_JOURNAL_PATH: /app/data/${AOA_ENV:-paper-dry}/journal/aoa.jsonl
     volumes:
-      - aoa-journal:/app/journal
+      - aoa-data:/app/data
     restart: unless-stopped
     profiles:
       - daemon
 
 volumes:
-  aoa-journal:
+  aoa-data:
