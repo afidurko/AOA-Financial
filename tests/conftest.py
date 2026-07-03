@@ -56,7 +56,7 @@ class FakeBroker(Broker):
     def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
         return {s.upper(): self.get_quote(s.upper()) for s in symbols if s}
 
-    def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
+    def _synthetic_bars(self, limit: int) -> list[Bar]:
         # Synthetic gently-rising series with enough history for all indicators.
         base = datetime(2024, 1, 1, tzinfo=timezone.utc)
         bars = []
@@ -74,6 +74,17 @@ class FakeBroker(Broker):
                 )
             )
         return bars
+
+    def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
+        return self._synthetic_bars(limit)
+
+    def get_bars_batch(
+        self,
+        symbols: list[str],
+        timeframe: str = "1Day",
+        limit: int = 120,
+    ) -> dict[str, list[Bar]]:
+        return {s.upper(): self._synthetic_bars(limit) for s in symbols if s}
 
     def get_most_active(self, limit: int = 25) -> list[str]:
         return ["AAPL", "MSFT", "NVDA"][:limit]

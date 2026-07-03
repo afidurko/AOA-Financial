@@ -51,6 +51,10 @@ def _int(name: str, default: int) -> int:
         return default
 
 
+_VALID_DATA_FEEDS = frozenset({"", "sip", "iex", "boats", "otc"})
+_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     """Hard guardrails. Orders violating any of these are rejected outright."""
@@ -73,6 +77,8 @@ class Config:
     alpaca_key_id: str = ""
     alpaca_secret_key: str = ""
     alpaca_live: bool = False
+    alpaca_data_feed: str = ""  # sip | iex | boats | otc; blank = Alpaca default
+    alpaca_bar_adjustment: str = "split"  # raw | split | dividend | all
 
     # Universe & cadence
     universe: tuple[str, ...] = ()
@@ -127,6 +133,8 @@ class Config:
             alpaca_key_id=os.environ.get("ALPACA_API_KEY_ID", ""),
             alpaca_secret_key=os.environ.get("ALPACA_API_SECRET_KEY", ""),
             alpaca_live=_bool("ALPACA_LIVE", False),
+            alpaca_data_feed=os.environ.get("ALPACA_DATA_FEED", "").strip().lower(),
+            alpaca_bar_adjustment=os.environ.get("ALPACA_BAR_ADJUSTMENT", "split").strip().lower(),
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             news_limit=_int("AOA_NEWS_LIMIT", 5),
@@ -158,6 +166,14 @@ class Config:
             problems.append(
                 "ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY are not set — "
                 "no market data or order execution is possible."
+            )
+        if self.alpaca_data_feed and self.alpaca_data_feed not in _VALID_DATA_FEEDS - {""}:
+            problems.append(
+                "ALPACA_DATA_FEED must be one of: sip, iex, boats, otc (or leave blank)."
+            )
+        if self.alpaca_bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+            problems.append(
+                "ALPACA_BAR_ADJUSTMENT must be one of: raw, split, dividend, all, spin-off."
             )
         r = self.risk
         if not 0 < r.max_position_pct <= 1:

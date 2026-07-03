@@ -122,12 +122,7 @@ class MarketDataService:
             return bars_by_tf_symbol
 
         def fetch(tf: TimeframeSpec) -> tuple[str, dict[str, list[Bar]]]:
-            batch = self.broker.get_bars_many(
-                symbols,
-                tf.alpaca,
-                tf.limit,
-                feed=self.bar_feed,
-            )
+            batch = self.broker.get_bars_batch(symbols, tf.alpaca, tf.limit)
             return tf.key, batch
 
         max_workers = min(len(self.timeframes), 8)

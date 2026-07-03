@@ -7,10 +7,10 @@ both the **information source** (quotes, bars, option chains, account, positions
 and the **order executor**. Every agent reasons with **Claude** (`claude-opus-4-8`).
 
 > ⚠️ **This software can place real orders with real money.** It defaults to
-> live trading when live Alpaca credentials are configured (`ALPACA_LIVE=true`).
-> Hard, deterministic risk guardrails always apply, but **you are responsible for
-> any trades it makes.** Start in the paper sandbox. Nothing here is financial
-> advice.
+> **paper trading** (`ALPACA_LIVE=false`). Set `ALPACA_LIVE=true` only when you
+> intentionally route orders to a live account. Hard, deterministic risk
+> guardrails always apply, but **you are responsible for any trades it makes.**
+> Start in the paper sandbox. Nothing here is financial advice.
 
 ---
 
@@ -112,16 +112,21 @@ Requires Python 3.10+.
 cp .env.example .env
 # Edit .env: set ANTHROPIC_API_KEY and your Alpaca keys.
 # Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
+# Optional market-data tuning:
+#   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
+#   ALPACA_BAR_ADJUSTMENT=split   # raw | split | dividend | all | spin-off
 ```
 
-Get free Alpaca paper keys at <https://alpaca.markets>. Options trading requires
-options approval on the account (the swarm checks `options_level`).
+Get free Alpaca **Trading API** paper keys (`PK...`) at <https://alpaca.markets>.
+These are **not** the same as Broker API OAuth credentials (`authx.alpaca.markets`).
+Options trading requires options approval on the account (the swarm checks `options_level`).
 
 ## Run
 
 ```bash
-aoa doctor     # validate config + check broker/LLM connectivity
-aoa status     # show account, positions, market clock
+aoa doctor            # validate config + check broker/LLM connectivity
+aoa doctor --offline  # validate config only (no network)
+aoa status            # show account, positions, market clock
 aoa run        # run ONE analysis → decision → execution cycle
 aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
 aoa serve      # start the web dashboard + REST API (port 8080)
@@ -210,8 +215,8 @@ Adjust `User`, `WorkingDirectory`, and paths in the unit files for your host.
 
 ## News feed
 
-When `AOA_NEWS_ENABLED=true` (the default), the orchestrator fetches recent
-headlines from Alpaca's market-data news API for each scanner candidate and
+When `AOA_NEWS_ENABLED=true` (the default), the **Analyze** pipeline stage fetches
+recent headlines from Alpaca's market-data news API for each scanner candidate and
 passes them to the **Fundamental** agent. If the feed is unavailable the agent
 falls back to qualitative reasoning without fabricating headlines.
 
@@ -227,7 +232,7 @@ falls back to qualitative reasoning without fabricating headlines.
                              │ Config.from_env()
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Orchestrator — composable pipeline                             │
+│  Orchestrator — composable pipeline (intake → … → execute)      │
 │  intake → scan → analyze(+news) → mesh → portfolio → risk       │
 └──────┬──────────────────┬──────────────────┬────────────────────┘
        │                  │                  │
@@ -266,6 +271,7 @@ touching agent or orchestration code.
 ## Test
 
 ```bash
+ruff check .
 pytest
 ```
 
@@ -276,7 +282,7 @@ canned-response fake LLM — no network, no API keys, no real orders.
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
 - **Add a news feed**: implement or extend `aoa.data.news.NewsFeed` (Alpaca is built-in)
-  and pass it to `Orchestrator`; tune via `AOA_NEWS_*` in `.env`.
+  and pass it to `Orchestrator`; tune via `AOA_NEWS_*` or `AOA_NEWS_ENABLED` in `.env`.
 - **Add an agent**: subclass `aoa.agents.base.Agent`, register it in `AgentTeam`
   (`aoa.swarm.team`), and add or extend a pipeline stage in `aoa.swarm.stages`.
 - **Customize the pipeline**: pass a custom `Pipeline(stages=[...])` to
@@ -285,6 +291,14 @@ canned-response fake LLM — no network, no API keys, no real orders.
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 - **Add a UI panel**: extend `aoa/web/app.py` dashboard or add API routes.
+
+```python
+from aoa.swarm.pipeline import Pipeline
+from aoa.swarm.stages import default_stages, PortfolioStage
+
+custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
+orch = Orchestrator(config, broker, llm, pipeline=custom)
+```
 
 ## Disclaimer
 

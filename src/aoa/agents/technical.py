@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 
-from aoa.agents.base import Agent, Direction, Signal
+from aoa.agents.base import Agent, Direction, Signal, clamp_conviction, parse_direction
 from aoa.data.market_data import SymbolSnapshot
+from aoa.llm.client import LLMError
 
 _SCHEMA = {
     "type": "object",
@@ -52,7 +53,16 @@ class TechnicalAgent(Agent):
             f"Multi-timeframe technicals: {json.dumps(snap.technicals, default=str)}\n\n"
             "Return your technical read as JSON."
         )
-        r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        try:
+            r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        except LLMError as exc:
+            return Signal(
+                symbol=snap.symbol,
+                source=self.name,
+                direction=Direction.NEUTRAL,
+                conviction=0.0,
+                rationale=f"LLM unavailable ({exc}).",
+            )
         levels = {}
         if r.get("support") is not None:
             levels["support"] = r["support"]
@@ -63,17 +73,10 @@ class TechnicalAgent(Agent):
         return Signal(
             symbol=snap.symbol,
             source=self.name,
-            direction=Direction(r["direction"]),
-            conviction=_clamp(r["conviction"]),
-            rationale=r["rationale"],
+            direction=parse_direction(r.get("direction")),
+            conviction=clamp_conviction(r.get("conviction")),
+            rationale=r.get("rationale", "No rationale provided."),
             horizon=r.get("horizon", "swing"),
             key_levels=levels,
             tags=["technical"],
         )
-
-
-def _clamp(v: float) -> float:
-    try:
-        return max(0.0, min(1.0, float(v)))
-    except (TypeError, ValueError):
-        return 0.0

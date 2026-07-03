@@ -58,22 +58,18 @@ class Broker(ABC):
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
         """Return recent OHLCV bars, oldest first."""
 
-    def get_bars_many(
+    def get_bars_batch(
         self,
         symbols: list[str],
         timeframe: str = "1Day",
         limit: int = 120,
-        *,
-        feed: str | None = None,
     ) -> dict[str, list[Bar]]:
-        """Return recent OHLCV bars for each symbol (oldest first within each list)."""
-        out: dict[str, list[Bar]] = {}
-        for sym in symbols:
-            if not sym:
-                continue
-            key = sym.upper()
-            out[key] = self.get_bars(key, timeframe, limit)
-        return out
+        """Return recent OHLCV bars for multiple symbols, oldest first per symbol."""
+        return {
+            s.upper(): self.get_bars(s, timeframe, limit)
+            for s in symbols
+            if s
+        }
 
     @abstractmethod
     def get_most_active(self, limit: int = 25) -> list[str]:

@@ -29,9 +29,9 @@ def test_market_data_service_batches_bar_requests():
     calls: list[tuple[list[str], str, int]] = []
 
     class TrackingBroker(FakeBroker):
-        def get_bars_many(self, symbols, timeframe="1Day", limit=120, *, feed=None):
+        def get_bars_batch(self, symbols, timeframe="1Day", limit=120):
             calls.append((list(symbols), timeframe, limit))
-            return super().get_bars_many(symbols, timeframe, limit, feed=feed)
+            return super().get_bars_batch(symbols, timeframe, limit)
 
     broker = TrackingBroker()
     daily = (TimeframeSpec("1Day", "1Day", 30),)
@@ -72,22 +72,34 @@ def test_multi_timeframe_snapshot_structure():
     assert "5Min" in ctx["technicals"]
 
 
-def test_alpaca_broker_get_bars_many():
+def test_alpaca_broker_get_bars_batch():
     broker = AlpacaBroker("key-id", "secret-key")
     bar_set = MagicMock()
-    bar_set.__getitem__.side_effect = lambda sym: [
-        MagicMock(
-            timestamp=datetime(2024, 1, 2, tzinfo=timezone.utc),
-            open=100.0,
-            high=101.0,
-            low=99.0,
-            close=100.5,
-            volume=1000.0,
-        )
-    ]
+    bar_set.data = {
+        "AAPL": [
+            MagicMock(
+                timestamp=datetime(2024, 1, 2, tzinfo=timezone.utc),
+                open=100.0,
+                high=101.0,
+                low=99.0,
+                close=100.5,
+                volume=1000.0,
+            )
+        ],
+        "MSFT": [
+            MagicMock(
+                timestamp=datetime(2024, 1, 2, tzinfo=timezone.utc),
+                open=200.0,
+                high=201.0,
+                low=199.0,
+                close=200.5,
+                volume=2000.0,
+            )
+        ],
+    }
     broker._stock_data.get_stock_bars = MagicMock(return_value=bar_set)
 
-    result = broker.get_bars_many(["AAPL", "MSFT"], "1Day", 1)
+    result = broker.get_bars_batch(["AAPL", "MSFT"], "1Day", 1)
 
     assert set(result.keys()) == {"AAPL", "MSFT"}
     assert result["AAPL"][0].close == 100.5

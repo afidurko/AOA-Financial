@@ -37,7 +37,7 @@ def _sample_bar() -> Bar:
 def test_verify_stock_bars_success():
     broker = AlpacaBroker("key-id", "secret-key")
     bar_set = MagicMock()
-    bar_set.__getitem__.return_value = [_sample_bar()]
+    bar_set.data = {"AAPL": [_sample_bar()]}
     broker._stock_data.get_stock_bars = MagicMock(return_value=bar_set)
 
     bar = broker.verify_stock_bars("AAPL", limit=1)
@@ -61,7 +61,7 @@ def test_verify_stock_bars_auth_failure():
 def test_verify_stock_bars_empty_response():
     broker = AlpacaBroker("key-id", "secret-key")
     bar_set = MagicMock()
-    bar_set.__getitem__.return_value = []
+    bar_set.data = {"AAPL": []}
     broker._stock_data.get_stock_bars = MagicMock(return_value=bar_set)
 
     with pytest.raises(BrokerError, match="returned no data"):
@@ -69,7 +69,13 @@ def test_verify_stock_bars_empty_response():
 
 
 def test_cmd_doctor_reports_stock_bars_check(monkeypatch):
-    cfg = Config(anthropic_api_key="x", alpaca_key_id="k", alpaca_secret_key="s")
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        alpaca_data_feed="iex",
+        alpaca_bar_adjustment="raw",
+    )
     broker = MagicMock()
     broker.name = "alpaca-paper"
     broker.get_account.return_value.equity = 50_000.0
@@ -79,4 +85,4 @@ def test_cmd_doctor_reports_stock_bars_check(monkeypatch):
     monkeypatch.setattr("aoa.cli.build_llm", lambda _cfg: MagicMock())
 
     assert cmd_doctor(cfg) == 0
-    broker.verify_stock_bars.assert_called_once_with("AAPL", limit=1)
+    broker.verify_stock_bars.assert_called_once_with("SPY", limit=1)

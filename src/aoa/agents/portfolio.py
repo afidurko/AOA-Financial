@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 
 from aoa.agents.base import Agent
+from aoa.llm.client import LLMError
 
 _SCHEMA = {
     "type": "object",
@@ -86,4 +87,10 @@ class PortfolioManagerAgent(Agent):
             f"Propose at most {max_new_positions} new trades (plus any exits). "
             "Return JSON."
         )
-        return self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        try:
+            return self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        except LLMError:
+            return {
+                "proposals": [],
+                "portfolio_commentary": "Portfolio manager unavailable (LLM error).",
+            }
