@@ -52,8 +52,9 @@ class PortfolioManagerAgent(Agent):
     name = "portfolio_manager"
     system_prompt = (
         "You are the portfolio manager for an autonomous CASH-account trading swarm. "
-        "You receive, per symbol, the technical and fundamental signals plus any "
-        "options idea, along with current positions and the account snapshot. "
+        "You receive, per symbol, a meshed view (unified synthesis of technical "
+        "and fundamental signals) plus per-domain context, any options idea, "
+        "current positions, and the account snapshot. "
         "Decide a focused set of trades that best expresses the highest-conviction, "
         "best-corroborated views while respecting diversification and the cash on "
         "hand. Rules you must honor:\n"
@@ -81,7 +82,7 @@ class PortfolioManagerAgent(Agent):
         prompt = (
             f"Account: {json.dumps(account)}\n"
             f"Current positions: {json.dumps(positions, default=str)}\n"
-            f"Per-symbol analysis (signals + options ideas):\n"
+            f"Per-symbol analysis (meshed views + domain context):\n"
             f"{json.dumps(per_symbol, default=str)}\n\n"
             f"Propose at most {max_new_positions} new trades (plus any exits). "
             "Return JSON."
