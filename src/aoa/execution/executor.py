@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 
 from aoa.agents.base import TradeProposal
 from aoa.brokerage.base import Broker, BrokerError
-from aoa.brokerage.models import Order, OrderRequest, OrderType, TimeInForce
+from aoa.brokerage.models import Order, OrderRequest, OrderType, Side, TimeInForce
 from aoa.journal.store import Journal
 
 
@@ -31,6 +31,8 @@ class Executor:
 
     def execute(self, proposals: list[TradeProposal]) -> ExecutionReport:
         report = ExecutionReport(dry_run=self.dry_run)
+        open_order_keys = self._open_order_keys()
+
         for prop in proposals:
             if not prop.approved:
                 report.skipped.append(
@@ -39,6 +41,16 @@ class Executor:
                 continue
             if prop.qty <= 0:
                 report.skipped.append({"symbol": prop.symbol, "reason": "zero quantity"})
+                continue
+
+            order_key = (prop.symbol.upper(), prop.side)
+            if order_key in open_order_keys:
+                reason = "duplicate open order for same symbol and side"
+                report.skipped.append({"symbol": prop.symbol, "reason": reason})
+                self.journal.record(
+                    "order.skipped",
+                    {"symbol": prop.symbol, "side": prop.side.value, "reason": reason},
+                )
                 continue
 
             request = self._to_request(prop)
@@ -54,6 +66,7 @@ class Executor:
             try:
                 order = self.broker.submit_order(request)
                 report.submitted.append(order)
+                open_order_keys.add(order_key)
                 self.journal.record(
                     "order.submitted",
                     {
@@ -71,6 +84,16 @@ class Executor:
                     "order.error", {"symbol": prop.symbol, "error": str(exc)}
                 )
         return report
+
+    def _open_order_keys(self) -> set[tuple[str, Side]]:
+        if self.dry_run:
+            return set()
+        try:
+            orders = self.broker.list_orders(status="open")
+        except BrokerError as exc:
+            self.journal.record("broker.error", {"op": "list_orders", "error": str(exc)})
+            return set()
+        return {(o.symbol.upper(), o.side) for o in orders}
 
     @staticmethod
     def _to_request(prop: TradeProposal) -> OrderRequest:

@@ -23,7 +23,7 @@ def client(fake_broker, fake_llm, monkeypatch, tmp_path):
         dry_run=True,
         news_enabled=False,
         web_auto_loop=False,
-        journal_path=str(tmp_path / "j.jsonl"),
+        journal_path=tmp_path / "j.jsonl",
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
     )
 

@@ -59,6 +59,15 @@ def build_orchestrator(cfg: Config) -> Orchestrator:
     )
 
 
+def _print_environment(cfg: Config) -> None:
+    profile = cfg.profile or cfg.env
+    print(
+        f"Environment: {cfg.env} | profile: {profile} | "
+        f"mode: {cfg.trading_mode} | data: {cfg.data_dir}"
+    )
+    print(f"Journal: {cfg.journal_path}")
+
+
 # --------------------------------------------------------------------- output
 def _print_cycle(result: CycleResult) -> None:
     bb = result.blackboard
@@ -98,7 +107,7 @@ def _print_cycle(result: CycleResult) -> None:
 
 # --------------------------------------------------------------------- commands
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
-    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
+    _print_environment(cfg)
     problems = cfg.validate()
     if problems:
         print("Configuration problems:")
@@ -109,6 +118,9 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
+    if cfg.is_test:
+        print("  ✓ Test environment — skipping broker/LLM connectivity checks.")
+        return 0
     if offline:
         print("  ✓ Offline mode — skipped broker and LLM connectivity checks.")
         return 0
@@ -127,15 +139,18 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         print(f"  ✗ Broker check failed: {exc}")
         return 1
     try:
-        build_llm(cfg)
+        llm = build_llm(cfg)
         print("  ✓ LLM client initialized.")
+        llm.ping()
+        print(f"  ✓ LLM reachable (model={cfg.model}).")
     except LLMError as exc:
-        print(f"  ✗ LLM init failed: {exc}")
+        print(f"  ✗ LLM check failed: {exc}")
         return 1
     return 0
 
 
 def cmd_status(cfg: Config) -> int:
+    _print_environment(cfg)
     broker = build_broker(cfg)
     acct = broker.get_account()
     print(f"Mode: {cfg.trading_mode} | Broker: {broker.name}")
@@ -157,26 +172,34 @@ def cmd_status(cfg: Config) -> int:
     return 0
 
 
+def _cycle_exit_code(result: CycleResult) -> int:
+    if result.execution and result.execution.errors:
+        return 1
+    return 0
+
+
 def cmd_run(cfg: Config) -> int:
     orch = build_orchestrator(cfg)
     if not orch.broker.is_market_open():
         print("Market is closed. Running analysis anyway (orders may queue/reject).")
     result = orch.run_cycle()
     _print_cycle(result)
-    return 0
+    return _cycle_exit_code(result)
 
 
 def cmd_loop(cfg: Config) -> int:
     orch = build_orchestrator(cfg)
+    _print_environment(cfg)
     print(
-        f"Starting continuous loop: mode={cfg.trading_mode}, "
-        f"cadence={cfg.cycle_seconds}s. Ctrl-C to stop."
+        f"Starting continuous loop: cadence={cfg.cycle_seconds}s. Ctrl-C to stop."
     )
     try:
         while True:
             if orch.broker.is_market_open():
                 result = orch.run_cycle()
                 _print_cycle(result)
+                if _cycle_exit_code(result):
+                    print("Cycle finished with execution errors.", file=sys.stderr)
             else:
                 print("Market closed — sleeping.")
             time.sleep(cfg.cycle_seconds)

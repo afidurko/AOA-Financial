@@ -25,7 +25,7 @@ from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import ContractType, OrderSide, QueryOrderStatus
 from alpaca.trading.enums import TimeInForce as AlpacaTimeInForce
-from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
+from alpaca.trading.requests import GetOptionContractsRequest, GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
 
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import (
@@ -243,7 +243,9 @@ class AlpacaBroker(Broker):
             equity=_f(acct.equity),
             cash=_f(acct.cash),
             buying_power=_f(acct.buying_power),
-            settled_cash=_f(acct.cash),
+            settled_cash=_f(
+                getattr(acct, "non_marginable_buying_power", None) or acct.cash
+            ),
             options_level=int(_f(acct.options_approved_level, 0)),
             daytrade_count=int(_f(acct.daytrade_count, 0)),
             pattern_day_trader=bool(acct.pattern_day_trader),
@@ -373,6 +375,7 @@ class AlpacaBroker(Broker):
         except BrokerError:
             return []
 
+        oi_by_symbol = self._fetch_open_interest(underlying, expiration=expiration)
         contracts: list[OptionContract] = []
         for occ_symbol, snap in snapshots.items():
             parsed = _parse_occ(occ_symbol)
@@ -382,6 +385,9 @@ class AlpacaBroker(Broker):
             quote = snap.latest_quote
             trade = snap.latest_trade
             greeks = snap.greeks
+            oi = oi_by_symbol.get(occ_symbol)
+            if oi is None:
+                oi = _f(getattr(snap, "open_interest", 0))
             contracts.append(
                 OptionContract(
                     symbol=occ_symbol,
@@ -392,7 +398,7 @@ class AlpacaBroker(Broker):
                     bid=_f(quote.bid_price) if quote else 0.0,
                     ask=_f(quote.ask_price) if quote else 0.0,
                     last=_f(trade.price) if trade else 0.0,
-                    open_interest=0.0,
+                    open_interest=oi,
                     implied_volatility=(
                         float(snap.implied_volatility)
                         if snap.implied_volatility is not None
@@ -403,6 +409,32 @@ class AlpacaBroker(Broker):
             )
         contracts.sort(key=lambda c: (c.expiration, c.option_type.value, c.strike))
         return contracts
+
+    def _fetch_open_interest(
+        self, underlying: str, *, expiration: str | None = None
+    ) -> dict[str, float]:
+        """Open interest lives on the trading API, not the data snapshot."""
+        kwargs: dict = {
+            "underlying_symbols": underlying,
+            "status": "active",
+            "limit": 1000,
+        }
+        if expiration:
+            kwargs["expiration_date"] = expiration
+        try:
+            result = self._sdk_call(
+                self._trading.get_option_contracts,
+                GetOptionContractsRequest(**kwargs),
+            )
+        except BrokerError:
+            return {}
+        out: dict[str, float] = {}
+        rows = getattr(result, "option_contracts", None) or []
+        for row in rows:
+            sym = getattr(row, "symbol", None)
+            if sym:
+                out[sym] = _f(getattr(row, "open_interest", 0))
+        return out
 
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:

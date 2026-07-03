@@ -41,5 +41,13 @@ class CycleContext:
     def update_starting_equity(self, equity: float) -> None:
         today = date.today()
         if self.equity_day != today:
-            self.equity_day = today
+            stored_day_raw, stored_equity = self.journal.load_daily_equity_baseline()
+            if stored_day_raw == today.isoformat() and stored_equity > 0:
+                self.equity_day = today
+                self.starting_equity = stored_equity
+            else:
+                self.equity_day = today
+                self.starting_equity = equity
+                self.journal.save_daily_equity_baseline(today, equity)
+        elif self.starting_equity <= 0:
             self.starting_equity = equity

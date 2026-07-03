@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
 from aoa.agents.base import Direction, TradeProposal
+from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, Side
 from aoa.data.market_data import SymbolSnapshot
 from aoa.swarm.context import CycleContext
@@ -41,7 +42,17 @@ class IntakeStage(PipelineStage):
         if ctx.config.universe:
             bb.universe = list(ctx.config.universe)
         else:
-            bb.universe = ctx.broker.get_most_active(limit=25)
+            try:
+                bb.universe = ctx.broker.get_most_active(limit=25)
+            except BrokerError as exc:
+                msg = f"Failed to resolve trading universe: {exc}"
+                ctx.notes.append(msg)
+                ctx.journal.record(
+                    "broker.error",
+                    {"op": "resolve_universe", "error": str(exc)},
+                )
+                bb.universe = []
+                return False
 
         if not bb.universe:
             ctx.notes.append("Empty universe — nothing to analyze.")
@@ -95,7 +106,20 @@ class AnalyzeStage(PipelineStage):
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
-        symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
+        candidates = list(bb.candidates)
+        if not candidates and bb.positions:
+            for pos in bb.positions:
+                if pos.qty <= 0 or pos.asset_class is AssetClass.OPTION:
+                    continue
+                candidates.append(
+                    {
+                        "symbol": pos.symbol.upper(),
+                        "reason": "existing position — reviewing for exit",
+                        "priority": 0.5,
+                    }
+                )
+
+        symbols = [c.get("symbol", "").upper() for c in candidates if c.get("symbol")]
         if ctx.config.news_enabled and symbols:
             ctx.news_by_symbol = ctx.news.headlines(symbols, limit=ctx.config.news_limit)
             ctx.journal.record(
@@ -109,14 +133,12 @@ class AnalyzeStage(PipelineStage):
             ctx.news_by_symbol = {}
 
         workers = max(1, ctx.config.parallel_workers)
-        if workers == 1 or len(ctx.blackboard.candidates) <= 1:
-            for cand in ctx.blackboard.candidates:
+        if workers == 1 or len(candidates) <= 1:
+            for cand in candidates:
                 _analyze_one(ctx, cand)
         else:
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = [
-                    pool.submit(_analyze_one, ctx, cand) for cand in ctx.blackboard.candidates
-                ]
+                futures = [pool.submit(_analyze_one, ctx, cand) for cand in candidates]
                 for fut in as_completed(futures):
                     fut.result()
         return True
