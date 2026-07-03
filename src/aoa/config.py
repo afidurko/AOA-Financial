@@ -88,6 +88,11 @@ def _int(name: str, default: int) -> int:
         return default
 
 
+def _parse_csv_paths(name: str) -> tuple[str, ...]:
+    raw = os.environ.get(name, "")
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
 def data_dir_for(env: str) -> Path:
     return Path(os.environ.get("AOA_DATA_DIR", "data")) / env
 
@@ -106,6 +111,13 @@ def plasticity_path_for(env: str) -> Path:
     return data_dir_for(env) / "journal" / "plasticity.json"
 
 
+def workloop_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_WORKLOOP_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "workloop"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -122,6 +134,7 @@ class Config:
     data_dir: Path = field(default_factory=lambda: data_dir_for("paper-dry"))
     journal_path: Path = field(default_factory=lambda: journal_path_for("paper-dry"))
     plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
+    workloop_path: Path = field(default_factory=lambda: workloop_path_for("paper-dry"))
 
     anthropic_api_key: str = ""
     model: str = "claude-sonnet-4-20250514"
@@ -156,6 +169,15 @@ class Config:
     plasticity_enabled: bool = True
     plasticity_tail: int = 200
     plasticity_max_lessons: int = 10
+
+    workloop_enabled: bool = True
+    workloop_approver: str = "Aaron"
+    workloop_journal_tail: int = 100
+    workloop_max_lessons: int = 20
+    workloop_auto_commit: bool = False
+    workloop_allow_merge: bool = False
+    workloop_base_branch: str = "main"
+    workloop_extra_sources: tuple[str, ...] = ()
 
     risk: RiskLimits = field(default_factory=RiskLimits)
 
@@ -195,6 +217,7 @@ class Config:
             data_dir=data_dir_for(env),
             journal_path=journal_path_for(env),
             plasticity_path=plasticity_path_for(env),
+            workloop_path=workloop_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -219,6 +242,14 @@ class Config:
             plasticity_enabled=_bool("AOA_PLASTICITY_ENABLED", True),
             plasticity_tail=max(20, _int("AOA_PLASTICITY_TAIL", 200)),
             plasticity_max_lessons=max(1, _int("AOA_PLASTICITY_MAX_LESSONS", 10)),
+            workloop_enabled=_bool("AOA_WORKLOOP_ENABLED", True),
+            workloop_approver=os.environ.get("AOA_WORKLOOP_APPROVER", "Aaron").strip() or "Aaron",
+            workloop_journal_tail=max(20, _int("AOA_WORKLOOP_JOURNAL_TAIL", 100)),
+            workloop_max_lessons=max(1, _int("AOA_WORKLOOP_MAX_LESSONS", 20)),
+            workloop_auto_commit=_bool("AOA_WORKLOOP_AUTO_COMMIT", False),
+            workloop_allow_merge=_bool("AOA_WORKLOOP_ALLOW_MERGE", False),
+            workloop_base_branch=os.environ.get("AOA_WORKLOOP_BASE_BRANCH", "main").strip() or "main",
+            workloop_extra_sources=_parse_csv_paths("AOA_WORKLOOP_EXTRA_SOURCES"),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),
