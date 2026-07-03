@@ -23,7 +23,13 @@ from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
 
 def build_broker(cfg: Config) -> Broker:
-    return AlpacaBroker(cfg.alpaca_key_id, cfg.alpaca_secret_key, live=cfg.alpaca_live)
+    return AlpacaBroker(
+        cfg.alpaca_key_id,
+        cfg.alpaca_secret_key,
+        live=cfg.alpaca_live,
+        data_feed=cfg.alpaca_data_feed,
+        bar_adjustment=cfg.alpaca_bar_adjustment,
+    )
 
 
 def build_llm(cfg: Config) -> LLMClient:

@@ -71,6 +71,8 @@ class Config:
     alpaca_key_id: str = ""
     alpaca_secret_key: str = ""
     alpaca_live: bool = False
+    alpaca_data_feed: str = ""  # sip | iex | boats | otc; blank = Alpaca default
+    alpaca_bar_adjustment: str = "split"  # raw | split | dividend | all
 
     # Universe & cadence
     universe: tuple[str, ...] = ()
@@ -107,6 +109,8 @@ class Config:
             alpaca_key_id=os.environ.get("ALPACA_API_KEY_ID", ""),
             alpaca_secret_key=os.environ.get("ALPACA_API_SECRET_KEY", ""),
             alpaca_live=_bool("ALPACA_LIVE", False),
+            alpaca_data_feed=os.environ.get("ALPACA_DATA_FEED", "").strip().lower(),
+            alpaca_bar_adjustment=os.environ.get("ALPACA_BAR_ADJUSTMENT", "split").strip().lower(),
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             dry_run=_bool("AOA_DRY_RUN", False),

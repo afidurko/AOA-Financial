@@ -78,12 +78,16 @@ class AlpacaBroker(Broker):
         *,
         live: bool = False,
         timeout: float = 20.0,
+        data_feed: str = "",
+        bar_adjustment: str = "split",
     ) -> None:
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required.")
         self.is_live = live
         self.name = "alpaca-live" if live else "alpaca-paper"
         self._trading_base = TRADING_LIVE if live else TRADING_PAPER
+        self._data_feed = data_feed.strip().lower()
+        self._bar_adjustment = bar_adjustment.strip().lower() or "split"
         headers = {
             "APCA-API-KEY-ID": key_id,
             "APCA-API-SECRET-KEY": secret_key,
@@ -196,10 +200,12 @@ class AlpacaBroker(Broker):
         params: dict = {
             "symbols": ",".join(uniq),
             "timeframe": timeframe,
-            "adjustment": "split",
+            "adjustment": self._bar_adjustment,
             "sort": "asc",
             "limit": min(10_000, max(limit, limit * len(uniq))),
         }
+        if self._data_feed:
+            params["feed"] = self._data_feed
         page_token: str | None = None
 
         while True:

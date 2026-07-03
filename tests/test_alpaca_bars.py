@@ -106,6 +106,27 @@ def test_get_bars_delegates_to_batch_endpoint():
     assert bars == ["bar1", "bar2"]
 
 
+def test_get_bars_batch_passes_feed_and_adjustment():
+    broker = AlpacaBroker(
+        "key",
+        "secret",
+        live=False,
+        data_feed="sip",
+        bar_adjustment="raw",
+    )
+    broker._data = MagicMock(  # type: ignore[method-assign]
+        return_value={"bars": {"AAPL": []}, "next_page_token": None}
+    )
+
+    broker.get_bars_batch(["AAPL"], limit=10)
+
+    params = broker._data.call_args.kwargs["params"]
+    assert params["feed"] == "sip"
+    assert params["adjustment"] == "raw"
+    assert params["symbols"] == "AAPL"
+    assert params["timeframe"] == "1Day"
+
+
 def test_market_data_service_uses_batch_bars(fake_broker):
     calls: list[list[str]] = []
     original_batch = fake_broker.get_bars_batch
