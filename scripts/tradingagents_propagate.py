@@ -5,8 +5,9 @@ This script wraps the official TauricResearch TradingAgents library
 (https://github.com/TauricResearch/TradingAgents) for offline / historical
 decision propagation. It is separate from AOA's live Alpaca swarm pipeline.
 
-Install the optional extra first:
+Install the optional extra first (pins upstream v0.3.0):
   pip install -e ".[tradingagents]"
+  pip install -e ".[tradingagents-bedrock]"   # optional AWS Bedrock provider
 
 Configuration:
   TRADINGAGENTS_* env vars override DEFAULT_CONFIG (see upstream default_config.py).
@@ -104,6 +105,16 @@ def main(argv: list[str] | None = None) -> int:
     from tradingagents.default_config import DEFAULT_CONFIG
     from tradingagents.graph.trading_graph import TradingAgentsGraph
 
+    try:
+        import importlib.metadata as importlib_metadata
+    except ImportError:
+        import importlib_metadata  # type: ignore[no-redef]
+
+    try:
+        upstream_version = importlib_metadata.version("tradingagents")
+    except importlib_metadata.PackageNotFoundError:
+        upstream_version = "unknown"
+
     config = DEFAULT_CONFIG.copy()
     if args.config_json:
         import pathlib
@@ -117,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
     trade_date = args.trade_date.strip()
 
     print(f"TradingAgents propagate: {symbol} @ {trade_date}")
+    print(f"upstream tradingagents=={upstream_version}")
     print(
         f"provider={config.get('llm_provider')} "
         f"deep={config.get('deep_think_llm')} "
