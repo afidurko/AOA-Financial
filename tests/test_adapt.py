@@ -150,6 +150,52 @@ def test_orchestrator_adapts_and_learns(fake_broker, fake_llm, tmp_path):
     assert "adapt.applied" in events
 
 
+def test_trading_agents_adapts_and_learns(fake_broker, fake_llm, tmp_path):
+    from aoa.config import Config, RiskLimits
+    from aoa.journal.store import Journal
+    from aoa.swarm.orchestrator import Orchestrator
+
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        trading_agents_enabled=True,
+        risk=RiskLimits(max_orders_per_cycle=5),
+    )
+    journal = Journal(tmp_path / "j.jsonl")
+    adapter = SignalAdapter(lr=0.1)
+    orch = Orchestrator(cfg, fake_broker, fake_llm, journal, signal_adapter=adapter)
+
+    r1 = orch.run_cycle()
+    agent_sigs = [
+        s
+        for s in r1.blackboard.signals_for("AAPL")
+        if s.source in ("technical", "fundamental", "news", "sentiment")
+    ]
+    assert len(agent_sigs) == 4
+    directional = [s for s in agent_sigs if s.direction is not Direction.NEUTRAL]
+    assert directional and all("adapted" in s.tags for s in directional)
+    assert adapter.updates == 0
+
+    orch.run_cycle()
+    # neutral news is skipped; three directional analysts scored each cycle
+    assert adapter.updates == 3
+
+    events = {e["event"] for e in journal.tail(100)}
+    assert "adapt.applied" in events
+    assert "research.debate" in events
+
+
+def test_signal_adapter_featurizes_trading_agents_analysts():
+    sa = SignalAdapter()
+    for agent in ("news", "sentiment"):
+        feats = sa.featurize(agent=agent, direction="bullish", conviction=0.5)
+        assert feats[0] == 1.0  # bias
+        assert sum(feats[1 : 1 + 8]) == 1.0  # one-hot over 7 agents + other
+
+
 def test_orchestrator_without_adapter_unchanged(fake_broker, fake_llm, tmp_path):
     from aoa.config import Config, RiskLimits
     from aoa.journal.store import Journal

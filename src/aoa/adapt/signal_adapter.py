@@ -33,7 +33,7 @@ from aoa.adapt.lowrank import LowRankAdapter
 from aoa.agents.base import Direction, Signal
 
 # Fixed feature layout. Unknown agents fall into the trailing "other" slot.
-_AGENTS = ("technical", "fundamental", "options", "portfolio", "scanner")
+_AGENTS = ("technical", "fundamental", "news", "sentiment", "options", "portfolio", "scanner")
 _HORIZONS = ("intraday", "swing", "position")
 # bias + agent one-hot(+other) + direction-sign + raw-conviction + horizon one-hot
 _IN_FEATURES = 1 + (len(_AGENTS) + 1) + 1 + 1 + len(_HORIZONS)

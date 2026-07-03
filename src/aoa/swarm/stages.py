@@ -402,6 +402,17 @@ def _compute_analysis(
             news = news_fut.result()
             sentiment = sent_fut.result()
 
+        price = snap.reference_price() if snap else None
+        adapted, n_learned, n_adapted, pending_update = _adapt_analyst_signals(
+            ctx.signal_adapter,
+            prior_pending,
+            symbol,
+            [tech, fund, news, sentiment],
+            price,
+        )
+        pending.update(pending_update)
+        tech, fund, news, sentiment = adapted
+
         reports = [
             report_from_signal(tech, analyst="technical"),
             report_from_signal(fund, analyst="fundamental"),
@@ -440,17 +451,16 @@ def _compute_analysis(
             tech = ctx.agents.technical.analyze(snap)
             fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
 
-        if ctx.signal_adapter is not None:
-            price = snap.reference_price() if snap else None
-            n_learned = _learn_from_prior(ctx.signal_adapter, prior_pending, symbol, price)
-            if price:
-                pending[symbol] = {
-                    "price": price,
-                    "signals": [_pending_entry(tech), _pending_entry(fund)],
-                }
-            tech = ctx.signal_adapter.adapt_signal(tech)
-            fund = ctx.signal_adapter.adapt_signal(fund)
-            n_adapted = sum("adapted" in s.tags for s in (tech, fund))
+        price = snap.reference_price() if snap else None
+        adapted, n_learned, n_adapted, pending_update = _adapt_analyst_signals(
+            ctx.signal_adapter,
+            prior_pending,
+            symbol,
+            [tech, fund],
+            price,
+        )
+        pending.update(pending_update)
+        tech, fund = adapted
 
         meshed = ctx.agents.meshing.mesh(
             symbol,
@@ -716,6 +726,29 @@ def _pending_entry(signal: Signal) -> dict:
         "conviction": signal.conviction,
         "horizon": signal.horizon,
     }
+
+
+def _adapt_analyst_signals(
+    adapter,
+    prior_pending: dict[str, dict],
+    symbol: str,
+    signals: list[Signal],
+    price: float | None,
+) -> tuple[list[Signal], int, int, dict[str, dict]]:
+    """Learn from the prior cycle, adapt convictions, and queue pending for the next."""
+    if adapter is None:
+        return signals, 0, 0, {}
+
+    n_learned = _learn_from_prior(adapter, prior_pending, symbol, price)
+    pending: dict[str, dict] = {}
+    if price:
+        pending[symbol] = {
+            "price": price,
+            "signals": [_pending_entry(s) for s in signals],
+        }
+    adapted = [adapter.adapt_signal(s) for s in signals]
+    n_adapted = sum("adapted" in s.tags for s in adapted)
+    return adapted, n_learned, n_adapted, pending
 
 
 def _learn_from_prior(
