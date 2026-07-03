@@ -1,35 +1,43 @@
-"""Swarm orchestration: the blackboard, pipeline, and cycle orchestrator."""
+"""Swarm orchestration: the blackboard and the cycle orchestrator."""
 
 from aoa.swarm.blackboard import Blackboard
-from aoa.swarm.context import CycleContext
-from aoa.swarm.orchestrator import CycleResult, Orchestrator
-from aoa.swarm.pipeline import Pipeline, PipelineStage
-from aoa.swarm.stages import (
-    AnalyzeStage,
-    ExecuteStage,
-    IntakeStage,
-    MaterializeStage,
-    PortfolioStage,
-    RiskStage,
-    ScanStage,
-    default_stages,
-)
-from aoa.swarm.team import AgentTeam
+from aoa.swarm.environment import DomainSlice, MeshedView, SwarmEnvironment
+from aoa.swarm.events import EventBus, SwarmEvent
 
 __all__ = [
-    "AgentTeam",
-    "AnalyzeStage",
     "Blackboard",
     "CycleContext",
-    "CycleResult",
-    "ExecuteStage",
-    "IntakeStage",
-    "MaterializeStage",
+    "DomainSlice",
+    "EventBus",
+    "MeshedView",
     "Orchestrator",
     "Pipeline",
     "PipelineStage",
-    "PortfolioStage",
-    "RiskStage",
-    "ScanStage",
-    "default_stages",
+    "SwarmEnvironment",
+    "SwarmEvent",
+    "AgentTeam",
 ]
+
+
+def __getattr__(name: str):
+    if name == "Orchestrator":
+        from aoa.swarm.orchestrator import Orchestrator
+
+        return Orchestrator
+    if name == "CycleContext":
+        from aoa.swarm.context import CycleContext
+
+        return CycleContext
+    if name == "Pipeline":
+        from aoa.swarm.pipeline import Pipeline
+
+        return Pipeline
+    if name == "PipelineStage":
+        from aoa.swarm.pipeline import PipelineStage
+
+        return PipelineStage
+    if name == "AgentTeam":
+        from aoa.swarm.team import AgentTeam
+
+        return AgentTeam
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

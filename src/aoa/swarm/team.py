@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from aoa.agents.fundamental import FundamentalAgent
+from aoa.agents.meshing import MeshingAgent
 from aoa.agents.options import OptionsStrategistAgent
 from aoa.agents.portfolio import PortfolioManagerAgent
 from aoa.agents.risk import RiskManagerAgent
@@ -22,6 +23,7 @@ class AgentTeam:
     scanner: ScannerAgent
     technical: TechnicalAgent
     fundamental: FundamentalAgent
+    meshing: MeshingAgent
     options: OptionsStrategistAgent
     portfolio: PortfolioManagerAgent
     risk: RiskManagerAgent
@@ -32,6 +34,7 @@ class AgentTeam:
             scanner=ScannerAgent(llm),
             technical=TechnicalAgent(llm),
             fundamental=FundamentalAgent(llm),
+            meshing=MeshingAgent(llm),
             options=OptionsStrategistAgent(llm, broker),
             portfolio=PortfolioManagerAgent(llm),
             risk=RiskManagerAgent(llm, risk),

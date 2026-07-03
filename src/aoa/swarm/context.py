@@ -30,7 +30,6 @@ class CycleContext:
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None
     max_candidates: int = 6
-    pm_raw: dict | None = None
 
     # Daily-loss tracking (owned by the orchestrator, read by risk stage).
     equity_day: date | None = None

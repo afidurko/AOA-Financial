@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 
-from aoa.agents.base import Direction, Signal, TradeProposal
+from aoa.agents.base import Direction, TradeProposal
 from aoa.brokerage.models import AssetClass, Side
+from aoa.data.market_data import SymbolSnapshot
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import PipelineStage
 
@@ -45,6 +47,10 @@ class IntakeStage(PipelineStage):
             return False
 
         bb.snapshots = ctx.market.snapshots(bb.universe)
+        bb.environment.global_context = {
+            "mode": ctx.config.trading_mode,
+            "universe_size": len(bb.universe),
+        }
         return True
 
 
@@ -53,6 +59,7 @@ class ScanStage(PipelineStage):
     """Scanner shortlists candidates from the universe."""
 
     name: str = "scan"
+    checkpoint: bool = True
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
@@ -60,6 +67,19 @@ class ScanStage(PipelineStage):
             bb.snapshots, max_candidates=ctx.max_candidates
         )
         ctx.journal.record("scanner.candidates", {"candidates": bb.candidates})
+        bb.events.emit("domain.write", "scanner", {"candidates": len(bb.candidates)})
+
+        bb.environment.set_domain(
+            "scanner",
+            {
+                "candidates": bb.candidates,
+                "by_symbol": {
+                    c.get("symbol", "").upper(): c for c in bb.candidates if c.get("symbol")
+                },
+            },
+        )
+        bb.environment.global_context["n_candidates"] = len(bb.candidates)
+
         if not bb.candidates:
             ctx.notes.append("Scanner returned no candidates.")
         return True
@@ -67,24 +87,32 @@ class ScanStage(PipelineStage):
 
 @dataclass
 class AnalyzeStage(PipelineStage):
-    """Per-candidate technical + fundamental analysis and options ideas."""
+    """Per-candidate technical + fundamental analysis, meshing, and options."""
 
     name: str = "analyze"
+    checkpoint: bool = True
 
     def run(self, ctx: CycleContext) -> bool:
-        bb = ctx.blackboard
-        per_symbol: list[dict] = []
-        for cand in bb.candidates:
-            per_symbol.append(_analyze_one(ctx, cand))
-        bb.per_symbol = per_symbol
+        workers = max(1, ctx.config.parallel_workers)
+        if workers == 1 or len(ctx.blackboard.candidates) <= 1:
+            for cand in ctx.blackboard.candidates:
+                _analyze_one(ctx, cand)
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futures = [
+                    pool.submit(_analyze_one, ctx, cand) for cand in ctx.blackboard.candidates
+                ]
+                for fut in as_completed(futures):
+                    fut.result()
         return True
 
 
 @dataclass
 class PortfolioStage(PipelineStage):
-    """Portfolio manager synthesizes signals into target trades."""
+    """Portfolio manager synthesizes meshed views into target trades."""
 
     name: str = "portfolio"
+    checkpoint: bool = True
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
@@ -106,17 +134,24 @@ class PortfolioStage(PipelineStage):
             for p in bb.positions
         ]
         pm = ctx.agents.portfolio.decide(
-            bb.per_symbol,
+            bb.environment.per_symbol_context(),
             positions_ctx,
             account_ctx,
             max_new_positions=ctx.config.risk.max_orders_per_cycle,
         )
         bb.commentary = pm.get("portfolio_commentary", "")
+        bb.environment.set_domain("portfolio", pm)
         ctx.journal.record(
             "portfolio.decision",
             {"proposals": pm.get("proposals", []), "commentary": bb.commentary},
         )
-        ctx.pm_raw = pm
+        bb.events.emit(
+            "domain.write",
+            "portfolio",
+            {"proposals": len(pm.get("proposals", []))},
+        )
+        # Stash raw PM output for the materialize stage.
+        bb.environment.global_context["_pm_raw"] = pm
         return True
 
 
@@ -128,7 +163,7 @@ class MaterializeStage(PipelineStage):
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
-        raw = (ctx.pm_raw or {}).get("proposals", [])
+        raw = bb.environment.global_context.get("_pm_raw", {}).get("proposals", [])
         bb.proposals = _materialize_proposals(raw, bb)
         return True
 
@@ -138,6 +173,7 @@ class RiskStage(PipelineStage):
     """Deterministic guards + LLM veto."""
 
     name: str = "risk"
+    checkpoint: bool = True
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
@@ -149,6 +185,10 @@ class RiskStage(PipelineStage):
         )
         ctx.journal.record(
             "risk.review",
+            {"proposals": [p.to_context() for p in bb.proposals]},
+        )
+        bb.environment.set_domain(
+            "risk",
             {"proposals": [p.to_context() for p in bb.proposals]},
         )
         return True
@@ -188,23 +228,48 @@ def default_stages() -> list[PipelineStage]:
 
 
 # ----------------------------------------------------------------- analysis
-def _analyze_one(ctx: CycleContext, cand: dict) -> dict:
+def _analyze_one(ctx: CycleContext, cand: dict) -> None:
     bb = ctx.blackboard
+    env = bb.environment
     symbol = cand.get("symbol", "").upper()
     snap = bb.snapshots.get(symbol) or ctx.market.snapshot(symbol)
 
-    tech = ctx.agents.technical.analyze(snap)
-    fund = ctx.agents.fundamental.analyze(snap)
+    if ctx.config.parallel_workers > 1:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
+            fund_fut = pool.submit(ctx.agents.fundamental.analyze, snap)
+            tech = tech_fut.result()
+            fund = fund_fut.result()
+    else:
+        tech = ctx.agents.technical.analyze(snap)
+        fund = ctx.agents.fundamental.analyze(snap)
+
     bb.add_signal(tech)
     bb.add_signal(fund)
+    env.set_domain(f"technical:{symbol}", {"symbol": symbol, "signal": tech.to_context()})
+    env.set_domain(f"fundamental:{symbol}", {"symbol": symbol, "signal": fund.to_context()})
+    bb.events.emit("domain.write", f"technical:{symbol}", {"direction": tech.direction.value})
 
-    entry: dict = {
-        "symbol": symbol,
-        "scanner_reason": cand.get("reason", ""),
-        "signals": [tech.to_context(), fund.to_context()],
-    }
+    meshed = ctx.agents.meshing.mesh(
+        symbol,
+        [tech, fund],
+        scanner_reason=cand.get("reason", ""),
+        snapshot_context=snap.to_context() if snap else None,
+    )
+    env.set_meshed(meshed)
+    bb.add_signal(meshed.to_signal())
+    ctx.journal.record("meshing.view", meshed.to_context())
+    bb.events.emit("domain.write", f"meshed:{symbol}", meshed.to_context())
 
-    combined_dir, combined_conv = _combine(tech, fund)
+    _maybe_options(ctx, symbol, snap, meshed)
+
+
+def _maybe_options(
+    ctx: CycleContext, symbol: str, snap: SymbolSnapshot, meshed
+) -> None:
+    bb = ctx.blackboard
+    combined_dir = meshed.effective_direction
+    combined_conv = meshed.effective_conviction
     price = (snap.quote.mid if snap.quote else None) or (
         snap.technicals.get("last_close") if snap.technicals else None
     )
@@ -221,19 +286,7 @@ def _analyze_one(ctx: CycleContext, cand: dict) -> dict:
             if contract is not None:
                 bb.option_contracts[contract.symbol] = contract
             bb.options_ideas[symbol] = idea
-            entry["options_idea"] = {
-                k: v for k, v in idea.items() if not k.startswith("_")
-            }
-    return entry
-
-
-def _combine(tech: Signal, fund: Signal) -> tuple[Direction, float]:
-    """Combine technical & fundamental signals into a single directional view."""
-    if tech.direction == fund.direction and tech.direction is not Direction.NEUTRAL:
-        return tech.direction, min(1.0, (tech.conviction + fund.conviction) / 1.6)
-    if tech.direction is not Direction.NEUTRAL:
-        return tech.direction, tech.conviction * 0.6
-    return Direction.NEUTRAL, 0.0
+            bb.environment.set_domain(f"options:{symbol}", idea)
 
 
 def _materialize_proposals(raw: list[dict], bb) -> list[TradeProposal]:

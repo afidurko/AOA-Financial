@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from aoa.agents.base import Direction, Signal
+from aoa.agents.base import Direction
 from aoa.brokerage.models import Side
 from aoa.config import Config, RiskLimits
 from aoa.journal.store import Journal
-from aoa.swarm.orchestrator import Orchestrator, _combine, _marketable_limit
+from aoa.swarm.orchestrator import Orchestrator, _marketable_limit
 
 
 def _config(dry_run=False):
@@ -58,24 +58,21 @@ def test_journal_records_cycle(fake_broker, fake_llm, tmp_path):
     orch.run_cycle()
     events = {e["event"] for e in journal.tail(50)}
     assert "cycle.start" in events
+    assert "meshing.view" in events
     assert "portfolio.decision" in events
     assert "cycle.end" in events
 
 
-def test_combine_corroborated_signals():
-    tech = Signal("AAPL", "technical", Direction.BULLISH, 0.8, "x")
-    fund = Signal("AAPL", "fundamental", Direction.BULLISH, 0.6, "y")
-    direction, conv = _combine(tech, fund)
-    assert direction is Direction.BULLISH
-    assert conv > 0.8  # corroboration boosts conviction
+def test_cycle_populates_swarm_environment(fake_broker, fake_llm, tmp_path):
+    journal = Journal(tmp_path / "j.jsonl")
+    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    result = orch.run_cycle()
 
-
-def test_combine_conflicting_signals_discounts():
-    tech = Signal("AAPL", "technical", Direction.BULLISH, 0.8, "x")
-    fund = Signal("AAPL", "fundamental", Direction.BEARISH, 0.6, "y")
-    direction, conv = _combine(tech, fund)
-    assert direction is Direction.BULLISH  # technicals lead
-    assert conv < 0.8  # but discounted
+    env = result.blackboard.environment
+    assert "AAPL" in env.meshed_views
+    assert env.meshed_views["AAPL"].direction is Direction.BULLISH
+    assert "scanner" in env.domains
+    assert "technical:AAPL" in env.domains
 
 
 def test_marketable_limit_padding():
