@@ -47,10 +47,33 @@ class Pipeline:
                 break
             bus = ctx.blackboard.events
             bus.emit("stage.start", stage.name)
+            ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
             continue_cycle = stage.run(ctx)
             if stage.checkpoint:
                 ctx.blackboard.environment.checkpoint(stage.name)
                 bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
             bus.emit("stage.complete", stage.name)
+            ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
+            if not continue_cycle:
+                break
+
+    def run_from(self, ctx: CycleContext, start_at: str) -> None:
+        """Run stages starting at ``start_at`` (inclusive)."""
+        started = False
+        for stage in self.stages:
+            if not started:
+                if stage.name == start_at:
+                    started = True
+                else:
+                    continue
+            bus = ctx.blackboard.events
+            bus.emit("stage.start", stage.name)
+            ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
+            continue_cycle = stage.run(ctx)
+            if stage.checkpoint:
+                ctx.blackboard.environment.checkpoint(stage.name)
+                bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
+            bus.emit("stage.complete", stage.name)
+            ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
             if not continue_cycle:
                 break

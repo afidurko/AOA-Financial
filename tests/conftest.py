@@ -167,6 +167,14 @@ class FakeLLM:
                 "event_risk": "low",
                 "rationale": "stable large cap",
             }
+        if "key_observations" in props:  # tom — trends (before technical; shares horizon)
+            return {
+                "direction": "up",
+                "strength": 0.72,
+                "timeframe": "swing",
+                "rationale": "rising MA stack with higher lows",
+                "key_observations": ["above 50DMA", "RSI constructive"],
+            }
         if "support" in props or "horizon" in props:  # technical
             return {
                 "direction": "bullish",
@@ -203,6 +211,39 @@ class FakeLLM:
             }
         if "vetoes" in props:  # risk
             return {"vetoes": [], "assessment": "prudent"}
+        if "validated" in props:  # julie — algorithms
+            return {
+                "validated": True,
+                "adjusted_strength": 0.68,
+                "method_notes": "MACD histogram positive; RSI not overbought",
+                "signals": ["sma_cross_bullish", "rsi_midrange"],
+            }
+        if "recommendations" in props and "confidence" in props:  # alan
+            return {
+                "recommendations": [
+                    {
+                        "symbol": "AAPL",
+                        "action": "consider_long",
+                        "conviction": 0.7,
+                        "rationale": "validated uptrend",
+                    }
+                ],
+                "summary": "One high-quality long setup",
+                "confidence": 0.65,
+            }
+        if "team_status" in props:  # aaron — CEO
+            return {
+                "overall_ok": True,
+                "summary": "Team completed all deliverables.",
+                "user_notifications": [],
+                "team_status": [
+                    {"name": "Tom", "role": "Trend Analyst", "completed": True, "notes": "ok"},
+                    {"name": "Julie", "role": "Algorithm Specialist", "completed": True, "notes": "ok"},
+                    {"name": "Bob", "role": "Systems Health", "completed": True, "notes": "ok"},
+                    {"name": "Alan", "role": "Decision Aggregator", "completed": True, "notes": "ok"},
+                    {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
+                ],
+            }
         return {}
 
 
