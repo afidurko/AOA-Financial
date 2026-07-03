@@ -69,6 +69,15 @@ def test_api_run_cycle(client):
     assert r.status_code == 200
     data = r.json()
     assert "proposals" in data
+    assert data.get("health") is not None
+    assert data["health"]["can_proceed"] is True
+    assert "ceo" in data
+
+
+def test_api_config_team_mode(client):
+    r = client.get("/api/config")
+    assert r.status_code == 200
+    assert r.json()["team_mode"] is True
 
 
 def test_api_journal(client):

@@ -70,6 +70,19 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 ### The agents
 
+The swarm is coordinated by a **five-member agent team** before trades are proposed:
+
+| Member | Role |
+|--------|------|
+| **Tom** | Trend analyst — reads price action and characterizes prevailing trends. |
+| **Julie** | Algorithm specialist — validates and refines Tom's reads with quantitative methods. |
+| **Bob** | Systems health — checks config, broker connectivity, and code integrity (deterministic). |
+| **Alan** | Decision aggregator — synthesizes Tom and Julie into a focused decision brief. |
+| **Aaron** | CEO — fixes team issues when possible; pushes iPhone alerts (never email) when he can't fix or needs your verification. |
+
+Behind them, specialized trading agents still handle scanning, fundamentals, options,
+portfolio sizing, risk, and execution:
+
 | Agent | Role |
 |-------|------|
 | **Scanner** | Narrows the universe to a shortlist of the strongest setups. |
@@ -77,7 +90,7 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 | **Fundamental** | Qualitative catalyst & event-risk view (never fabricates news). |
 | **Meshing** | Synthesizes specialist signals into a cohesive, editable per-symbol view. |
 | **Options strategist** | Proposes a cash-account-appropriate options structure from the live chain. |
-| **Portfolio manager** | Synthesizes all signals + positions + account into target trades. |
+| **Portfolio manager** | Synthesizes all signals + team brief + positions + account into target trades. |
 | **Risk manager** | Enforces hard guardrails, then an LLM second-opinion veto. |
 
 ### Cash-account safety invariants (always enforced, deterministically)
@@ -127,14 +140,57 @@ Options trading requires options approval on the account (the swarm checks `opti
 aoa doctor            # validate config + check broker/LLM connectivity
 aoa doctor --offline  # validate config only (no network)
 aoa status            # show account, positions, market clock
-aoa run        # run ONE analysis → decision → execution cycle
+aoa run               # run ONE team-coordinated analysis → decision → execution cycle
 aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
+aoa team health   # Bob-only systems health check
+aoa team brief    # Tom→Julie→Alan analysis without trading
 aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 ```
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.
+
+### Aaron's iPhone alerts
+
+When Aaron cannot fix an issue or needs your verification first, he sends a push
+notification to your **iPhone** (never email). **Recommended: your custom app.**
+
+#### Custom app (recommended)
+
+Point Aaron at your app's backend webhook. Aaron POSTs JSON; your server forwards
+to APNs and delivers to your iPhone app:
+
+```bash
+AOA_CUSTOM_APP_WEBHOOK_URL=https://your-server.example.com/aoa/alerts
+AOA_CUSTOM_APP_API_KEY=your_shared_secret      # optional Bearer token
+AOA_CUSTOM_APP_DEVICE_ID=iphone-install-id     # optional routing
+```
+
+Example payload your webhook receives:
+
+```json
+{
+  "source": "aoa-financial",
+  "title": "AOA — Aaron (CEO)",
+  "message": "[Bob/broker] Broker unreachable …",
+  "reason": "unfixable",
+  "requires_response": false,
+  "priority": "high",
+  "device_id": "iphone-install-id"
+}
+```
+
+When `reason` is `needs_verification`, set `requires_response` to true in your app
+so the user can confirm before the swarm proceeds.
+
+#### Alternatives
+
+- **Pushover** — `AOA_PUSHOVER_USER_KEY` + `AOA_PUSHOVER_APP_TOKEN` ([pushover.net](https://pushover.net))
+- **ntfy** — `AOA_NTFY_TOPIC` ([ntfy.sh](https://ntfy.sh))
+
+Aaron will attempt fixes first (broker retries, cache clears, re-running team
+members) before escalating.
 
 ---
 
@@ -155,13 +211,13 @@ Open **http://localhost:8080/** for the dashboard. REST endpoints:
 | `/api/status` | GET | Account, positions, loop state |
 | `/api/config` | GET | Trading mode, universe, cadence |
 | `/api/journal?n=30` | GET | Tail the audit log |
-| `/api/run` | POST | Trigger one swarm cycle |
+| `/api/run` | POST | Trigger one team-coordinated swarm cycle |
 | `/api/loop/start` | POST | Start background loop |
 | `/api/loop/stop` | POST | Stop background loop |
 | `/api/last-cycle` | GET | Most recent cycle result |
 | `/api/docs` | GET | OpenAPI interactive docs |
 
-Set `AOA_WEB_AUTO_LOOP=true` to run the trading loop automatically in the
+Set `AOA_WEB_AUTO_LOOP=true` to run the team trading loop automatically in the
 background while the web server is up.
 
 ---
@@ -236,7 +292,9 @@ src/aoa/
   brokerage/           # broker abstraction (base) + Alpaca impl + neutral models
   data/                # market-data assembly + pure-Python indicators
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
-  agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk, team
+  agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk
+  team/                # Tom, Julie, Bob, Alan, Aaron + team orchestrator
+  notify/              # iPhone push (custom app webhook, Pushover, ntfy)
   swarm/               # blackboard, environment, events, pipeline, stages, orchestrator
   risk/                # deterministic cash-account guardrails
   execution/           # proposal → broker order
