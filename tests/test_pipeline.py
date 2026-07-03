@@ -39,10 +39,19 @@ def _ctx(fake_broker, fake_llm, tmp_path, *, parallel_workers=1):
     )
 
 
-def test_default_pipeline_has_seven_stages():
+def test_default_pipeline_has_eight_stages():
     stages = default_stages()
     names = [s.name for s in stages]
-    assert names == ["intake", "scan", "analyze", "portfolio", "materialize", "risk", "execute"]
+    assert names == [
+        "intake",
+        "scan",
+        "analyze",
+        "portfolio",
+        "materialize",
+        "risk",
+        "execute",
+        "plasticity",
+    ]
 
 
 def test_intake_stage_populates_blackboard(fake_broker, fake_llm, tmp_path):

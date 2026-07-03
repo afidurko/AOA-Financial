@@ -77,12 +77,17 @@ class PortfolioManagerAgent(Agent):
         account: dict,
         *,
         max_new_positions: int = 5,
+        plasticity_context: str = "",
     ) -> dict:
         prompt = (
             f"Account: {json.dumps(account)}\n"
             f"Current positions: {json.dumps(positions, default=str)}\n"
             f"Per-symbol analysis (meshed views + domain context):\n"
             f"{json.dumps(per_symbol, default=str)}\n\n"
+        )
+        if plasticity_context:
+            prompt += f"Cross-cycle memory:\n{plasticity_context}\n\n"
+        prompt += (
             f"Propose at most {max_new_positions} new trades (plus any exits). "
             "Return JSON."
         )

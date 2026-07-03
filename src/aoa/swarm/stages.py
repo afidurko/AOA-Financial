@@ -73,6 +73,9 @@ class IntakeStage(PipelineStage):
             "mode": ctx.config.trading_mode,
             "universe_size": len(bb.universe),
         }
+        if ctx.plasticity and ctx.plasticity.enabled:
+            ctx.plasticity.reload()
+            bb.environment.global_context["plasticity"] = ctx.plasticity.memory.to_context()
         return True
 
 
@@ -211,6 +214,7 @@ class PortfolioStage(PipelineStage):
             positions_ctx,
             account_ctx,
             max_new_positions=ctx.config.risk.max_orders_per_cycle,
+            plasticity_context=ctx.plasticity.prompt_block() if ctx.plasticity else "",
         )
         bb.commentary = pm.get("portfolio_commentary", "")
         bb.environment.set_domain("portfolio", pm)
@@ -255,6 +259,7 @@ class RiskStage(PipelineStage):
             bb.account,
             bb.positions,
             starting_equity=ctx.starting_equity,
+            plasticity_context=ctx.plasticity.prompt_block() if ctx.plasticity else "",
         )
         ctx.journal.record(
             "risk.review",
@@ -288,6 +293,20 @@ class ExecuteStage(PipelineStage):
         return True
 
 
+@dataclass
+class PlasticityStage(PipelineStage):
+    """Consolidate journal events into durable cross-cycle memory."""
+
+    name: str = "plasticity"
+
+    def run(self, ctx: CycleContext) -> bool:
+        if ctx.plasticity is None or not ctx.plasticity.enabled:
+            return True
+        delta = ctx.plasticity.consolidate()
+        ctx.blackboard.environment.set_domain("plasticity", delta)
+        return True
+
+
 def default_stages() -> list[PipelineStage]:
     return [
         IntakeStage(),
@@ -297,6 +316,7 @@ def default_stages() -> list[PipelineStage]:
         MaterializeStage(),
         RiskStage(),
         ExecuteStage(),
+        PlasticityStage(),
     ]
 
 

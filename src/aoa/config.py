@@ -110,6 +110,13 @@ def journal_path_for(env: str) -> Path:
     return data_dir_for(env) / "journal" / "aoa.jsonl"
 
 
+def plasticity_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_PLASTICITY_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "journal" / "plasticity.json"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -126,6 +133,7 @@ class Config:
     profile: str = ""
     data_dir: Path = field(default_factory=lambda: data_dir_for("paper-dry"))
     journal_path: Path = field(default_factory=lambda: journal_path_for("paper-dry"))
+    plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
 
     # LLM
     anthropic_api_key: str = ""
@@ -169,6 +177,11 @@ class Config:
 
     # Persistent state (daily-loss baseline + settlement ledger).
     state_path: str = "journal/state.json"
+
+    # Journal-driven cross-cycle memory (neuroplasticity).
+    plasticity_enabled: bool = True
+    plasticity_tail: int = 200
+    plasticity_max_lessons: int = 10
 
     # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
@@ -215,6 +228,7 @@ class Config:
             profile=os.environ.get("AOA_PROFILE", "").strip(),
             data_dir=data_dir_for(env),
             journal_path=journal_path_for(env),
+            plasticity_path=plasticity_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -246,6 +260,9 @@ class Config:
             state_path=os.environ.get(
                 "AOA_STATE_PATH", str(data_dir_for(env) / "state.json")
             ),
+            plasticity_enabled=_bool("AOA_PLASTICITY_ENABLED", True),
+            plasticity_tail=max(20, _int("AOA_PLASTICITY_TAIL", 200)),
+            plasticity_max_lessons=max(1, _int("AOA_PLASTICITY_MAX_LESSONS", 10)),
             adapt_enabled=_bool("AOA_ADAPT_ENABLED", False),
             adapt_path=os.environ.get("AOA_ADAPT_PATH", ".aoa/signal_adapter.json"),
             adapt_rank=_int("AOA_ADAPT_RANK", 4),
