@@ -78,8 +78,8 @@ class Config:
 
     # Execution
     dry_run: bool = False
-    journal_path: str = "journal/aoa.jsonl"
     parallel_workers: int = 4
+    journal_path: str = "journal/aoa.jsonl"
 
     # News feed
     news_enabled: bool = True
@@ -120,8 +120,8 @@ class Config:
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             dry_run=_bool("AOA_DRY_RUN", False),
-            journal_path=os.environ.get("AOA_JOURNAL_PATH", "journal/aoa.jsonl"),
             parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
+            journal_path=os.environ.get("AOA_JOURNAL_PATH", "journal/aoa.jsonl"),
             news_enabled=_bool("AOA_NEWS_ENABLED", True),
             web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
             web_port=_int("AOA_WEB_PORT", 8080),

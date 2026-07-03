@@ -49,17 +49,17 @@ def test_fundamental_agent_with_headlines(fake_llm):
     assert signal.source == "fundamental"
 
 
-def test_alpaca_news_feed_handles_http_error(monkeypatch):
-    import httpx
+def test_alpaca_news_feed_handles_api_error(monkeypatch):
+    from alpaca.common.exceptions import APIError
 
     class FakeClient:
-        def get(self, *args, **kwargs):
-            raise httpx.HTTPError("network down")
+        def get_news(self, *args, **kwargs):
+            raise APIError('{"message":"forbidden"}')
 
         def close(self):
             pass
 
-    monkeypatch.setattr("aoa.data.news.httpx.Client", lambda **kw: FakeClient())
+    monkeypatch.setattr("aoa.data.news.NewsClient", lambda **kw: FakeClient())
     feed = AlpacaNewsFeed("key", "secret")
     result = feed.headlines(["AAPL"])
     assert result == {"AAPL": []}

@@ -1,20 +1,31 @@
-"""Alpaca brokerage implementation.
+"""Alpaca brokerage implementation via the official ``alpaca-py`` SDK.
 
-Uses the Alpaca Trading API (account, positions, orders, clock) and the Alpaca
-Market Data API (quotes, bars, most-actives, option chains) over plain HTTPS via
-``httpx``. No third-party Alpaca SDK is required, which keeps the dependency
-surface small and the behavior transparent.
-
-Endpoint references:
-- Trading:    https://{paper-,}api.alpaca.markets/v2/...
-- Market data: https://data.alpaca.markets/v2 (stocks) and /v1beta1 (options, screener)
+Uses ``TradingClient`` for account, positions, orders, and clock; market-data
+clients for quotes, bars, most-actives, and option chains.
 """
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from datetime import datetime, timezone
+from typing import TypeVar
 
-import httpx
+from alpaca.common.exceptions import APIError
+from alpaca.data.enums import Adjustment, MostActivesBy, OptionsFeed
+from alpaca.data.historical import OptionHistoricalDataClient, StockHistoricalDataClient
+from alpaca.data.historical.screener import ScreenerClient
+from alpaca.data.requests import (
+    MostActivesRequest,
+    OptionChainRequest,
+    StockBarsRequest,
+    StockLatestQuoteRequest,
+)
+from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
+from alpaca.trading.client import TradingClient
+from alpaca.trading.enums import ContractType, OrderSide, QueryOrderStatus
+from alpaca.trading.enums import TimeInForce as AlpacaTimeInForce
+from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
 
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import (
@@ -25,23 +36,33 @@ from aoa.brokerage.models import (
     OptionType,
     Order,
     OrderRequest,
+    OrderType,
     Position,
     Quote,
     Side,
+    TimeInForce,
 )
 
-TRADING_LIVE = "https://api.alpaca.markets"
-TRADING_PAPER = "https://paper-api.alpaca.markets"
-DATA_BASE = "https://data.alpaca.markets"
+T = TypeVar("T")
+
+_TIMEFRAME_RE = re.compile(r"^(\d+)(Min|Hour|Day|Week|Month)$")
 
 
-def _parse_ts(value: str | None) -> datetime | None:
-    if not value:
+def _parse_ts(value: str | datetime | None) -> datetime | None:
+    if value is None:
         return None
+    if isinstance(value, datetime):
+        return _ensure_utc(value)
     try:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _ensure_utc(ts: datetime) -> datetime:
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
 
 
 def _f(value, default: float = 0.0) -> float:
@@ -49,6 +70,29 @@ def _f(value, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _parse_timeframe(value: str) -> TimeFrame:
+    match = _TIMEFRAME_RE.fullmatch(value)
+    if not match:
+        return TimeFrame.Day
+    amount = int(match.group(1))
+    unit_key = match.group(2)
+    unit_map = {
+        "Min": TimeFrameUnit.Minute,
+        "Hour": TimeFrameUnit.Hour,
+        "Day": TimeFrameUnit.Day,
+        "Week": TimeFrameUnit.Week,
+        "Month": TimeFrameUnit.Month,
+    }
+    return TimeFrame(amount, unit_map[unit_key])
+
+
+def _sdk_error_message(exc: APIError) -> str:
+    status = exc.status_code
+    if status is not None:
+        return f"Alpaca API {status}: {exc}"
+    return f"Alpaca API error: {exc}"
 
 
 class AlpacaBroker(Broker):
@@ -62,38 +106,32 @@ class AlpacaBroker(Broker):
     ) -> None:
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required.")
+        del timeout  # alpaca-py manages HTTP timeouts internally
         self.is_live = live
         self.name = "alpaca-live" if live else "alpaca-paper"
-        self._trading_base = TRADING_LIVE if live else TRADING_PAPER
-        headers = {
-            "APCA-API-KEY-ID": key_id,
-            "APCA-API-SECRET-KEY": secret_key,
-            "Content-Type": "application/json",
-        }
-        self._client = httpx.Client(headers=headers, timeout=timeout)
+        paper = not live
+        creds = {"api_key": key_id, "secret_key": secret_key}
+        self._trading = TradingClient(paper=paper, **creds)
+        self._stock_data = StockHistoricalDataClient(**creds)
+        self._screener = ScreenerClient(**creds)
+        self._options_data = OptionHistoricalDataClient(**creds)
 
-    # --- low-level helpers ---------------------------------------------------
-    def _request(self, method: str, url: str, **kwargs) -> dict | list:
+    def _sdk_call(self, fn: Callable[..., T], *args, **kwargs) -> T:
         try:
-            resp = self._client.request(method, url, **kwargs)
-        except httpx.HTTPError as exc:  # network error
-            raise BrokerError(f"Alpaca network error: {exc}") from exc
-        if resp.status_code >= 400:
-            raise BrokerError(
-                f"Alpaca API {resp.status_code} for {method} {url}: {resp.text[:400]}"
-            )
-        if not resp.content:
-            return {}
-        return resp.json()
-
-    def _trading(self, method: str, path: str, **kwargs) -> dict | list:
-        return self._request(method, f"{self._trading_base}{path}", **kwargs)
-
-    def _data(self, method: str, path: str, **kwargs) -> dict | list:
-        return self._request(method, f"{DATA_BASE}{path}", **kwargs)
+            return fn(*args, **kwargs)
+        except APIError as exc:
+            raise BrokerError(_sdk_error_message(exc)) from exc
 
     def close(self) -> None:
-        self._client.close()
+        for client in (
+            self._trading,
+            self._stock_data,
+            self._screener,
+            self._options_data,
+        ):
+            session = getattr(client, "_session", None)
+            if session is not None:
+                session.close()
 
     def __enter__(self) -> AlpacaBroker:
         return self
@@ -103,85 +141,104 @@ class AlpacaBroker(Broker):
 
     # --- account & positions -------------------------------------------------
     def get_account(self) -> Account:
-        d = self._trading("GET", "/v2/account")
-        assert isinstance(d, dict)
+        acct = self._sdk_call(self._trading.get_account)
         return Account(
-            equity=_f(d.get("equity")),
-            cash=_f(d.get("cash")),
-            buying_power=_f(d.get("buying_power")),
-            # In a cash account Alpaca reports non-marginable buying power as the
-            # settled, immediately usable cash.
-            settled_cash=_f(d.get("cash")),
-            options_level=int(_f(d.get("options_approved_level", 0))),
-            daytrade_count=int(_f(d.get("daytrade_count", 0))),
-            pattern_day_trader=bool(d.get("pattern_day_trader", False)),
-            currency=d.get("currency", "USD"),
+            equity=_f(acct.equity),
+            cash=_f(acct.cash),
+            buying_power=_f(acct.buying_power),
+            settled_cash=_f(acct.cash),
+            options_level=int(_f(acct.options_approved_level, 0)),
+            daytrade_count=int(_f(acct.daytrade_count, 0)),
+            pattern_day_trader=bool(acct.pattern_day_trader),
+            currency=acct.currency or "USD",
         )
 
     def get_positions(self) -> list[Position]:
-        rows = self._trading("GET", "/v2/positions")
+        rows = self._sdk_call(self._trading.get_all_positions)
         positions: list[Position] = []
-        for r in rows if isinstance(rows, list) else []:
-            ac = (
+        for row in rows:
+            asset_class = (
                 AssetClass.OPTION
-                if r.get("asset_class") == "us_option"
+                if getattr(row.asset_class, "value", row.asset_class) == "us_option"
                 else AssetClass.EQUITY
             )
             positions.append(
                 Position(
-                    symbol=r.get("symbol", ""),
-                    asset_class=ac,
-                    qty=_f(r.get("qty")),
-                    avg_entry_price=_f(r.get("avg_entry_price")),
-                    market_value=_f(r.get("market_value")),
-                    unrealized_pl=_f(r.get("unrealized_pl")),
-                    current_price=_f(r.get("current_price")),
+                    symbol=row.symbol,
+                    asset_class=asset_class,
+                    qty=_f(row.qty),
+                    avg_entry_price=_f(row.avg_entry_price),
+                    market_value=_f(row.market_value),
+                    unrealized_pl=_f(row.unrealized_pl),
+                    current_price=_f(row.current_price),
                 )
             )
         return positions
 
     # --- market data ---------------------------------------------------------
     def get_quote(self, symbol: str) -> Quote:
-        d = self._data("GET", f"/v2/stocks/{symbol}/quotes/latest")
-        q = d.get("quote", {}) if isinstance(d, dict) else {}
+        quotes = self._sdk_call(
+            self._stock_data.get_stock_latest_quote,
+            StockLatestQuoteRequest(symbol_or_symbols=symbol),
+        )
+        q = quotes[symbol]
         return Quote(
             symbol=symbol,
-            bid=_f(q.get("bp")),
-            ask=_f(q.get("ap")),
-            bid_size=_f(q.get("bs")),
-            ask_size=_f(q.get("as")),
-            timestamp=_parse_ts(q.get("t")),
+            bid=_f(q.bid_price),
+            ask=_f(q.ask_price),
+            bid_size=_f(q.bid_size),
+            ask_size=_f(q.ask_size),
+            timestamp=_ensure_utc(q.timestamp),
         )
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
-        params = {"timeframe": timeframe, "limit": limit, "adjustment": "split"}
-        d = self._data("GET", f"/v2/stocks/{symbol}/bars", params=params)
-        rows = d.get("bars", []) if isinstance(d, dict) else []
+        bar_set = self._sdk_call(
+            self._stock_data.get_stock_bars,
+            StockBarsRequest(
+                symbol_or_symbols=symbol,
+                timeframe=_parse_timeframe(timeframe),
+                limit=limit,
+                adjustment=Adjustment.SPLIT,
+            ),
+        )
         bars: list[Bar] = []
-        for r in rows:
-            ts = _parse_ts(r.get("t"))
-            if ts is None:
-                continue
+        for row in bar_set[symbol]:
             bars.append(
                 Bar(
-                    timestamp=ts,
-                    open=_f(r.get("o")),
-                    high=_f(r.get("h")),
-                    low=_f(r.get("l")),
-                    close=_f(r.get("c")),
-                    volume=_f(r.get("v")),
+                    timestamp=_ensure_utc(row.timestamp),
+                    open=_f(row.open),
+                    high=_f(row.high),
+                    low=_f(row.low),
+                    close=_f(row.close),
+                    volume=_f(row.volume),
                 )
             )
         return bars
 
+    def verify_stock_bars(self, symbol: str = "AAPL", limit: int = 1) -> Bar:
+        """Probe the authenticated stocks bars API.
+
+        Unlike crypto historical data, stock bars require valid API keys. A 401/403
+        from this call usually means missing or invalid ``ALPACA_API_KEY_ID`` /
+        ``ALPACA_API_SECRET_KEY``.
+        """
+        bars = self.get_bars(symbol, timeframe="1Day", limit=limit)
+        if not bars:
+            raise BrokerError(
+                f"Stock bars API reachable but returned no data for {symbol}. "
+                "Check your market-data subscription or symbol."
+            )
+        return bars[-1]
+
     def get_most_active(self, limit: int = 25) -> list[str]:
-        params = {"by": "volume", "top": limit}
         try:
-            d = self._data("GET", "/v1beta1/screener/stocks/most-actives", params=params)
+            result = self._sdk_call(
+                self._screener.get_most_actives,
+                MostActivesRequest(by=MostActivesBy.VOLUME, top=limit),
+            )
         except BrokerError:
             return []
-        rows = d.get("most_actives", []) if isinstance(d, dict) else []
-        return [r.get("symbol", "") for r in rows if r.get("symbol")]
+        return [row.symbol for row in result.most_actives if row.symbol]
 
     # --- options -------------------------------------------------------------
     def get_option_chain(
@@ -190,25 +247,30 @@ class AlpacaBroker(Broker):
         expiration: str | None = None,
         option_type: str | None = None,
     ) -> list[OptionContract]:
-        params: dict = {"limit": 100, "feed": "indicative"}
+        params: dict = {"underlying_symbol": underlying, "feed": OptionsFeed.INDICATIVE}
         if expiration:
             params["expiration_date"] = expiration
         if option_type:
-            params["type"] = option_type  # "call" | "put"
+            params["type"] = (
+                ContractType.CALL if option_type == "call" else ContractType.PUT
+            )
         try:
-            d = self._data("GET", f"/v1beta1/options/snapshots/{underlying}", params=params)
+            snapshots = self._sdk_call(
+                self._options_data.get_option_chain,
+                OptionChainRequest(**params),
+            )
         except BrokerError:
             return []
-        snapshots = d.get("snapshots", {}) if isinstance(d, dict) else {}
+
         contracts: list[OptionContract] = []
         for occ_symbol, snap in snapshots.items():
             parsed = _parse_occ(occ_symbol)
             if parsed is None:
                 continue
             otype, strike, expiry = parsed
-            quote = snap.get("latestQuote", {}) or {}
-            trade = snap.get("latestTrade", {}) or {}
-            greeks = snap.get("greeks", {}) or {}
+            quote = snap.latest_quote
+            trade = snap.latest_trade
+            greeks = snap.greeks
             contracts.append(
                 OptionContract(
                     symbol=occ_symbol,
@@ -216,16 +278,16 @@ class AlpacaBroker(Broker):
                     option_type=otype,
                     strike=strike,
                     expiration=expiry,
-                    bid=_f(quote.get("bp")),
-                    ask=_f(quote.get("ap")),
-                    last=_f(trade.get("p")),
-                    open_interest=_f(snap.get("openInterest")),
+                    bid=_f(quote.bid_price) if quote else 0.0,
+                    ask=_f(quote.ask_price) if quote else 0.0,
+                    last=_f(trade.price) if trade else 0.0,
+                    open_interest=0.0,
                     implied_volatility=(
-                        _f(snap.get("impliedVolatility"))
-                        if snap.get("impliedVolatility") is not None
+                        float(snap.implied_volatility)
+                        if snap.implied_volatility is not None
                         else None
                     ),
-                    delta=_f(greeks.get("delta")) if greeks.get("delta") is not None else None,
+                    delta=float(greeks.delta) if greeks and greeks.delta is not None else None,
                 )
             )
         contracts.sort(key=lambda c: (c.expiration, c.option_type.value, c.strike))
@@ -233,50 +295,69 @@ class AlpacaBroker(Broker):
 
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:
-        payload: dict = {
+        side = OrderSide.BUY if request.side is Side.BUY else OrderSide.SELL
+        tif = (
+            AlpacaTimeInForce.DAY
+            if request.time_in_force is TimeInForce.DAY
+            else AlpacaTimeInForce.GTC
+        )
+        common = {
             "symbol": request.symbol,
-            "qty": str(request.qty),
-            "side": request.side.value,
-            "type": request.order_type.value,
-            "time_in_force": request.time_in_force.value,
+            "qty": request.qty,
+            "side": side,
+            "time_in_force": tif,
+            "client_order_id": request.client_order_id,
         }
-        if request.limit_price is not None:
-            payload["limit_price"] = str(request.limit_price)
-        if request.client_order_id:
-            payload["client_order_id"] = request.client_order_id
-        d = self._trading("POST", "/v2/orders", json=payload)
-        assert isinstance(d, dict)
-        return _order_from_payload(d)
+        if request.order_type is OrderType.LIMIT:
+            sdk_request = LimitOrderRequest(
+                **common,
+                limit_price=request.limit_price,
+            )
+        else:
+            sdk_request = MarketOrderRequest(**common)
+        order = self._sdk_call(self._trading.submit_order, sdk_request)
+        return _order_from_sdk(order)
 
     def list_orders(self, status: str = "open") -> list[Order]:
-        rows = self._trading("GET", "/v2/orders", params={"status": status, "limit": 100})
-        return [_order_from_payload(r) for r in rows] if isinstance(rows, list) else []
+        status_map = {
+            "open": QueryOrderStatus.OPEN,
+            "closed": QueryOrderStatus.CLOSED,
+            "all": QueryOrderStatus.ALL,
+        }
+        rows = self._sdk_call(
+            self._trading.get_orders,
+            GetOrdersRequest(
+                status=status_map.get(status, QueryOrderStatus.OPEN),
+                limit=100,
+            ),
+        )
+        return [_order_from_sdk(row) for row in rows]
 
     def cancel_order(self, order_id: str) -> None:
-        self._trading("DELETE", f"/v2/orders/{order_id}")
+        self._sdk_call(self._trading.cancel_order_by_id, order_id)
 
     # --- clock ---------------------------------------------------------------
     def is_market_open(self) -> bool:
-        d = self._trading("GET", "/v2/clock")
-        return bool(d.get("is_open")) if isinstance(d, dict) else False
+        clock = self._sdk_call(self._trading.get_clock)
+        return bool(clock.is_open)
 
 
-def _order_from_payload(d: dict) -> Order:
-    ac = AssetClass.OPTION if d.get("asset_class") == "us_option" else AssetClass.EQUITY
-    side_raw = d.get("side", "buy")
+def _order_from_sdk(order) -> Order:
+    asset_value = getattr(order.asset_class, "value", order.asset_class)
+    ac = AssetClass.OPTION if asset_value == "us_option" else AssetClass.EQUITY
+    side_value = getattr(order.side, "value", order.side)
+    status_value = getattr(order.status, "value", order.status)
     return Order(
-        id=d.get("id", ""),
-        symbol=d.get("symbol", ""),
-        qty=_f(d.get("qty")),
-        side=Side(side_raw) if side_raw in (s.value for s in Side) else Side.BUY,
-        status=d.get("status", "unknown"),
+        id=str(order.id),
+        symbol=order.symbol or "",
+        qty=_f(order.qty),
+        side=Side(side_value) if side_value in (s.value for s in Side) else Side.BUY,
+        status=status_value or "unknown",
         asset_class=ac,
-        filled_qty=_f(d.get("filled_qty")),
-        filled_avg_price=(
-            _f(d.get("filled_avg_price")) if d.get("filled_avg_price") else None
-        ),
-        submitted_at=_parse_ts(d.get("submitted_at")),
-        raw=d,
+        filled_qty=_f(order.filled_qty),
+        filled_avg_price=_f(order.filled_avg_price) if order.filled_avg_price else None,
+        submitted_at=_parse_ts(order.submitted_at),
+        raw=order.model_dump(mode="json") if hasattr(order, "model_dump") else {},
     )
 
 

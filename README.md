@@ -213,12 +213,12 @@ falls back to qualitative reasoning without fabricating headlines.
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │  Orchestrator — composable pipeline (intake → … → execute)      │
-│  Scanner → Technical/Fundamental(+news) → Meshing → PM → Risk   │
+│  intake → scan → analyze(+news) → mesh → portfolio → risk       │
 └──────┬──────────────────┬──────────────────┬────────────────────┘
        │                  │                  │
        ▼                  ▼                  ▼
   Alpaca broker      Claude LLM         Journal (JSONL)
-  (data + orders)    (agent reasoning)
+  (data + orders)    (agent reasoning)  + SwarmEnvironment
 ```
 
 ---

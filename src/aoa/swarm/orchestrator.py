@@ -62,19 +62,7 @@ class Orchestrator:
         self._ctx: CycleContext | None = None
 
     def run_cycle(self, *, max_candidates: int = 6) -> CycleResult:
-        ctx = CycleContext(
-            config=self.config,
-            broker=self.broker,
-            llm=self.llm,
-            journal=self.journal,
-            market=self.market,
-            agents=self.agents,
-            executor=self.executor,
-            news=self.news,
-            max_candidates=max_candidates,
-            equity_day=self._ctx.equity_day if self._ctx else None,
-            starting_equity=self._ctx.starting_equity if self._ctx else 0.0,
-        )
+        ctx = self._build_context(max_candidates=max_candidates)
         self.pipeline.run(ctx)
         self._ctx = ctx
         return CycleResult(
@@ -85,7 +73,13 @@ class Orchestrator:
 
     def run_until(self, stop_before: str, *, max_candidates: int = 6) -> CycleResult:
         """Run the pipeline up to a stage — useful for editing the environment mid-cycle."""
-        ctx = CycleContext(
+        ctx = self._build_context(max_candidates=max_candidates)
+        self.pipeline.run_until(ctx, stop_before)
+        self._ctx = ctx
+        return CycleResult(blackboard=ctx.blackboard, notes=ctx.notes)
+
+    def _build_context(self, *, max_candidates: int) -> CycleContext:
+        return CycleContext(
             config=self.config,
             broker=self.broker,
             llm=self.llm,
@@ -98,9 +92,6 @@ class Orchestrator:
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,
         )
-        self.pipeline.run_until(ctx, stop_before)
-        self._ctx = ctx
-        return CycleResult(blackboard=ctx.blackboard, notes=ctx.notes)
 
 
 def _marketable_limit(price: float, side: Side) -> float:

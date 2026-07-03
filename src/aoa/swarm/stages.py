@@ -95,26 +95,26 @@ class AnalyzeStage(PipelineStage):
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
         symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
-        news_by_symbol: dict[str, list] = {}
         if ctx.config.news_enabled and symbols:
-            news_by_symbol = ctx.news.headlines(symbols, limit=5)
+            ctx.news_by_symbol = ctx.news.headlines(symbols, limit=5)
             ctx.journal.record(
                 "news.fetched",
                 {
                     "symbols": symbols,
-                    "counts": {sym: len(items) for sym, items in news_by_symbol.items()},
+                    "counts": {sym: len(items) for sym, items in ctx.news_by_symbol.items()},
                 },
             )
+        else:
+            ctx.news_by_symbol = {}
 
         workers = max(1, ctx.config.parallel_workers)
-        if workers == 1 or len(bb.candidates) <= 1:
-            for cand in bb.candidates:
-                _analyze_one(ctx, cand, news_by_symbol)
+        if workers == 1 or len(ctx.blackboard.candidates) <= 1:
+            for cand in ctx.blackboard.candidates:
+                _analyze_one(ctx, cand)
         else:
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = [
-                    pool.submit(_analyze_one, ctx, cand, news_by_symbol)
-                    for cand in bb.candidates
+                    pool.submit(_analyze_one, ctx, cand) for cand in ctx.blackboard.candidates
                 ]
                 for fut in as_completed(futures):
                     fut.result()
@@ -242,14 +242,12 @@ def default_stages() -> list[PipelineStage]:
 
 
 # ----------------------------------------------------------------- analysis
-def _analyze_one(
-    ctx: CycleContext, cand: dict, news_by_symbol: dict[str, list] | None = None
-) -> None:
+def _analyze_one(ctx: CycleContext, cand: dict) -> None:
     bb = ctx.blackboard
     env = bb.environment
     symbol = cand.get("symbol", "").upper()
     snap = bb.snapshots.get(symbol) or ctx.market.snapshot(symbol)
-    headlines = (news_by_symbol or {}).get(symbol, [])
+    headlines = ctx.news_by_symbol.get(symbol, [])
 
     if ctx.config.parallel_workers > 1:
         with ThreadPoolExecutor(max_workers=2) as pool:
