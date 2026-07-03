@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
@@ -30,6 +31,8 @@ class CycleContext:
     executor: Executor
     news: NewsFeed
     state: StateStore
+    signal_adapter: SignalAdapter | None = None
+    adapt_pending: dict[str, dict] = field(default_factory=dict)
     blackboard: Blackboard = field(default_factory=Blackboard)
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None

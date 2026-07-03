@@ -185,6 +185,13 @@ class Config:
     # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
 
+    # Low-rank signal adaptation (LoRA-style online conviction recalibration)
+    adapt_enabled: bool = False
+    adapt_path: str = ".aoa/signal_adapter.json"
+    adapt_rank: int = 4
+    adapt_alpha: float = 8.0
+    adapt_lr: float = 0.05
+
     @property
     def has_brokerage_creds(self) -> bool:
         return bool(self.alpaca_key_id and self.alpaca_secret_key)
@@ -251,6 +258,11 @@ class Config:
             state_path=os.environ.get(
                 "AOA_STATE_PATH", str(data_dir_for(env) / "state.json")
             ),
+            adapt_enabled=_bool("AOA_ADAPT_ENABLED", False),
+            adapt_path=os.environ.get("AOA_ADAPT_PATH", ".aoa/signal_adapter.json"),
+            adapt_rank=_int("AOA_ADAPT_RANK", 4),
+            adapt_alpha=_float("AOA_ADAPT_ALPHA", 8.0),
+            adapt_lr=_float("AOA_ADAPT_LR", 0.05),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

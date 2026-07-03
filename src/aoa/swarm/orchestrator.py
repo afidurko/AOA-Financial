@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.base import Broker
 from aoa.brokerage.models import Side
 from aoa.config import Config
@@ -39,6 +40,7 @@ class Orchestrator:
         news: NewsFeed | None = None,
         *,
         pipeline: Pipeline | None = None,
+        signal_adapter: SignalAdapter | None = None,
     ) -> None:
         self.config = config
         self.broker = broker
@@ -56,6 +58,10 @@ class Orchestrator:
             broker, self.journal, dry_run=config.dry_run, state=self.state
         )
         self.pipeline = pipeline or Pipeline(stages=default_stages())
+
+        # Optional low-rank online adaptation of agent signals.
+        self.signal_adapter = signal_adapter
+        self._adapt_pending: dict[str, dict] = {}
 
         # Preserve attributes referenced by tests and CLI.
         self.scanner = self.agents.scanner
@@ -101,6 +107,8 @@ class Orchestrator:
             executor=self.executor,
             news=self.news,
             state=self.state,
+            signal_adapter=self.signal_adapter,
+            adapt_pending=self._adapt_pending,
             max_candidates=max_candidates,
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,

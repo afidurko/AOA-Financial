@@ -18,6 +18,9 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "pytest-mock>=3.12.0", "ruff>=0.6.0"]
 web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
+# Only needed for aoa.adapt.torch_lora (general-purpose PyTorch LoRA). The
+# swarm's own signal adaptation is pure-Python and needs none of this.
+torch = ["torch>=2.0.0"]
 all = ["aoa-financial[dev,web]"]
 
 [project.scripts]

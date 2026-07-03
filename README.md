@@ -463,6 +463,7 @@ src/aoa/
   data/                # market-data assembly + pure-Python indicators
   simulation/          # trend analysis, scenario library, Monte-Carlo + live adaptive tracker
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
+  adapt/               # Low-Rank Adaptation (LoRA): online signal recalibration + torch LoRA
   agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk
   team/                # Tom, Julie, Bob, Alan, Aaron + team orchestrator
   notify/              # iPhone push (custom app webhook, Pushover, ntfy)
@@ -494,6 +495,39 @@ pytest
 The full swarm runs end-to-end in tests against an in-memory fake broker and a
 canned-response fake LLM — no network, no API keys, no real orders.
 
+## Low-rank adaptation (LoRA)
+
+The agents reason through a **frozen, hosted model** (Claude via the API), so we
+can't fine-tune their weights directly. Instead the swarm applies the LoRA idea
+one level up — a tiny, trainable **low-rank correction on top of each agent's raw
+conviction**, learned online from realized outcomes. It lives in `aoa.adapt`:
+
+- **`aoa.adapt.lowrank.LowRankAdapter`** — a dependency-free (no torch/numpy)
+  low-rank adapter implementing `ΔW = (α/r)·A·B`, with SGD training and JSON
+  persistence. `A` starts at zero, so the adapter begins as an exact **no-op**
+  and only departs from the agents' output as it learns.
+- **`aoa.adapt.signal_adapter.SignalAdapter`** — the trading application: it
+  recalibrates each signal's conviction and learns a calibration target from the
+  realized move (confident-and-correct is rewarded; confident-and-wrong is
+  deflated). Wired optionally into the `Orchestrator`.
+- **`aoa.adapt.torch_lora`** — an optional, reusable PyTorch `LoRALinear`
+  (merge/unmerge, adapter save/load, `mark_only_lora_as_trainable`) that **other
+  projects** can import for real neural-net fine-tuning. Requires the extra:
+  `pip install "aoa-financial[torch]"`.
+
+Enable the swarm's online recalibration with `AOA_ADAPT_ENABLED=true` (it starts
+as a no-op and improves over cycles; learned state persists to `AOA_ADAPT_PATH`).
+
+```python
+# Reusable PyTorch LoRA for any project:
+from torch import nn
+from aoa.adapt.torch_lora import LoRALinear, mark_only_lora_as_trainable
+
+model = LoRALinear.from_linear(nn.Linear(768, 768), rank=8, alpha=16)
+mark_only_lora_as_trainable(model)   # train just the adapter
+model.merge()                        # fold the delta in for fast inference
+```
+
 ## Extending
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
@@ -507,6 +541,8 @@ canned-response fake LLM — no network, no API keys, no real orders.
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 - **Add a UI panel**: extend `aoa/web/app.py` dashboard or add API routes.
+- **Adapt signals**: enable LoRA-style conviction recalibration with `AOA_ADAPT_*`,
+  or reuse `aoa.adapt.torch_lora.LoRALinear` for neural-net fine-tuning elsewhere.
 
 ```python
 from aoa.swarm.pipeline import Pipeline

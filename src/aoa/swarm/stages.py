@@ -6,7 +6,7 @@ import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 
-from aoa.agents.base import Direction, TradeProposal
+from aoa.agents.base import Direction, Signal, TradeProposal
 from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, Side
 from aoa.data.market_data import SymbolSnapshot
@@ -143,14 +143,39 @@ class AnalyzeStage(PipelineStage):
             ctx.news_by_symbol = {}
 
         workers = max(1, ctx.config.parallel_workers)
+        prior_pending = dict(ctx.adapt_pending)
+        new_pending: dict[str, dict] = {}
+        n_learned = 0
+        n_adapted = 0
         if workers == 1 or len(candidates) <= 1:
             for cand in candidates:
-                _analyze_one(ctx, cand)
+                learned, adapted, pending = _analyze_one(ctx, cand, prior_pending)
+                n_learned += learned
+                n_adapted += adapted
+                new_pending.update(pending)
         else:
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = [pool.submit(_analyze_one, ctx, cand) for cand in candidates]
+                futures = [
+                    pool.submit(_analyze_one, ctx, cand, prior_pending)
+                    for cand in candidates
+                ]
                 for fut in as_completed(futures):
-                    fut.result()
+                    learned, adapted, pending = fut.result()
+                    n_learned += learned
+                    n_adapted += adapted
+                    new_pending.update(pending)
+
+        if ctx.signal_adapter is not None:
+            ctx.adapt_pending.clear()
+            ctx.adapt_pending.update(new_pending)
+            ctx.journal.record(
+                "adapt.applied",
+                {
+                    "signals_adapted": n_adapted,
+                    "outcomes_learned": n_learned,
+                    "total_updates": ctx.signal_adapter.updates,
+                },
+            )
         return True
 
 
@@ -275,12 +300,19 @@ def default_stages() -> list[PipelineStage]:
 
 
 # ----------------------------------------------------------------- analysis
-def _analyze_one(ctx: CycleContext, cand: dict) -> None:
+def _analyze_one(
+    ctx: CycleContext,
+    cand: dict,
+    prior_pending: dict[str, dict],
+) -> tuple[int, int, dict[str, dict]]:
     bb = ctx.blackboard
     env = bb.environment
     symbol = cand.get("symbol", "").upper()
     snap = bb.snapshots.get(symbol) or ctx.market.snapshot(symbol)
     headlines = ctx.news_by_symbol.get(symbol, [])
+    pending: dict[str, dict] = {}
+    n_learned = 0
+    n_adapted = 0
 
     if ctx.config.parallel_workers > 1:
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -293,6 +325,20 @@ def _analyze_one(ctx: CycleContext, cand: dict) -> None:
     else:
         tech = ctx.agents.technical.analyze(snap)
         fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
+
+    if ctx.signal_adapter is not None:
+        price = (snap.quote.mid if snap.quote else None) or (
+            snap.technicals.get("last_close") if snap.technicals else None
+        )
+        n_learned = _learn_from_prior(ctx.signal_adapter, prior_pending, symbol, price)
+        if price:
+            pending[symbol] = {
+                "price": price,
+                "signals": [_pending_entry(tech), _pending_entry(fund)],
+            }
+        tech = ctx.signal_adapter.adapt_signal(tech)
+        fund = ctx.signal_adapter.adapt_signal(fund)
+        n_adapted = sum("adapted" in s.tags for s in (tech, fund))
 
     bb.add_signal(tech)
     bb.add_signal(fund)
@@ -312,6 +358,7 @@ def _analyze_one(ctx: CycleContext, cand: dict) -> None:
     bb.events.emit("domain.write", f"meshed:{symbol}", meshed.to_context())
 
     _maybe_options(ctx, symbol, snap, meshed)
+    return n_learned, n_adapted, pending
 
 
 def _maybe_options(
@@ -457,3 +504,37 @@ def _protective_levels(
 def _marketable_limit(price: float, side: Side) -> float:
     pad = 1.01 if side is Side.BUY else 0.99
     return round(price * pad, 2)
+
+
+def _pending_entry(signal: Signal) -> dict:
+    """Minimal record of a raw signal needed to score it next cycle."""
+    return {
+        "agent": signal.source,
+        "direction": signal.direction.value,
+        "conviction": signal.conviction,
+        "horizon": signal.horizon,
+    }
+
+
+def _learn_from_prior(
+    adapter,
+    prior_pending: dict[str, dict],
+    symbol: str,
+    price: float | None,
+) -> int:
+    """Score the previous cycle's signals against the realized move."""
+    prior = prior_pending.get(symbol)
+    if not prior or not price or not prior.get("price"):
+        return 0
+    realized = (price - prior["price"]) / prior["price"]
+    learned = 0
+    for s in prior["signals"]:
+        adapter.record_outcome(
+            agent=s["agent"],
+            direction=s["direction"],
+            conviction=s["conviction"],
+            realized_return=realized,
+            horizon=s["horizon"],
+        )
+        learned += 1
+    return learned

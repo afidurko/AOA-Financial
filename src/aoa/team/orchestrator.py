@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.news import NewsFeed
@@ -51,6 +52,7 @@ class TeamOrchestrator:
         llm: LLMClient,
         journal: Journal | None = None,
         news: NewsFeed | None = None,
+        signal_adapter: SignalAdapter | None = None,
     ) -> None:
         self.config = config
         self.broker = broker
@@ -78,7 +80,9 @@ class TeamOrchestrator:
             notifier=notifier,
             journal=self.journal,
         )
-        self.trading = Orchestrator(config, broker, llm, self.journal, news)
+        self.trading = Orchestrator(
+            config, broker, llm, self.journal, news, signal_adapter=signal_adapter
+        )
 
     def run_health_check(self) -> HealthReport:
         report = self.bob.check_health()
