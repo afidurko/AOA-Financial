@@ -33,9 +33,25 @@ class Pipeline:
         """Run stages up to (but not including) ``stop_before`` — for edit workflows."""
         self._run_stages(ctx, stop_before=stop_before)
 
-    def _run_stages(self, ctx: CycleContext, *, stop_before: str | None = None) -> None:
+    def run_from(self, ctx: CycleContext, start_at: str) -> None:
+        """Run stages starting at ``start_at`` (inclusive)."""
+        self._run_stages(ctx, start_at=start_at)
+
+    def _run_stages(
+        self,
+        ctx: CycleContext,
+        *,
+        stop_before: str | None = None,
+        start_at: str | None = None,
+    ) -> None:
         bus = ctx.blackboard.events
+        started = start_at is None
         for stage in self.stages:
+            if not started:
+                if stage.name == start_at:
+                    started = True
+                else:
+                    continue
             if stop_before is not None and stage.name == stop_before:
                 break
             bus.emit("stage.start", stage.name)

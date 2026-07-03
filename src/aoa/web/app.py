@@ -9,21 +9,22 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from aoa.brokerage.base import BrokerError
-from aoa.cli import build_orchestrator
+from aoa.cli import build_team
 from aoa.config import Config
 from aoa.llm.client import LLMError
+from aoa.team.orchestrator import TeamCycleResult
 from aoa.web.loop_runner import CycleBusyError, LoopRunner
 
 
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or Config.from_env()
-    orchestrator = build_orchestrator(cfg)
-    runner = LoopRunner(orchestrator, cfg.cycle_seconds)
+    team = build_team(cfg)
+    runner = LoopRunner(team, cfg.cycle_seconds)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.cfg = cfg
-        app.state.orchestrator = orchestrator
+        app.state.team = team
         app.state.runner = runner
         if cfg.web_auto_loop:
             runner.start()
@@ -51,23 +52,23 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "cycle_seconds": cfg.cycle_seconds,
             "universe": list(cfg.universe),
             "news_enabled": cfg.news_enabled,
+            "team_mode": True,
             "loop_running": runner.state.running,
         }
 
     @app.get("/api/status")
     def api_status(request: Request) -> dict[str, Any]:
         cfg = request.app.state.cfg
-        orch = request.app.state.orchestrator
         runner = request.app.state.runner
         try:
-            acct = orch.broker.get_account()
-            positions = orch.broker.get_positions()
+            acct = runner.broker.get_account()
+            positions = runner.broker.get_positions()
         except BrokerError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return {
             "mode": cfg.trading_mode,
-            "broker": orch.broker.name,
-            "market_open": orch.broker.is_market_open(),
+            "broker": runner.broker.name,
+            "market_open": runner.broker.is_market_open(),
             "account": acct.to_context(),
             "positions": [p.to_context() for p in positions],
             "loop": {
@@ -80,8 +81,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     @app.get("/api/journal")
     def api_journal(request: Request, n: int = 30) -> dict[str, Any]:
-        orch = request.app.state.orchestrator
-        return {"entries": orch.journal.tail(n)}
+        runner = request.app.state.runner
+        return {"entries": runner.journal.tail(n)}
 
     @app.post("/api/run")
     def api_run(request: Request) -> dict[str, Any]:
@@ -92,7 +93,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (BrokerError, LLMError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
-        return _cycle_to_dict(result)
+        return _team_cycle_to_dict(result)
 
     @app.post("/api/loop/start")
     def loop_start(request: Request) -> dict[str, str]:
@@ -109,7 +110,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         runner = request.app.state.runner
         if runner.state.last_result is None:
             return {"result": None}
-        return {"result": _cycle_to_dict(runner.state.last_result)}
+        return {"result": _team_cycle_to_dict(runner.state.last_result)}
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
@@ -118,24 +119,44 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     return app
 
 
-def _cycle_to_dict(result) -> dict[str, Any]:
-    bb = result.blackboard
+def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "halted": result.halted,
+        "halt_reason": result.halt_reason,
+        "health": result.health.to_context() if result.health else None,
+        "trends": [t.to_context() for t in result.trends],
+        "algorithms": [a.to_context() for a in result.algorithms],
+        "decision": result.decision.to_context() if result.decision else None,
+        "ceo": result.ceo.to_context() if result.ceo else None,
+        "notes": [],
+        "commentary": "",
+        "candidates": [],
+        "proposals": [],
+        "execution": None,
+    }
+    if result.cycle is None:
+        return out
+    cycle = result.cycle
+    bb = cycle.blackboard
     proposals = [p.to_context() for p in bb.proposals]
     execution = None
-    if result.execution:
+    if cycle.execution:
         execution = {
-            "dry_run": result.execution.dry_run,
-            "submitted": len(result.execution.submitted),
-            "skipped": len(result.execution.skipped),
-            "errors": result.execution.errors,
+            "dry_run": cycle.execution.dry_run,
+            "submitted": len(cycle.execution.submitted),
+            "skipped": len(cycle.execution.skipped),
+            "errors": cycle.execution.errors,
         }
-    return {
-        "notes": result.notes,
-        "commentary": bb.commentary,
-        "candidates": bb.candidates,
-        "proposals": proposals,
-        "execution": execution,
-    }
+    out.update(
+        {
+            "notes": cycle.notes,
+            "commentary": bb.commentary,
+            "candidates": bb.candidates,
+            "proposals": proposals,
+            "execution": execution,
+        }
+    )
+    return out
 
 
 _DASHBOARD_HTML = """<!DOCTYPE html>
@@ -227,6 +248,14 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
     </div>
     <div class="grid">
       <div class="card" style="grid-column: 1 / -1;">
+        <h2>Team (Bob → Tom → Julie → Alan → Aaron)</h2>
+        <div class="stat-sm" id="team-health">Health: —</div>
+        <div class="stat-sm" id="team-ceo" style="margin-top:0.5rem">CEO: —</div>
+        <div class="stat-sm" id="team-alerts" style="margin-top:0.5rem;color:var(--amber)"></div>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="card" style="grid-column: 1 / -1;">
         <h2>Last cycle proposals</h2>
         <table><thead><tr><th>Status</th><th>Side</th><th>Qty</th><th>Symbol</th><th>Strategy</th><th>Notional</th></tr></thead>
         <tbody id="proposals-body"><tr><td colspan="6">No cycle run yet</td></tr></tbody></table>
@@ -270,6 +299,17 @@ _DASHBOARD_HTML = """<!DOCTYPE html>
       document.getElementById('proposals-body').innerHTML = proposals.length
         ? proposals.map(p => `<tr><td class="${p.approved ? 'approved' : 'blocked'}">${p.approved ? 'APPROVED' : 'blocked'}</td><td>${p.side}</td><td>${p.qty}</td><td>${p.symbol}</td><td>${p.strategy}</td><td>${fmt(p.est_notional)}</td></tr>`).join('')
         : '<tr><td colspan="6">No proposals</td></tr>';
+      const team = last.result || {};
+      document.getElementById('team-health').textContent = team.health
+        ? `Health: ${team.health.summary} (${team.health.worst_status})`
+        : 'Health: —';
+      document.getElementById('team-ceo').textContent = team.ceo
+        ? `Aaron: ${team.ceo.summary}`
+        : 'CEO: —';
+      const alerts = (team.ceo?.user_notifications || []).concat(team.halted ? [team.halt_reason] : []);
+      document.getElementById('team-alerts').textContent = alerts.length
+        ? '⚠ ' + alerts.join(' · ')
+        : '';
       document.getElementById('journal').innerHTML = (journal.entries || []).slice().reverse().map(e =>
         `<div class="journal-entry"><span class="journal-ts">${e.ts || ''}</span>${e.event || ''}</div>`
       ).join('') || 'Empty';

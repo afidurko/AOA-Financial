@@ -97,6 +97,25 @@ class Agent:
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
 
+    def structured_safe(
+        self,
+        system: str,
+        prompt: str,
+        schema: dict,
+        fallback: dict,
+        *,
+        max_tokens: int | None = None,
+    ) -> dict:
+        """Call the LLM and return ``fallback`` if the request fails."""
+        from aoa.llm.client import LLMError
+
+        try:
+            return self.llm.structured(
+                system, prompt, schema, max_tokens=max_tokens
+            )
+        except LLMError:
+            return fallback
+
 
 def parse_direction(value: object) -> Direction:
     try:

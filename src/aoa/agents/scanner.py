@@ -34,9 +34,11 @@ class ScannerAgent(Agent):
     name = "scanner"
     system_prompt = (
         "You are a market scanner for a cash-account trading swarm. You are given "
-        "lightweight technical snapshots for a universe of liquid US equities. Your "
-        "job is to surface the handful of names showing the most actionable setups "
-        "(momentum, mean-reversion, volatility expansion, trend with pullback). "
+        "lightweight multi-timeframe technical snapshots for a universe of liquid "
+        "US equities. Your job is to surface the handful of names showing the most "
+        "actionable setups (momentum, mean-reversion, volatility expansion, trend "
+        "with pullback, volume spikes). Compare intraday (1m–15m), hourly, daily, "
+        "and yearly context when present. "
         "You do NOT decide trades — you only shortlist what deserves deeper study. "
         "Prefer liquid names with clean technicals and avoid those with missing data. "
         "Be selective: quality over quantity."
@@ -46,7 +48,9 @@ class ScannerAgent(Agent):
         self, snapshots: dict[str, SymbolSnapshot], *, max_candidates: int = 6
     ) -> list[dict]:
         universe_ctx = [
-            s.to_context() for s in snapshots.values() if s.error is None and s.technicals
+            s.to_context()
+            for s in snapshots.values()
+            if s.error is None and s.has_technicals
         ]
         if not universe_ctx:
             return []

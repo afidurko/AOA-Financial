@@ -1,8 +1,8 @@
 """Fundamental / catalyst agent.
 
 When a news feed is wired in, this agent incorporates verified recent headlines
-into its catalyst read. Without headlines it reasons about known structural
-context and event risk rather than fabricating news.
+from Alpaca into its catalyst read. Without headlines it reasons about known
+structural context and event risk rather than fabricating news.
 """
 
 from __future__ import annotations

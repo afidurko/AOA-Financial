@@ -13,6 +13,7 @@ from requests.exceptions import HTTPError
 from aoa.brokerage.alpaca import AlpacaBroker, _bars_from_sdk_rows, _sdk_error_message
 from aoa.brokerage.base import BrokerError
 from aoa.data.market_data import MarketDataService
+from aoa.data.timeframes import TimeframeSpec
 
 
 def _api_error(status_code: int, body: str = '{"message":"unauthorized"}') -> APIError:
@@ -98,7 +99,8 @@ def test_market_data_service_uses_batch_bars(fake_broker):
         return original_batch(symbols, timeframe, limit)
 
     fake_broker.get_bars_batch = _batch  # type: ignore[method-assign]
-    svc = MarketDataService(fake_broker, bar_limit=30)
+    daily = (TimeframeSpec("1Day", "1Day", 30),)
+    svc = MarketDataService(fake_broker, timeframes=daily)
 
     snaps = svc.snapshots(["AAPL", "MSFT", "NVDA"])
 

@@ -79,3 +79,52 @@ def test_cycle_populates_swarm_environment(fake_broker, fake_llm, tmp_path):
 def test_marketable_limit_padding():
     assert marketable_limit(100.0, Side.BUY) == 101.0
     assert marketable_limit(100.0, Side.SELL) == 99.0
+
+
+def test_empty_scanner_still_reviews_open_positions(fake_broker, fake_llm, tmp_path):
+    from conftest import make_position
+
+    fake_llm.candidates = []
+    fake_broker.set_positions([make_position("AAPL", qty=50, price=100.0)])
+    journal = Journal(tmp_path / "j.jsonl")
+    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+
+    result = orch.run_cycle()
+
+    assert "Scanner returned no candidates." in result.notes
+    assert "AAPL" in result.blackboard.signals
+    assert len(result.blackboard.signals["AAPL"]) >= 2
+
+
+def test_daily_equity_baseline_persists_across_restarts(fake_broker, fake_llm, tmp_path):
+    journal = Journal(tmp_path / "j.jsonl")
+    journal.save_daily_equity_baseline(__import__("datetime").date.today(), 100_000.0)
+    fake_broker._account = fake_broker._account.__class__(
+        equity=96_000,
+        cash=96_000,
+        buying_power=96_000,
+        settled_cash=96_000,
+        options_level=2,
+    )
+    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch.run_cycle()
+    assert orch._starting_equity == 100_000.0
+
+
+def test_universe_broker_error_surfaces_in_notes(fake_broker, fake_llm, tmp_path):
+    from dataclasses import replace
+
+    from aoa.brokerage.base import BrokerError
+
+    def boom(limit=25):
+        raise BrokerError("screener unavailable")
+
+    fake_broker.get_most_active = boom
+    journal = Journal(tmp_path / "j.jsonl")
+    cfg = replace(_config(dry_run=True), universe=())
+    orch = Orchestrator(cfg, fake_broker, fake_llm, journal)
+
+    result = orch.run_cycle()
+
+    assert result.blackboard.universe == []
+    assert any("Failed to resolve trading universe" in n for n in result.notes)

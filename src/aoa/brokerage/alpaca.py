@@ -25,7 +25,12 @@ from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
 from alpaca.trading.enums import ContractType, OrderSide, QueryOrderStatus
 from alpaca.trading.enums import TimeInForce as AlpacaTimeInForce
-from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
+from alpaca.trading.requests import (
+    GetOptionContractsRequest,
+    GetOrdersRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+)
 
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.constants import (
@@ -50,6 +55,12 @@ from aoa.brokerage.models import (
 T = TypeVar("T")
 
 _TIMEFRAME_RE = re.compile(r"^(\d+)(Min|Hour|Day|Week|Month)$")
+_FEED_MAP = {
+    "sip": DataFeed.SIP,
+    "iex": DataFeed.IEX,
+    "boats": DataFeed.BOATS,
+    "otc": DataFeed.OTC,
+}
 
 _ADJUSTMENT_MAP = {
     "raw": Adjustment.RAW,
@@ -57,13 +68,6 @@ _ADJUSTMENT_MAP = {
     "dividend": Adjustment.DIVIDEND,
     "all": Adjustment.ALL,
     "spin-off": Adjustment.ALL,
-}
-
-_FEED_MAP = {
-    "sip": DataFeed.SIP,
-    "iex": DataFeed.IEX,
-    "boats": DataFeed.BOATS,
-    "otc": DataFeed.OTC,
 }
 
 
@@ -125,6 +129,10 @@ def _parse_timeframe(value: str) -> TimeFrame:
     return TimeFrame(amount, unit_map[unit_key])
 
 
+def _data_feed(name: str) -> DataFeed:
+    return _FEED_MAP.get(name.lower(), DataFeed.IEX)
+
+
 def _parse_adjustment(value: str) -> Adjustment:
     return _ADJUSTMENT_MAP.get(value, Adjustment.SPLIT)
 
@@ -163,6 +171,17 @@ def _sdk_error_message(exc: APIError) -> str:
     return base
 
 
+def _bar_from_sdk(row) -> Bar:
+    return Bar(
+        timestamp=_ensure_utc(row.timestamp),
+        open=_f(row.open),
+        high=_f(row.high),
+        low=_f(row.low),
+        close=_f(row.close),
+        volume=_f(row.volume),
+    )
+
+
 class AlpacaBroker(Broker):
     def __init__(
         self,
@@ -170,14 +189,18 @@ class AlpacaBroker(Broker):
         secret_key: str,
         *,
         live: bool = False,
+        bar_feed: str = "iex",
         timeout: float = 20.0,
         data_feed: str = "",
         bar_adjustment: str = "split",
     ) -> None:
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required.")
+        if bar_feed not in _FEED_MAP:
+            raise BrokerError(f"Unsupported Alpaca bar feed: {bar_feed}")
         del timeout  # alpaca-py manages HTTP timeouts internally
         self.is_live = live
+        self.bar_feed = bar_feed
         self.name = "alpaca-live" if live else "alpaca-paper"
         self._data_feed = data_feed.strip().lower()
         self._bar_adjustment = bar_adjustment.strip().lower() or "split"
@@ -275,19 +298,31 @@ class AlpacaBroker(Broker):
 
     # --- market data ---------------------------------------------------------
     def get_quote(self, symbol: str) -> Quote:
+        return self.get_quotes_many([symbol]).get(symbol.upper(), Quote(symbol=symbol, bid=0, ask=0))
+
+    def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        normalized = [s.upper() for s in symbols if s]
+        if not normalized:
+            return {}
         quotes = self._sdk_call(
             self._stock_data.get_stock_latest_quote,
-            StockLatestQuoteRequest(symbol_or_symbols=symbol),
+            StockLatestQuoteRequest(
+                symbol_or_symbols=normalized,
+                feed=_data_feed(self.bar_feed),
+            ),
         )
-        q = quotes[symbol]
-        return Quote(
-            symbol=symbol,
-            bid=_f(q.bid_price),
-            ask=_f(q.ask_price),
-            bid_size=_f(q.bid_size),
-            ask_size=_f(q.ask_size),
-            timestamp=_ensure_utc(q.timestamp),
-        )
+        out: dict[str, Quote] = {}
+        for sym in normalized:
+            q = quotes[sym]
+            out[sym] = Quote(
+                symbol=sym,
+                bid=_f(q.bid_price),
+                ask=_f(q.ask_price),
+                bid_size=_f(q.bid_size),
+                ask_size=_f(q.ask_size),
+                timestamp=_ensure_utc(q.timestamp),
+            )
+        return out
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
         batch = self.get_bars_batch([symbol], timeframe, limit)
@@ -331,13 +366,10 @@ class AlpacaBroker(Broker):
         return bars[-1]
 
     def get_most_active(self, limit: int = 25) -> list[str]:
-        try:
-            result = self._sdk_call(
-                self._screener.get_most_actives,
-                MostActivesRequest(by=MostActivesBy.VOLUME, top=limit),
-            )
-        except BrokerError:
-            return []
+        result = self._sdk_call(
+            self._screener.get_most_actives,
+            MostActivesRequest(by=MostActivesBy.VOLUME, top=limit),
+        )
         return [row.symbol for row in result.most_actives if row.symbol]
 
     # --- options -------------------------------------------------------------
@@ -354,13 +386,11 @@ class AlpacaBroker(Broker):
             params["type"] = (
                 ContractType.CALL if option_type == "call" else ContractType.PUT
             )
-        try:
-            snapshots = self._sdk_call(
-                self._options_data.get_option_chain,
-                OptionChainRequest(**params),
-            )
-        except BrokerError:
-            return []
+        snapshots = self._sdk_call(
+            self._options_data.get_option_chain,
+            OptionChainRequest(**params),
+        )
+        oi_by_symbol = self._fetch_open_interest(underlying, expiration=expiration)
 
         contracts: list[OptionContract] = []
         for occ_symbol, snap in snapshots.items():
@@ -371,6 +401,7 @@ class AlpacaBroker(Broker):
             quote = snap.latest_quote
             trade = snap.latest_trade
             greeks = snap.greeks
+            oi = oi_by_symbol.get(occ_symbol, 0.0)
             contracts.append(
                 OptionContract(
                     symbol=occ_symbol,
@@ -381,7 +412,7 @@ class AlpacaBroker(Broker):
                     bid=_f(quote.bid_price) if quote else 0.0,
                     ask=_f(quote.ask_price) if quote else 0.0,
                     last=_f(trade.price) if trade else 0.0,
-                    open_interest=_f(getattr(snap, "open_interest", 0) or 0),
+                    open_interest=oi or _f(getattr(snap, "open_interest", 0) or 0),
                     implied_volatility=(
                         float(snap.implied_volatility)
                         if snap.implied_volatility is not None
@@ -392,6 +423,31 @@ class AlpacaBroker(Broker):
             )
         contracts.sort(key=lambda c: (c.expiration, c.option_type.value, c.strike))
         return contracts
+
+    def _fetch_open_interest(
+        self, underlying: str, *, expiration: str | None = None
+    ) -> dict[str, float]:
+        """Open interest is on the trading API contracts endpoint, not snapshots."""
+        req_kwargs: dict = {
+            "underlying_symbols": [underlying],
+            "status": "active",
+            "limit": 1000,
+        }
+        if expiration:
+            req_kwargs["expiration_date"] = expiration
+        try:
+            result = self._sdk_call(
+                self._trading.get_option_contracts,
+                GetOptionContractsRequest(**req_kwargs),
+            )
+        except BrokerError:
+            return {}
+        rows = getattr(result, "option_contracts", result) or []
+        return {
+            row.symbol: _f(row.open_interest)
+            for row in rows
+            if getattr(row, "symbol", None)
+        }
 
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:

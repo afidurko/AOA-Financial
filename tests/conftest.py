@@ -38,6 +38,7 @@ class FakeBroker(Broker):
             options_level=options_level,
         )
         self._positions: list[Position] = []
+        self._open_orders: list[Order] = []
         self.submitted: list[OrderRequest] = []
         self.market_open = True
 
@@ -52,6 +53,9 @@ class FakeBroker(Broker):
 
     def get_quote(self, symbol: str) -> Quote:
         return Quote(symbol=symbol, bid=99.5, ask=100.5)
+
+    def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        return {s.upper(): self.get_quote(s.upper()) for s in symbols if s}
 
     def _synthetic_bars(self, limit: int) -> list[Bar]:
         # Synthetic gently-rising series with enough history for all indicators.
@@ -116,7 +120,12 @@ class FakeBroker(Broker):
         )
 
     def list_orders(self, status: str = "open") -> list[Order]:
+        if status == "open":
+            return list(self._open_orders)
         return []
+
+    def set_open_orders(self, orders: list[Order]) -> None:
+        self._open_orders = orders
 
     def cancel_order(self, order_id: str) -> None:
         pass
@@ -137,6 +146,10 @@ class FakeLLM:
     _PORTFOLIO = frozenset({"proposals", "portfolio_commentary"})
     _RISK = frozenset({"vetoes", "assessment"})
     _SCANNER = frozenset({"candidates"})
+    _TOM = frozenset({"direction", "strength", "timeframe", "rationale", "key_observations"})
+    _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
+    _ALAN = frozenset({"recommendations", "summary", "confidence"})
+    _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
 
     def __init__(self, *, candidates=None):
         self.candidates = candidates if candidates is not None else [
@@ -167,6 +180,14 @@ class FakeLLM:
                 "conviction": 0.6,
                 "event_risk": "low",
                 "rationale": "stable large cap",
+            }
+        if required == self._TOM:
+            return {
+                "direction": "up",
+                "strength": 0.72,
+                "timeframe": "swing",
+                "rationale": "rising MA stack with higher lows",
+                "key_observations": ["above 50DMA", "RSI constructive"],
             }
         if required == self._TECHNICAL:
             return {
@@ -204,6 +225,39 @@ class FakeLLM:
             }
         if required == self._RISK:
             return {"vetoes": [], "assessment": "prudent"}
+        if required == self._JULIE:
+            return {
+                "validated": True,
+                "adjusted_strength": 0.68,
+                "method_notes": "MACD histogram positive; RSI not overbought",
+                "signals": ["sma_cross_bullish", "rsi_midrange"],
+            }
+        if required == self._ALAN:
+            return {
+                "recommendations": [
+                    {
+                        "symbol": "AAPL",
+                        "action": "consider_long",
+                        "conviction": 0.7,
+                        "rationale": "validated uptrend",
+                    }
+                ],
+                "summary": "One high-quality long setup",
+                "confidence": 0.65,
+            }
+        if required == self._AARON:
+            return {
+                "overall_ok": True,
+                "summary": "Team completed all deliverables.",
+                "user_notifications": [],
+                "team_status": [
+                    {"name": "Tom", "role": "Trend Analyst", "completed": True, "notes": "ok"},
+                    {"name": "Julie", "role": "Algorithm Specialist", "completed": True, "notes": "ok"},
+                    {"name": "Bob", "role": "Systems Health", "completed": True, "notes": "ok"},
+                    {"name": "Alan", "role": "Decision Aggregator", "completed": True, "notes": "ok"},
+                    {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
+                ],
+            }
         raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
 
 
