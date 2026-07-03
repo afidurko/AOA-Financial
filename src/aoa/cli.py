@@ -92,6 +92,16 @@ def cmd_doctor(cfg: Config) -> int:
         acct = broker.get_account()
         print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
         print(f"  ✓ Market open: {broker.is_market_open()}")
+        bars = broker.get_bars("SPY", timeframe="1Day", limit=2)
+        if not bars:
+            print("  ✗ Live bars API (GET /v2/stocks/bars) returned no data for SPY.")
+            return 1
+        last = bars[-1]
+        feed = cfg.alpaca_data_feed or "default"
+        print(
+            f"  ✓ Live bars API; SPY last close ${last.close:,.2f} "
+            f"({last.timestamp.date()}, feed={feed}, adjustment={cfg.alpaca_bar_adjustment})."
+        )
     except BrokerError as exc:
         print(f"  ✗ Broker check failed: {exc}")
         return 1
