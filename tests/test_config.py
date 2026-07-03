@@ -39,3 +39,23 @@ def test_from_env_risk_limits(monkeypatch):
     cfg = Config.from_env(load_dotenv=False)
     assert cfg.risk.max_position_pct == 0.25
     assert cfg.risk.max_orders_per_cycle == 3
+
+
+def test_from_env_bar_timeframes_default(monkeypatch):
+    monkeypatch.delenv("AOA_BAR_TIMEFRAMES", raising=False)
+    cfg = Config.from_env(load_dotenv=False)
+    assert [t.key for t in cfg.bar_timeframes] == [
+        "1Min",
+        "3Min",
+        "5Min",
+        "15Min",
+        "1Hour",
+        "1Day",
+        "12Month",
+    ]
+
+
+def test_from_env_bar_timeframes_override(monkeypatch):
+    monkeypatch.setenv("AOA_BAR_TIMEFRAMES", "1Min,1Day,1Year")
+    cfg = Config.from_env(load_dotenv=False)
+    assert [t.key for t in cfg.bar_timeframes] == ["1Min", "1Day", "12Month"]

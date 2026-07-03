@@ -58,7 +58,7 @@ class Orchestrator:
         self.broker = broker
         self.llm = llm
         self.journal = journal or Journal()
-        self.market = MarketDataService(broker)
+        self.market = MarketDataService(broker, timeframes=config.bar_timeframes)
         self.news = NewsService(
             broker,
             limit_per_symbol=config.news_limit,
@@ -212,9 +212,7 @@ class Orchestrator:
 
             # Options idea when there is a corroborated directional view.
             combined_dir, combined_conv = _combine(tech, fund)
-            price = (snap.quote.mid if snap.quote else None) or (
-                snap.technicals.get("last_close") if snap.technicals else None
-            )
+            price = (snap.quote.mid if snap.quote else None) or snap.last_close()
             if (
                 combined_dir is not Direction.NEUTRAL
                 and combined_conv >= 0.55
@@ -274,7 +272,7 @@ class Orchestrator:
             else:
                 snap = bb.snapshots.get(symbol)
                 price = (snap.quote.mid if snap and snap.quote else None) or (
-                    snap.technicals.get("last_close") if snap and snap.technicals else None
+                    snap.last_close() if snap else None
                 )
                 if not price or price <= 0:
                     continue

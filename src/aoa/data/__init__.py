@@ -12,6 +12,7 @@ from aoa.data.indicators import (
 )
 from aoa.data.market_data import MarketDataService, SymbolSnapshot
 from aoa.data.news import NewsService
+from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
 
 __all__ = [
     "sma",
@@ -22,6 +23,9 @@ __all__ = [
     "bollinger_bands",
     "technical_snapshot",
     "volume_metrics",
+    "DEFAULT_TIMEFRAMES",
+    "TimeframeSpec",
+    "parse_timeframes",
     "MarketDataService",
     "NewsService",
     "SymbolSnapshot",

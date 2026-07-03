@@ -11,6 +11,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
+
 
 def _load_dotenv(path: str | os.PathLike[str] = ".env") -> None:
     """Populate ``os.environ`` from a ``.env`` file if present.
@@ -80,6 +82,9 @@ class Config:
     news_limit: int = 5
     news_lookback_hours: int = 72
 
+    # Multi-timeframe historical bars (Alpaca bar API)
+    bar_timeframes: tuple[TimeframeSpec, ...] = DEFAULT_TIMEFRAMES
+
     # Execution
     dry_run: bool = False
 
@@ -115,6 +120,7 @@ class Config:
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             news_limit=_int("AOA_NEWS_LIMIT", 5),
             news_lookback_hours=_int("AOA_NEWS_LOOKBACK_HOURS", 72),
+            bar_timeframes=parse_timeframes(os.environ.get("AOA_BAR_TIMEFRAMES", "")),
             dry_run=_bool("AOA_DRY_RUN", False),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
