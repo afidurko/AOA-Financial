@@ -26,6 +26,36 @@ def test_validate_clean_config():
     assert cfg.validate() == []
 
 
+def test_validate_rejects_bad_data_feed():
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        alpaca_data_feed="bad-feed",
+    )
+    problems = cfg.validate()
+    assert any("ALPACA_DATA_FEED" in p for p in problems)
+
+
+def test_validate_rejects_bad_bar_adjustment():
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        alpaca_bar_adjustment="bogus",
+    )
+    problems = cfg.validate()
+    assert any("ALPACA_BAR_ADJUSTMENT" in p for p in problems)
+
+
+def test_from_env_parses_alpaca_market_data_settings(monkeypatch):
+    monkeypatch.setenv("ALPACA_DATA_FEED", "SIP")
+    monkeypatch.setenv("ALPACA_BAR_ADJUSTMENT", "RAW")
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.alpaca_data_feed == "sip"
+    assert cfg.alpaca_bar_adjustment == "raw"
+
+
 def test_from_env_parses_universe(monkeypatch):
     monkeypatch.setenv("AOA_UNIVERSE", "aapl, msft ,nvda")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "x")

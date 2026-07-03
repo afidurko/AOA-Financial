@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import TypeVar
 
 from alpaca.common.exceptions import APIError
-from alpaca.data.enums import Adjustment, MostActivesBy, OptionsFeed
+from alpaca.data.enums import Adjustment, DataFeed, MostActivesBy, OptionsFeed
 from alpaca.data.historical import OptionHistoricalDataClient, StockHistoricalDataClient
 from alpaca.data.historical.screener import ScreenerClient
 from alpaca.data.requests import (
@@ -46,6 +46,24 @@ from aoa.brokerage.models import (
 T = TypeVar("T")
 
 _TIMEFRAME_RE = re.compile(r"^(\d+)(Min|Hour|Day|Week|Month)$")
+
+_VALID_DATA_FEEDS = frozenset({"sip", "iex", "boats", "otc"})
+_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
+
+_ADJUSTMENT_MAP = {
+    "raw": Adjustment.RAW,
+    "split": Adjustment.SPLIT,
+    "dividend": Adjustment.DIVIDEND,
+    "all": Adjustment.ALL,
+    "spin-off": Adjustment.ALL,
+}
+
+_FEED_MAP = {
+    "sip": DataFeed.SIP,
+    "iex": DataFeed.IEX,
+    "boats": DataFeed.BOATS,
+    "otc": DataFeed.OTC,
+}
 
 
 def _parse_ts(value: str | datetime | None) -> datetime | None:
@@ -88,11 +106,42 @@ def _parse_timeframe(value: str) -> TimeFrame:
     return TimeFrame(amount, unit_map[unit_key])
 
 
+def _parse_adjustment(value: str) -> Adjustment:
+    return _ADJUSTMENT_MAP.get(value, Adjustment.SPLIT)
+
+
+def _bars_from_sdk_rows(rows) -> list[Bar]:
+    bars: list[Bar] = []
+    for row in rows:
+        bars.append(
+            Bar(
+                timestamp=_ensure_utc(row.timestamp),
+                open=_f(row.open),
+                high=_f(row.high),
+                low=_f(row.low),
+                close=_f(row.close),
+                volume=_f(row.volume),
+            )
+        )
+    return bars
+
+
 def _sdk_error_message(exc: APIError) -> str:
     status = exc.status_code
-    if status is not None:
-        return f"Alpaca API {status}: {exc}"
-    return f"Alpaca API error: {exc}"
+    base = f"Alpaca API {status}: {exc}" if status is not None else f"Alpaca API error: {exc}"
+    if status == 401:
+        base += (
+            " Hint: Trading and market data require ALPACA_API_KEY_ID and "
+            "ALPACA_API_SECRET_KEY (PK... keys from the Alpaca paper/live "
+            "dashboard). Broker API OAuth (authx.alpaca.markets) is a "
+            "different product and will not work here."
+        )
+    elif status == 403:
+        base += (
+            " Hint: your data subscription may not include the requested feed "
+            "(try ALPACA_DATA_FEED=iex)."
+        )
+    return base
 
 
 class AlpacaBroker(Broker):
@@ -103,12 +152,26 @@ class AlpacaBroker(Broker):
         *,
         live: bool = False,
         timeout: float = 20.0,
+        data_feed: str = "",
+        bar_adjustment: str = "split",
     ) -> None:
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required.")
         del timeout  # alpaca-py manages HTTP timeouts internally
         self.is_live = live
         self.name = "alpaca-live" if live else "alpaca-paper"
+        self._data_feed = data_feed.strip().lower()
+        self._bar_adjustment = bar_adjustment.strip().lower() or "split"
+        if self._data_feed and self._data_feed not in _VALID_DATA_FEEDS:
+            raise BrokerError(
+                f"Invalid Alpaca data feed {self._data_feed!r}; "
+                f"expected one of {', '.join(sorted(_VALID_DATA_FEEDS))}."
+            )
+        if self._bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+            raise BrokerError(
+                f"Invalid bar adjustment {self._bar_adjustment!r}; "
+                f"expected one of {', '.join(sorted(_VALID_BAR_ADJUSTMENTS))}."
+            )
         paper = not live
         creds = {"api_key": key_id, "secret_key": secret_key}
         self._trading = TradingClient(paper=paper, **creds)
@@ -121,6 +184,22 @@ class AlpacaBroker(Broker):
             return fn(*args, **kwargs)
         except APIError as exc:
             raise BrokerError(_sdk_error_message(exc)) from exc
+
+    def _stock_bars_request(
+        self,
+        symbols: list[str],
+        timeframe: str,
+        limit: int,
+    ) -> StockBarsRequest:
+        kwargs: dict = {
+            "symbol_or_symbols": symbols,
+            "timeframe": _parse_timeframe(timeframe),
+            "limit": limit,
+            "adjustment": _parse_adjustment(self._bar_adjustment),
+        }
+        if self._data_feed:
+            kwargs["feed"] = _FEED_MAP[self._data_feed]
+        return StockBarsRequest(**kwargs)
 
     def close(self) -> None:
         for client in (
@@ -192,28 +271,30 @@ class AlpacaBroker(Broker):
         )
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
-        bar_set = self._sdk_call(
-            self._stock_data.get_stock_bars,
-            StockBarsRequest(
-                symbol_or_symbols=symbol,
-                timeframe=_parse_timeframe(timeframe),
-                limit=limit,
-                adjustment=Adjustment.SPLIT,
-            ),
-        )
-        bars: list[Bar] = []
-        for row in bar_set[symbol]:
-            bars.append(
-                Bar(
-                    timestamp=_ensure_utc(row.timestamp),
-                    open=_f(row.open),
-                    high=_f(row.high),
-                    low=_f(row.low),
-                    close=_f(row.close),
-                    volume=_f(row.volume),
-                )
-            )
-        return bars
+        batch = self.get_bars_batch([symbol], timeframe, limit)
+        return batch.get(symbol.upper(), [])
+
+    def get_bars_batch(
+        self,
+        symbols: list[str],
+        timeframe: str = "1Day",
+        limit: int = 120,
+    ) -> dict[str, list[Bar]]:
+        """Fetch OHLCV bars for multiple symbols via ``get_stock_bars``."""
+        uniq = list(dict.fromkeys(s.upper() for s in symbols if s))
+        if not uniq:
+            return {}
+
+        request = self._stock_bars_request(uniq, timeframe, limit)
+        bar_set = self._sdk_call(self._stock_data.get_stock_bars, request)
+        out: dict[str, list[Bar]] = {}
+        for sym in uniq:
+            rows = bar_set.data.get(sym, []) if hasattr(bar_set, "data") else bar_set[sym]
+            bars = _bars_from_sdk_rows(rows)
+            if len(bars) > limit:
+                bars = bars[-limit:]
+            out[sym] = bars
+        return out
 
     def verify_stock_bars(self, symbol: str = "AAPL", limit: int = 1) -> Bar:
         """Probe the authenticated stocks bars API.

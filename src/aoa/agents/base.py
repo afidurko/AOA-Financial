@@ -96,3 +96,17 @@ class Agent:
 
     def __init__(self, llm: LLMClient) -> None:
         self.llm = llm
+
+
+def parse_direction(value: object) -> Direction:
+    try:
+        return Direction(str(value))
+    except (ValueError, TypeError):
+        return Direction.NEUTRAL
+
+
+def clamp_conviction(value: object, default: float = 0.0) -> float:
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return default

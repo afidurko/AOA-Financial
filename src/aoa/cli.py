@@ -25,7 +25,13 @@ from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
 
 def build_broker(cfg: Config) -> Broker:
-    return AlpacaBroker(cfg.alpaca_key_id, cfg.alpaca_secret_key, live=cfg.alpaca_live)
+    return AlpacaBroker(
+        cfg.alpaca_key_id,
+        cfg.alpaca_secret_key,
+        live=cfg.alpaca_live,
+        data_feed=cfg.alpaca_data_feed,
+        bar_adjustment=cfg.alpaca_bar_adjustment,
+    )
 
 
 def build_llm(cfg: Config) -> LLMClient:
@@ -86,7 +92,7 @@ def _print_cycle(result: CycleResult) -> None:
 
 
 # --------------------------------------------------------------------- commands
-def cmd_doctor(cfg: Config) -> int:
+def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print(f"AOA Financial — trading mode: {cfg.trading_mode.upper()}")
     problems = cfg.validate()
     if problems:
@@ -95,15 +101,19 @@ def cmd_doctor(cfg: Config) -> int:
             print(f"  ✗ {p}")
         return 1
     print("  ✓ Configuration looks complete.")
+    if offline:
+        print("  ✓ Offline mode — skipped broker and LLM connectivity checks.")
+        return 0
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
         print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
-        print(f"  ✓ Market open: {broker.is_market_open()}")
-        latest = broker.verify_stock_bars("AAPL", limit=1)
+        latest = broker.verify_stock_bars("SPY", limit=1)
+        feed = cfg.alpaca_data_feed or "default"
         print(
-            f"  ✓ Stock market data OK (AAPL daily bar "
-            f"{latest.timestamp.date()}: close ${latest.close:,.2f})."
+            f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
+            f"({latest.timestamp.date()}, feed={feed}, "
+            f"adjustment={cfg.alpaca_bar_adjustment})."
         )
     except BrokerError as exc:
         print(f"  ✗ Broker check failed: {exc}")
@@ -200,7 +210,12 @@ def cmd_serve(cfg: Config) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("doctor", help="Validate configuration & connectivity.")
+    doctor = sub.add_parser("doctor", help="Validate configuration & connectivity.")
+    doctor.add_argument(
+        "--offline",
+        action="store_true",
+        help="Validate config only; skip live broker and LLM checks.",
+    )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single swarm cycle.")
     sub.add_parser("loop", help="Run cycles continuously.")
@@ -213,7 +228,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.command == "doctor":
-            return cmd_doctor(cfg)
+            return cmd_doctor(cfg, offline=getattr(args, "offline", False))
         if args.command == "status":
             return cmd_status(cfg)
         if args.command == "run":
