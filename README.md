@@ -124,11 +124,102 @@ aoa doctor     # validate config + check broker/LLM connectivity
 aoa status     # show account, positions, market clock
 aoa run        # run ONE analysis → decision → execution cycle
 aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
+aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 ```
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.
+
+---
+
+## Web dashboard & API
+
+Install the optional web dependencies, then start the server:
+
+```bash
+pip install -e ".[web]"
+aoa serve
+```
+
+Open **http://localhost:8080/** for the dashboard. REST endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Liveness check |
+| `/api/status` | GET | Account, positions, loop state |
+| `/api/config` | GET | Trading mode, universe, cadence |
+| `/api/journal?n=30` | GET | Tail the audit log |
+| `/api/run` | POST | Trigger one swarm cycle |
+| `/api/loop/start` | POST | Start background loop |
+| `/api/loop/stop` | POST | Stop background loop |
+| `/api/last-cycle` | GET | Most recent cycle result |
+| `/api/docs` | GET | OpenAPI interactive docs |
+
+Set `AOA_WEB_AUTO_LOOP=true` to run the trading loop automatically in the
+background while the web server is up.
+
+---
+
+## Docker deployment
+
+```bash
+cp .env.example .env   # fill in API keys
+docker compose up web  # dashboard at http://localhost:8080
+```
+
+Run the headless trading loop as a separate daemon:
+
+```bash
+docker compose --profile daemon up -d   # starts web + swarm services
+```
+
+The journal is persisted in a Docker volume (`aoa-journal`).
+
+---
+
+## Production (systemd)
+
+Copy the unit files and enable the services you need:
+
+```bash
+sudo cp deploy/aoa-swarm.service deploy/aoa-web.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now aoa-web.service    # dashboard
+sudo systemctl enable --now aoa-swarm.service  # headless loop
+```
+
+Adjust `User`, `WorkingDirectory`, and paths in the unit files for your host.
+
+---
+
+## News feed
+
+When `AOA_NEWS_ENABLED=true` (the default), the **Analyze** pipeline stage fetches
+recent headlines from Alpaca's market-data news API for each scanner candidate and
+passes them to the **Fundamental** agent. If the feed is unavailable the agent
+falls back to qualitative reasoning without fabricating headlines.
+
+---
+
+## Full-stack architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  CLI (aoa doctor/status/run/loop/serve/journal)                 │
+│  Web dashboard + REST API (aoa serve)                             │
+└────────────────────────────┬────────────────────────────────────┘
+                             │ Config.from_env()
+                             ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Orchestrator — composable pipeline (intake → … → execute)      │
+│  Scanner → Technical/Fundamental(+news) → Meshing → PM → Risk   │
+└──────┬──────────────────┬──────────────────┬────────────────────┘
+       │                  │                  │
+       ▼                  ▼                  ▼
+  Alpaca broker      Claude LLM         Journal (JSONL)
+  (data + orders)    (agent reasoning)
+```
 
 ---
 
@@ -146,7 +237,11 @@ src/aoa/
   execution/           # proposal → broker order
   journal/             # append-only JSONL audit log
   cli.py               # `aoa` command-line entry point
+  web/                 # FastAPI dashboard + REST API + loop runner
 tests/                 # unit + end-to-end tests (fake broker + fake LLM)
+deploy/                # systemd unit files for production
+Dockerfile             # container image
+docker-compose.yml     # web + optional swarm daemon
 ```
 
 The broker layer is an abstract interface (`aoa.brokerage.base.Broker`), so a
@@ -165,7 +260,8 @@ canned-response fake LLM — no network, no API keys, no real orders.
 ## Extending
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
-- **Add a news feed**: wire it into `FundamentalAgent` (its prompt is the integration point).
+- **Add a news feed**: implement `aoa.data.news.NewsFeed` and pass it to `Orchestrator`
+  (or enable the built-in Alpaca feed via `AOA_NEWS_ENABLED`).
 - **Add an agent**: subclass `aoa.agents.base.Agent`, register it in `AgentTeam`
   (`aoa.swarm.team`), and add or extend a pipeline stage in `aoa.swarm.stages`.
 - **Customize the pipeline**: pass a custom `Pipeline(stages=[...])` to
@@ -173,6 +269,15 @@ canned-response fake LLM — no network, no API keys, no real orders.
 - **Edit the cycle environment**: use `blackboard.environment.edit_meshed()` for unified
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
+- **Add a UI panel**: extend `aoa/web/app.py` dashboard or add API routes.
+
+```python
+from aoa.swarm.pipeline import Pipeline
+from aoa.swarm.stages import default_stages, PortfolioStage
+
+custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
+orch = Orchestrator(config, broker, llm, pipeline=custom)
+```
 
 ## Disclaimer
 

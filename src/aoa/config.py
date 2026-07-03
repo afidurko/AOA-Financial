@@ -78,7 +78,16 @@ class Config:
 
     # Execution
     dry_run: bool = False
+    journal_path: str = "journal/aoa.jsonl"
     parallel_workers: int = 4
+
+    # News feed
+    news_enabled: bool = True
+
+    # Web server
+    web_host: str = "0.0.0.0"
+    web_port: int = 8080
+    web_auto_loop: bool = False
 
     # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
@@ -111,7 +120,12 @@ class Config:
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             dry_run=_bool("AOA_DRY_RUN", False),
+            journal_path=os.environ.get("AOA_JOURNAL_PATH", "journal/aoa.jsonl"),
             parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
+            news_enabled=_bool("AOA_NEWS_ENABLED", True),
+            web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
+            web_port=_int("AOA_WEB_PORT", 8080),
+            web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

@@ -8,6 +8,7 @@ from datetime import date
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
+from aoa.data.news import NewsFeed, NullNewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
@@ -26,6 +27,7 @@ class CycleContext:
     market: MarketDataService
     agents: AgentTeam
     executor: Executor
+    news: NewsFeed = field(default_factory=NullNewsFeed)
     blackboard: Blackboard = field(default_factory=Blackboard)
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None
