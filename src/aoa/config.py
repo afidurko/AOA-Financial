@@ -178,6 +178,7 @@ class Config:
     workloop_allow_merge: bool = False
     workloop_base_branch: str = "main"
     workloop_extra_sources: tuple[str, ...] = ()
+    workloop_interval_seconds: int = 3600
 
     risk: RiskLimits = field(default_factory=RiskLimits)
 
@@ -250,6 +251,7 @@ class Config:
             workloop_allow_merge=_bool("AOA_WORKLOOP_ALLOW_MERGE", False),
             workloop_base_branch=os.environ.get("AOA_WORKLOOP_BASE_BRANCH", "main").strip() or "main",
             workloop_extra_sources=_parse_csv_paths("AOA_WORKLOOP_EXTRA_SOURCES"),
+            workloop_interval_seconds=max(60, _int("AOA_WORKLOOP_INTERVAL_SECONDS", 3600)),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

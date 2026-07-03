@@ -14,6 +14,7 @@ from aoa.workloop.discover import discover_sources
 from aoa.workloop.extract import extract_insights
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
+from aoa.workloop.scheduler import WorkloopScheduler
 from aoa.workloop.propose import build_proposal
 from aoa.workloop.store import WorkloopStore
 from aoa.workloop.stages import default_stages
@@ -146,3 +147,72 @@ def test_build_proposal_reports_git_state():
     assert "branch" in proposal
     assert "changed_files" in proposal
     assert "summary" in proposal
+
+
+def test_scheduler_chains_completed_runs(tmp_path, monkeypatch):
+    cfg = _config(tmp_path, workloop_interval_seconds=60)
+    repo = Path(__file__).resolve().parents[1]
+    orch = WorkloopOrchestrator(cfg, repo_root=repo)
+    scheduler = WorkloopScheduler(orch, interval_seconds=60, sleep_fn=lambda _s: None)
+
+    monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
+
+    first = scheduler.tick(dry_run=True)
+    assert first.action == "completed"
+    assert first.result.run.status == "completed"
+
+    sched = scheduler.state()
+    assert sched.iteration == 1
+    assert sched.last_completed_run_id == first.result.run.run_id
+    assert sched.next_run_at
+    assert orch.store.load_run() is None
+
+    second = scheduler.tick(dry_run=True)
+    assert second.action == "completed"
+    assert second.result.run.iteration == 2
+    assert second.result.run.previous_run_id == first.result.run.run_id
+    assert "Chained iteration" in " ".join(second.result.run.notes)
+
+
+def test_scheduler_polls_approval_then_resumes(tmp_path, monkeypatch):
+    cfg = _config(tmp_path, workloop_interval_seconds=60)
+    repo = Path(__file__).resolve().parents[1]
+    orch = WorkloopOrchestrator(cfg, repo_root=repo)
+    scheduler = WorkloopScheduler(orch, interval_seconds=60, sleep_fn=lambda _s: None)
+
+    monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
+    monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
+    monkeypatch.setattr(
+        "aoa.workloop.stages.run_merge",
+        lambda proposal, **kwargs: {"message": "merge skipped"},
+    )
+
+    halted = scheduler.tick(dry_run=False)
+    assert halted.action == "awaiting_approval"
+
+    still_waiting = scheduler.tick(dry_run=False)
+    assert still_waiting.action == "awaiting_approval"
+
+    orch.approve(approver="Aaron")
+    resumed = scheduler.tick(dry_run=False)
+    assert resumed.action == "resumed"
+    assert resumed.result.run.status == "completed"
+    assert scheduler.state().iteration == 1
+
+
+def test_extract_includes_prior_workloop_learnings(tmp_path):
+    store = WorkloopStore(tmp_path / "workloop")
+    store.save_learnings({"lessons": ["avoid repeat vetoes on AAPL"], "adaptations": []})
+    store.save_scheduler({"iteration": 2, "last_completed_run_id": "abc", "status": "sleeping"})
+
+    extracted = extract_insights(
+        [],
+        journal_path=tmp_path / "missing.jsonl",
+        plasticity_path=tmp_path / "missing.json",
+        workloop_path=tmp_path / "workloop",
+        previous_run_id="abc",
+    )
+    assert "avoid repeat vetoes on AAPL" in extracted["workloop_lessons"]
+    assert extracted["prior_iterations"] == 2
+    assert extracted["previous_run_id"] == "abc"
+

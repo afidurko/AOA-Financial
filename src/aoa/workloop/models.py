@@ -52,6 +52,8 @@ class WorkloopRun:
     merge: dict[str, Any] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)
     error: str = ""
+    iteration: int = 0
+    previous_run_id: str = ""
 
     def to_context(self) -> dict[str, Any]:
         return {
@@ -70,6 +72,8 @@ class WorkloopRun:
             "merge": self.merge,
             "notes": self.notes,
             "error": self.error,
+            "iteration": self.iteration,
+            "previous_run_id": self.previous_run_id,
         }
 
     @classmethod
@@ -90,4 +94,6 @@ class WorkloopRun:
             merge=dict(data.get("merge", {})),
             notes=list(data.get("notes", [])),
             error=str(data.get("error", "")),
+            iteration=int(data.get("iteration", 0) or 0),
+            previous_run_id=str(data.get("previous_run_id", "")),
         )

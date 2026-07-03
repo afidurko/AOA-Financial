@@ -23,7 +23,8 @@ from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
-from aoa.workloop.orchestrator import WorkloopOrchestrator
+from aoa.workloop.orchestrator import WorkloopOrchestrator, WorkloopResult
+from aoa.workloop.scheduler import WorkloopScheduler, build_scheduler
 from aoa.workloop.models import STAGE_ORDER
 
 
@@ -282,14 +283,40 @@ def cmd_workloop_run(
 def cmd_workloop_status(cfg: Config) -> int:
     orch = WorkloopOrchestrator(cfg)
     run = orch.status()
+    sched = build_scheduler(cfg).state()
+    print(f"Scheduler: iteration={sched.iteration} status={sched.status}")
+    if sched.last_completed_at:
+        print(f"Last completed: {sched.last_completed_run_id} at {sched.last_completed_at}")
+    if sched.next_run_at:
+        print(f"Next run scheduled: {sched.next_run_at}")
     if run is None:
         print("No active work-loop run.")
         return 0
     print(f"Run: {run.run_id}")
     print(f"Stage: {run.stage}")
     print(f"Status: {run.status}")
+    if run.iteration:
+        print(f"Iteration: {run.iteration}")
+    if run.previous_run_id:
+        print(f"Previous run: {run.previous_run_id}")
     if run.error:
         print(f"Error: {run.error}")
+    return 0
+
+
+def cmd_workloop_loop(cfg: Config, *, dry_run: bool) -> int:
+    if not cfg.workloop_enabled:
+        print("Work-loop is disabled (AOA_WORKLOOP_ENABLED=false).")
+        return 1
+    scheduler = build_scheduler(cfg)
+    print(
+        f"Work-loop scheduler at {cfg.workloop_path} "
+        f"(interval={cfg.workloop_interval_seconds}s). Ctrl-C to stop."
+    )
+    try:
+        scheduler.run_forever(dry_run=dry_run)
+    except KeyboardInterrupt:
+        print("\nStopped.")
     return 0
 
 
@@ -369,6 +396,15 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Resume the last saved run (e.g. after approval).",
     )
+    wl_loop = wl_sub.add_parser(
+        "loop",
+        help="Run work loops continuously at AOA_WORKLOOP_INTERVAL_SECONDS.",
+    )
+    wl_loop.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Bypass approval and skip execute/upgrade/merge side effects.",
+    )
     wl_sub.add_parser("status", help="Show the current work-loop run state.")
     wl_approve = wl_sub.add_parser("approve", help="Record approver sign-off.")
     wl_approve.add_argument(
@@ -404,6 +440,8 @@ def main(argv: list[str] | None = None) -> int:
                     dry_run=getattr(args, "dry_run", False),
                     resume=getattr(args, "resume", False),
                 )
+            if args.workloop_command == "loop":
+                return cmd_workloop_loop(cfg, dry_run=getattr(args, "dry_run", False))
             if args.workloop_command == "status":
                 return cmd_workloop_status(cfg)
             if args.workloop_command == "approve":

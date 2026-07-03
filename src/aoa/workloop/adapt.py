@@ -41,6 +41,15 @@ def _lessons_from_extracted(extracted: dict[str, Any]) -> list[str]:
     for lesson in extracted.get("plasticity_lessons", []):
         lessons.append(f"Plasticity: {lesson}")
 
+    for lesson in extracted.get("workloop_lessons", [])[:5]:
+        lessons.append(f"Prior work-loop: {lesson}")
+
+    if extracted.get("previous_run_id"):
+        lessons.append(
+            f"Chained from prior run {extracted['previous_run_id']} "
+            f"(iteration {extracted.get('prior_iterations', 0)})."
+        )
+
     for veto in extracted.get("recent_vetoes", [])[:5]:
         sym = veto.get("symbol", "")
         note = veto.get("note", "")

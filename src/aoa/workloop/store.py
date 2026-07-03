@@ -19,6 +19,7 @@ class WorkloopStore:
         self.log_path = self.root / "runs.jsonl"
         self.learnings_path = self.root / "learnings.json"
         self.approval_path = self.root / "approval.json"
+        self.scheduler_path = self.root / "scheduler.json"
 
     def new_run_id(self) -> str:
         return uuid.uuid4().hex[:12]
@@ -86,3 +87,37 @@ class WorkloopStore:
     def clear_approval(self) -> None:
         if self.approval_path.exists():
             self.approval_path.unlink()
+
+    def clear_run(self) -> None:
+        if self.state_path.exists():
+            self.state_path.unlink()
+
+    def load_scheduler(self) -> dict[str, Any]:
+        if not self.scheduler_path.exists():
+            return {
+                "iteration": 0,
+                "last_completed_run_id": "",
+                "last_completed_at": "",
+                "next_run_at": "",
+                "status": "idle",
+            }
+        try:
+            data = json.loads(self.scheduler_path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            return {
+                "iteration": 0,
+                "last_completed_run_id": "",
+                "last_completed_at": "",
+                "next_run_at": "",
+                "status": "idle",
+            }
+        return {
+            "iteration": int(data.get("iteration", 0) or 0),
+            "last_completed_run_id": str(data.get("last_completed_run_id", "")),
+            "last_completed_at": str(data.get("last_completed_at", "")),
+            "next_run_at": str(data.get("next_run_at", "")),
+            "status": str(data.get("status", "idle")),
+        }
+
+    def save_scheduler(self, data: dict[str, Any]) -> None:
+        self.scheduler_path.write_text(json.dumps(data, indent=2), encoding="utf-8")

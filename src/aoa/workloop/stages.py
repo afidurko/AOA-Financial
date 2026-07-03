@@ -64,7 +64,9 @@ class ExtractStage(WorkloopStage):
             sources,
             journal_path=ctx.config.journal_path,
             plasticity_path=ctx.config.plasticity_path,
+            workloop_path=ctx.config.workloop_path,
             journal_tail=ctx.config.workloop_journal_tail,
+            previous_run_id=ctx.run.previous_run_id,
         )
         ctx.store.record("workloop.extract", {"keys": sorted(ctx.run.extracted.keys())})
         return True

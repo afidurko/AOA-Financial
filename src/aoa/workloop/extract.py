@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 from aoa.journal.store import Journal
 from aoa.plasticity.memory import load_memory
 from aoa.workloop.models import LearningSource
+from aoa.workloop.store import WorkloopStore
 
 
 def extract_insights(
@@ -16,7 +16,9 @@ def extract_insights(
     *,
     journal_path: Path,
     plasticity_path: Path,
+    workloop_path: Path | None = None,
     journal_tail: int = 100,
+    previous_run_id: str = "",
 ) -> dict[str, Any]:
     journal = Journal(journal_path)
     entries = journal.tail(journal_tail)
@@ -27,6 +29,13 @@ def extract_insights(
 
     vetoes = _collect_vetoes(entries)
     plasticity = load_memory(plasticity_path) if plasticity_path.exists() else None
+    workloop_lessons: list[str] = []
+    prior_iterations = 0
+    if workloop_path is not None:
+        store = WorkloopStore(workloop_path)
+        learnings = store.load_learnings()
+        workloop_lessons = list(learnings.get("lessons", []))
+        prior_iterations = int(store.load_scheduler().get("iteration", 0) or 0)
 
     return {
         "source_count": len(sources),
@@ -35,6 +44,9 @@ def extract_insights(
         "recent_vetoes": vetoes[:10],
         "plasticity_lessons": list(plasticity.lessons) if plasticity else [],
         "plasticity_trust": dict(plasticity.symbol_trust) if plasticity else {},
+        "workloop_lessons": workloop_lessons,
+        "prior_iterations": prior_iterations,
+        "previous_run_id": previous_run_id,
         "git_commits": _git_commits(sources),
         "test_files": _count_by_kind(sources, "tests"),
         "agent_modules": _count_by_kind(sources, "agents"),

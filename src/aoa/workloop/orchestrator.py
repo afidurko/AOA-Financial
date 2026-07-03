@@ -38,8 +38,14 @@ class WorkloopOrchestrator:
         from_stage: str | None = None,
         dry_run: bool = False,
         resume: bool = False,
+        iteration: int = 0,
+        previous_run_id: str = "",
     ) -> WorkloopResult:
-        run = self._resolve_run(resume=resume)
+        run = self._resolve_run(
+            resume=resume,
+            iteration=iteration,
+            previous_run_id=previous_run_id,
+        )
         start_idx = stage_index(from_stage) if from_stage else stage_index(run.stage)
         ctx = WorkloopContext(
             config=self.config,
@@ -50,7 +56,13 @@ class WorkloopOrchestrator:
         )
         self.store.record(
             "workloop.start",
-            {"run_id": run.run_id, "from_stage": run.stage, "dry_run": dry_run},
+            {
+                "run_id": run.run_id,
+                "from_stage": run.stage,
+                "dry_run": dry_run,
+                "iteration": run.iteration,
+                "previous_run_id": run.previous_run_id,
+            },
         )
 
         halted = False
@@ -101,11 +113,27 @@ class WorkloopOrchestrator:
             note=note,
         )
 
-    def _resolve_run(self, *, resume: bool) -> WorkloopRun:
+    def _resolve_run(
+        self,
+        *,
+        resume: bool,
+        iteration: int = 0,
+        previous_run_id: str = "",
+    ) -> WorkloopRun:
         if resume:
             existing = self.store.load_run()
             if existing is not None:
                 existing.status = "running"
                 existing.error = ""
                 return existing
-        return WorkloopRun(run_id=self.store.new_run_id())
+        run = WorkloopRun(run_id=self.store.new_run_id())
+        if iteration > 0:
+            run.iteration = iteration
+        if previous_run_id:
+            run.previous_run_id = previous_run_id
+        if iteration > 1 or previous_run_id:
+            run.notes.append(
+                f"Chained iteration {run.iteration} "
+                f"(previous run: {previous_run_id or 'none'})."
+            )
+        return run
