@@ -30,7 +30,7 @@ Always begin with a one-line confirmation:
 Constraints loaded from loop-constraints.md: N rules active.
 ```
 
-If no `loop-constraints.md` exists, say so and proceed with default safety rules from `docs/safety.md`.
+If no `loop-constraints.md` exists, say so and proceed with default safety rules from `docs/safety.md` (denylists, auto-merge policy, kill switch).
 
 ## Interaction with other skills
 
