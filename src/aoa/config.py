@@ -209,6 +209,9 @@ class Config:
     workloop_extra_sources: tuple[str, ...] = ()
     workloop_interval_seconds: int = 3600
 
+    trading_agents_enabled: bool = True
+    trading_agents_debate_rounds: int = 1
+
     risk: RiskLimits = field(default_factory=RiskLimits)
 
     # Low-rank signal adaptation (LoRA-style online conviction recalibration)
@@ -303,6 +306,8 @@ class Config:
             workloop_base_branch=os.environ.get("AOA_WORKLOOP_BASE_BRANCH", "main").strip() or "main",
             workloop_extra_sources=_parse_csv_paths("AOA_WORKLOOP_EXTRA_SOURCES"),
             workloop_interval_seconds=max(60, _int("AOA_WORKLOOP_INTERVAL_SECONDS", 3600)),
+            trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
+            trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

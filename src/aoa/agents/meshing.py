@@ -63,6 +63,7 @@ class MeshingAgent(Agent):
         *,
         scanner_reason: str = "",
         snapshot_context: dict | None = None,
+        research_context: dict | None = None,
     ) -> MeshedView:
         if not signals:
             return MeshedView(
@@ -81,6 +82,11 @@ class MeshingAgent(Agent):
         )
         if snapshot_context:
             prompt += f"Market snapshot: {json.dumps(snapshot_context, default=str)}\n"
+        if research_context:
+            prompt += (
+                "Research team debate (prevailing view):\n"
+                f"{json.dumps(research_context, default=str)}\n"
+            )
         prompt += "\nReturn the unified meshed view as JSON."
 
         try:

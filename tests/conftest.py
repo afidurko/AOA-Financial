@@ -150,6 +150,14 @@ class FakeLLM:
     _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
     _ALAN = frozenset({"recommendations", "summary", "confidence"})
     _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
+    _NEWS = frozenset({"direction", "conviction", "summary", "key_events", "macro_risk"})
+    _SENTIMENT = frozenset(
+        {"direction", "conviction", "sentiment_score", "summary", "drivers"}
+    )
+    _RESEARCH_FACILITATOR = frozenset({"prevailing_view", "conviction", "rationale"})
+    _RESEARCH_DEBATE = frozenset({"argument", "key_points", "conviction"})
+    _FUND_MANAGER = frozenset({"approved", "vetoes", "commentary"})
+    _RISK_DEBATE = frozenset({"perspectives", "facilitator_summary", "vetoes"})
 
     def __init__(self, *, candidates=None):
         self.candidates = candidates if candidates is not None else [
@@ -215,8 +223,48 @@ class FakeLLM:
                 ],
                 "portfolio_commentary": "one focused long",
             }
+        if required == self._RISK_DEBATE:
+            return {
+                "perspectives": [
+                    {"stance": "risk_seeking", "assessment": "ok", "recommendation": "hold"},
+                    {"stance": "neutral", "assessment": "ok", "recommendation": "hold"},
+                    {"stance": "risk_conservative", "assessment": "ok", "recommendation": "hold"},
+                ],
+                "facilitator_summary": "balanced risk",
+                "vetoes": [],
+            }
+        if required == self._FUND_MANAGER:
+            return {"approved": True, "vetoes": [], "commentary": "fund manager approved"}
         if required == self._RISK:
             return {"vetoes": [], "assessment": "prudent"}
+        if required == self._RESEARCH_FACILITATOR:
+            return {
+                "prevailing_view": "bullish",
+                "conviction": 0.65,
+                "rationale": "bull case stronger",
+            }
+        if required == self._RESEARCH_DEBATE:
+            return {
+                "argument": "constructive setup",
+                "key_points": ["momentum", "sentiment"],
+                "conviction": 0.7,
+            }
+        if required == self._SENTIMENT:
+            return {
+                "direction": "bullish",
+                "conviction": 0.55,
+                "sentiment_score": 0.4,
+                "summary": "positive headline tone",
+                "drivers": ["earnings optimism"],
+            }
+        if required == self._NEWS:
+            return {
+                "direction": "neutral",
+                "conviction": 0.4,
+                "summary": "no major catalysts",
+                "key_events": ["sector rotation"],
+                "macro_risk": "low",
+            }
         if required == self._TOM:
             return {
                 "direction": "up",
