@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from aoa.brokerage.base import BrokerError
@@ -13,29 +13,23 @@ from aoa.cli import build_team
 from aoa.config import Config
 from aoa.llm.client import LLMError
 from aoa.team.orchestrator import TeamCycleResult
-from aoa.web.loop_runner import LoopRunner
-
-_app: FastAPI | None = None
-_runner: LoopRunner | None = None
-_cfg: Config | None = None
+from aoa.web.loop_runner import CycleBusyError, LoopRunner
 
 
 def create_app(cfg: Config | None = None) -> FastAPI:
-    global _app, _runner, _cfg
-    if _app is not None:
-        return _app
-
     cfg = cfg or Config.from_env()
-    _cfg = cfg
     team = build_team(cfg)
-    _runner = LoopRunner(team, cfg.cycle_seconds)
-    if cfg.web_auto_loop:
-        _runner.start()
+    runner = LoopRunner(team, cfg.cycle_seconds)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        app.state.cfg = cfg
+        app.state.team = team
+        app.state.runner = runner
+        if cfg.web_auto_loop:
+            runner.start()
         yield
-        _runner.stop()
+        runner.stop()
 
     app = FastAPI(
         title="AOA Financial",
@@ -49,7 +43,9 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/api/config")
-    def api_config() -> dict[str, Any]:
+    def api_config(request: Request) -> dict[str, Any]:
+        cfg = request.app.state.cfg
+        runner = request.app.state.runner
         return {
             "trading_mode": cfg.trading_mode,
             "dry_run": cfg.dry_run,
@@ -57,77 +53,70 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "universe": list(cfg.universe),
             "news_enabled": cfg.news_enabled,
             "team_mode": True,
-            "loop_running": _runner.state.running,
+            "loop_running": runner.state.running,
         }
 
     @app.get("/api/status")
-    def api_status() -> dict[str, Any]:
+    def api_status(request: Request) -> dict[str, Any]:
+        cfg = request.app.state.cfg
+        team = request.app.state.team
+        runner = request.app.state.runner
         try:
-            acct = _runner.broker.get_account()
-            positions = _runner.broker.get_positions()
+            acct = team.broker.get_account()
+            positions = team.broker.get_positions()
         except BrokerError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return {
             "mode": cfg.trading_mode,
-            "broker": _runner.broker.name,
-            "market_open": _runner.broker.is_market_open(),
-            "account": {
-                "equity": acct.equity,
-                "cash": acct.cash,
-                "settled_cash": acct.settled_cash,
-                "options_level": acct.options_level,
-            },
-            "positions": [
-                {
-                    "symbol": p.symbol,
-                    "asset_class": p.asset_class.value,
-                    "qty": p.qty,
-                    "market_value": p.market_value,
-                    "unrealized_pl": p.unrealized_pl,
-                }
-                for p in positions
-            ],
+            "broker": team.broker.name,
+            "market_open": team.broker.is_market_open(),
+            "account": acct.to_context(),
+            "positions": [p.to_context() for p in positions],
             "loop": {
-                "running": _runner.state.running,
-                "cycles_completed": _runner.state.cycles_completed,
-                "last_cycle_at": _runner.state.last_cycle_at,
-                "last_error": _runner.state.last_error,
+                "running": runner.state.running,
+                "cycles_completed": runner.state.cycles_completed,
+                "last_cycle_at": runner.state.last_cycle_at,
+                "last_error": runner.state.last_error,
             },
         }
 
     @app.get("/api/journal")
-    def api_journal(n: int = 30) -> dict[str, Any]:
-        return {"entries": _runner.journal.tail(n)}
+    def api_journal(request: Request, n: int = 30) -> dict[str, Any]:
+        team = request.app.state.team
+        return {"entries": team.journal.tail(n)}
 
     @app.post("/api/run")
-    def api_run() -> dict[str, Any]:
+    def api_run(request: Request) -> dict[str, Any]:
+        runner = request.app.state.runner
         try:
-            result = _runner.run_once()
+            result = runner.run_once()
+        except CycleBusyError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (BrokerError, LLMError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return _team_cycle_to_dict(result)
 
     @app.post("/api/loop/start")
-    def loop_start() -> dict[str, str]:
-        _runner.start()
+    def loop_start(request: Request) -> dict[str, str]:
+        request.app.state.runner.start()
         return {"status": "started"}
 
     @app.post("/api/loop/stop")
-    def loop_stop() -> dict[str, str]:
-        _runner.stop()
+    def loop_stop(request: Request) -> dict[str, str]:
+        request.app.state.runner.stop()
         return {"status": "stopped"}
 
     @app.get("/api/last-cycle")
-    def last_cycle() -> dict[str, Any]:
-        if _runner.state.last_result is None:
+    def last_cycle(request: Request) -> dict[str, Any]:
+        runner = request.app.state.runner
+        if runner.state.last_result is None:
             return {"result": None}
-        return {"result": _team_cycle_to_dict(_runner.state.last_result)}
+        return {"result": _team_cycle_to_dict(runner.state.last_result)}
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
         return _DASHBOARD_HTML
 
-    _app = app
     return app
 
 

@@ -10,20 +10,19 @@ from datetime import date
 # Force the deterministic offline analyst so tests never hit the network.
 os.environ["AOA_FORCE_OFFLINE"] = "1"
 
-from aoa_financial.config import Config
-from aoa_financial.databases.store import MarketStore, Bar
-from aoa_financial.ingest.synthetic import SyntheticGenerator
-from aoa_financial.ingest.loaders import ingest_ticker
+from aoa_financial.analysis import factors as FAC
+from aoa_financial.analysis import forecast as FC
+from aoa_financial.analysis import fundamentals as FA
+from aoa_financial.analysis import regimes as RG
+from aoa_financial.analysis import sentiment as SENT
 from aoa_financial.analysis import series as S
 from aoa_financial.analysis import technical as TA
-from aoa_financial.analysis import fundamentals as FA
-from aoa_financial.analysis import forecast as FC
-from aoa_financial.analysis import regimes as RG
-from aoa_financial.analysis import factors as FAC
-from aoa_financial.analysis import sentiment as SENT
 from aoa_financial.analysis.reverse_engineer import reverse_engineer
-from aoa_financial.swarm.decision import analyze_ticker, decide
+from aoa_financial.databases.store import MarketStore
+from aoa_financial.ingest.loaders import ingest_ticker
+from aoa_financial.ingest.synthetic import SyntheticGenerator
 from aoa_financial.swarm.agents import run_agents
+from aoa_financial.swarm.decision import analyze_ticker, decide
 
 
 class SeriesTests(unittest.TestCase):
@@ -79,7 +78,7 @@ class BackendParityTests(unittest.TestCase):
         npv = S.log_returns(self.prices)
         pure = self._pure(S.log_returns, self.prices)
         self.assertEqual(len(npv), len(pure))
-        for x, y in zip(npv[:200], pure[:200]):
+        for x, y in zip(npv[:200], pure[:200], strict=False):
             self.assertAlmostEqual(x, y, places=9)
 
     def test_stdev_parity(self):
@@ -94,15 +93,15 @@ class BackendParityTests(unittest.TestCase):
             self.assertAlmostEqual(npv[-1], pure[-1], places=6)
 
     def test_factor_panel_parity(self):
-        from aoa_financial.ingest.synthetic import SyntheticGenerator
         from aoa_financial.analysis import factors as FAC
+        from aoa_financial.ingest.synthetic import SyntheticGenerator
         bars = SyntheticGenerator().generate("FPAR", end=date(2010, 1, 1)).bars
         npp = FAC.build_factor_panel(bars)
         pure = self._pure(FAC.build_factor_panel, bars)
         self.assertEqual(set(npp), set(pure))
         for col in npp:
             self.assertEqual(len(npp[col]), len(pure[col]))
-            for a, b2 in zip(npp[col][:500], pure[col][:500]):
+            for a, b2 in zip(npp[col][:500], pure[col][:500], strict=False):
                 self.assertAlmostEqual(a, b2, places=9)
 
     def test_ols_parity(self):
@@ -110,7 +109,7 @@ class BackendParityTests(unittest.TestCase):
         y = [2 + 0.5 * i - 0.01 * i * i for i in range(120)]
         cnp, r2np = S.ols(X, y)
         cpu, r2pu = self._pure(S.ols, X, y)
-        for a, b2 in zip(cnp, cpu):
+        for a, b2 in zip(cnp, cpu, strict=False):
             self.assertAlmostEqual(a, b2, places=4)
         self.assertAlmostEqual(r2np, r2pu, places=6)
 
@@ -255,7 +254,8 @@ class PandasTests(unittest.TestCase):
         corr = self.FR.correlation_matrix(store, ["AAA", "BBB", "CCC"], window=252)
         self.assertEqual(corr.shape, (3, 3))
         self.assertAlmostEqual(corr.loc["AAA", "AAA"], 1.0, places=6)
-        store.close(); tmp.cleanup()
+        store.close()
+        tmp.cleanup()
 
     def test_ingest_dataframe(self):
         from aoa_financial.ingest.loaders import ingest_dataframe
@@ -265,7 +265,8 @@ class PandasTests(unittest.TestCase):
         self.assertEqual(rep["bars"], len(self.bars))
         self.assertTrue(store.has_prices("EXT"))
         self.assertEqual(store.get_security("EXT").sector, "Tech")
-        store.close(); tmp.cleanup()
+        store.close()
+        tmp.cleanup()
 
 
 class FundamentalsFeedTests(unittest.TestCase):
@@ -281,9 +282,12 @@ class FundamentalsFeedTests(unittest.TestCase):
 
     def test_to_float_handles_junk(self):
         f = self.FF._to_float
-        self.assertIsNone(f("None")); self.assertIsNone(f("-"))
-        self.assertIsNone(f("")); self.assertIsNone(f(None))
-        self.assertEqual(f("28.4"), 28.4); self.assertEqual(f("0"), 0.0)
+        self.assertIsNone(f("None"))
+        self.assertIsNone(f("-"))
+        self.assertIsNone(f(""))
+        self.assertIsNone(f(None))
+        self.assertEqual(f("28.4"), 28.4)
+        self.assertEqual(f("0"), 0.0)
 
     def test_alphavantage_normalize(self):
         raw = {"Symbol": "AAPL", "PERatio": "30.5", "PriceToBookRatio": "45",
@@ -315,7 +319,7 @@ class FundamentalsFeedTests(unittest.TestCase):
 
     def test_get_json_no_network_returns_none(self):
         # Simulate a provider whose HTTP call fails -> falls back to synthetic.
-        self.FF._REGISTRY  # touch
+        _ = self.FF._REGISTRY  # touch registry side effects
         orig = self.FF._get_json
         self.FF._get_json = lambda *a, **k: None
         try:
@@ -347,7 +351,8 @@ class FundamentalsFeedTests(unittest.TestCase):
         res = refresh_fundamentals(store, "AAA", provider="synthetic")
         self.assertEqual(res["provider"], "synthetic")
         self.assertIsNotNone(store.latest_fundamentals("AAA"))
-        store.close(); tmp.cleanup()
+        store.close()
+        tmp.cleanup()
 
 
 class SwarmTests(unittest.TestCase):
@@ -416,7 +421,6 @@ class BacktestTests(unittest.TestCase):
         # A decision at index i must be identical whether computed from the full
         # history or from a history truncated exactly at i+horizon -> proves the
         # decision never reads bars beyond i.
-        from aoa_financial.backtest.engine import backtest_ticker
         from aoa_financial.swarm.decision import evaluate
         bars = self.store.get_bars("BTX")
         i = 300
@@ -450,7 +454,8 @@ class EvaluateParityTests(unittest.TestCase):
                           sector=store.get_security("PAR2").sector, use_llm=True)
         self.assertEqual(live.action, direct.action)
         self.assertAlmostEqual(live.conviction, direct.conviction, places=10)
-        store.close(); tmp.cleanup()
+        store.close()
+        tmp.cleanup()
 
 
 if __name__ == "__main__":

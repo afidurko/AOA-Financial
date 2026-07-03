@@ -5,8 +5,9 @@ from __future__ import annotations
 from aoa.agents.base import Direction
 from aoa.brokerage.models import Side
 from aoa.config import Config, RiskLimits
+from aoa.execution.pricing import marketable_limit
 from aoa.journal.store import Journal
-from aoa.swarm.orchestrator import Orchestrator, _marketable_limit
+from aoa.swarm.orchestrator import Orchestrator
 
 
 def _config(tmp_path, dry_run=False):
@@ -77,8 +78,8 @@ def test_cycle_populates_swarm_environment(fake_broker, fake_llm, tmp_path):
 
 
 def test_marketable_limit_padding():
-    assert _marketable_limit(100.0, Side.BUY) == 101.0
-    assert _marketable_limit(100.0, Side.SELL) == 99.0
+    assert marketable_limit(100.0, Side.BUY) == 101.0
+    assert marketable_limit(100.0, Side.SELL) == 99.0
 
 
 def test_empty_scanner_still_reviews_open_positions(fake_broker, fake_llm, tmp_path):

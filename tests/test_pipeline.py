@@ -95,6 +95,14 @@ def test_pipeline_emits_stage_events(fake_broker, fake_llm, tmp_path):
     assert "stage.checkpoint" in kinds
 
 
+def test_pipeline_run_until_journals_stages(fake_broker, fake_llm, tmp_path):
+    ctx = _ctx(fake_broker, fake_llm, tmp_path)
+    Pipeline(stages=[IntakeStage(), ScanStage()]).run_until(ctx, "analyze")
+    kinds = [r["event"] for r in ctx.journal.tail(20)]
+    assert "pipeline.stage.start" in kinds
+    assert "pipeline.stage.complete" in kinds
+
+
 def test_environment_checkpoints_after_marked_stages(fake_broker, fake_llm, tmp_path):
     ctx = _ctx(fake_broker, fake_llm, tmp_path)
     Pipeline(stages=default_stages()[:3]).run(ctx)  # intake, scan, analyze

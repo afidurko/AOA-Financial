@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from aoa.agents.base import Direction, Signal
+from aoa.agents.base import Direction, Signal, parse_direction
 
 
 @dataclass
@@ -77,7 +77,9 @@ class MeshedView:
     @property
     def effective_direction(self) -> Direction:
         raw = self.overrides.get("direction", self.direction.value)
-        return Direction(raw) if isinstance(raw, str) else raw
+        if isinstance(raw, Direction):
+            return raw
+        return parse_direction(raw)
 
     @property
     def effective_conviction(self) -> float:

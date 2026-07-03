@@ -26,7 +26,7 @@ def test_bob_health_passes(fake_broker):
     assert report.can_proceed is True
     assert report.worst_status is HealthStatus.OK
     names = {c.name for c in report.checks}
-    assert {"configuration", "broker", "code_integrity", "indicator_pipeline"} <= names
+    assert {"configuration", "broker", "code_integrity", "indicator_pipeline", "code_quality"} <= names
 
 
 def test_team_brief_pipeline(fake_broker, fake_llm):

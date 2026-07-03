@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import json
 
-from aoa.agents.base import Agent, Direction, Signal
+from aoa.agents.base import Agent, Direction, Signal, clamp_conviction, parse_direction
+from aoa.llm.client import LLMError
 from aoa.swarm.environment import MeshedView
 
 _SCHEMA = {
@@ -87,17 +88,17 @@ class MeshingAgent(Agent):
             levels = {k: v for k, v in (r.get("key_levels") or {}).items() if v is not None}
             return MeshedView(
                 symbol=symbol,
-                direction=Direction(r["direction"]),
-                conviction=_clamp(r["conviction"]),
-                rationale=r["rationale"],
-                horizon=r.get("horizon", "swing"),
+                direction=parse_direction(r.get("direction")),
+                conviction=clamp_conviction(r.get("conviction")),
+                rationale=str(r.get("rationale", "")),
+                horizon=str(r.get("horizon", "swing")),
                 conflicts=list(r.get("conflicts") or []),
                 corroboration=r.get("corroboration", "mixed"),
                 source_signals=source_ctx,
                 key_levels=levels,
                 tags=["meshed"],
             )
-        except Exception:
+        except (LLMError, KeyError, TypeError, ValueError):
             return _fallback_mesh(symbol, signals, source_ctx, scanner_reason)
 
 
@@ -166,10 +167,3 @@ def _combine(tech: Signal, fund: Signal) -> tuple[Direction, float]:
     if tech.direction is not Direction.NEUTRAL:
         return tech.direction, tech.conviction * 0.6
     return Direction.NEUTRAL, 0.0
-
-
-def _clamp(v: float) -> float:
-    try:
-        return max(0.0, min(1.0, float(v)))
-    except (TypeError, ValueError):
-        return 0.0

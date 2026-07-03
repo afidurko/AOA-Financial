@@ -27,34 +27,17 @@ class Pipeline:
     stages: list[PipelineStage] = field(default_factory=list)
 
     def run(self, ctx: CycleContext) -> None:
-        bus = ctx.blackboard.events
-        for stage in self.stages:
-            bus.emit("stage.start", stage.name)
-            ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
-            continue_cycle = stage.run(ctx)
-            if stage.checkpoint:
-                ctx.blackboard.environment.checkpoint(stage.name)
-                bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
-            bus.emit("stage.complete", stage.name)
-            ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
-            if not continue_cycle:
-                break
+        self._run_stages(ctx)
 
     def run_until(self, ctx: CycleContext, stop_before: str) -> None:
         """Run stages up to (but not including) ``stop_before`` — for edit workflows."""
+        self._run_stages(ctx, stop_before=stop_before)
+
+    def _run_stages(self, ctx: CycleContext, *, stop_before: str | None = None) -> None:
         for stage in self.stages:
-            if stage.name == stop_before:
+            if stop_before is not None and stage.name == stop_before:
                 break
-            bus = ctx.blackboard.events
-            bus.emit("stage.start", stage.name)
-            ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
-            continue_cycle = stage.run(ctx)
-            if stage.checkpoint:
-                ctx.blackboard.environment.checkpoint(stage.name)
-                bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
-            bus.emit("stage.complete", stage.name)
-            ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
-            if not continue_cycle:
+            if not self._run_stage(ctx, stage):
                 break
 
     def run_from(self, ctx: CycleContext, start_at: str) -> None:
@@ -66,14 +49,17 @@ class Pipeline:
                     started = True
                 else:
                     continue
-            bus = ctx.blackboard.events
-            bus.emit("stage.start", stage.name)
-            ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
-            continue_cycle = stage.run(ctx)
-            if stage.checkpoint:
-                ctx.blackboard.environment.checkpoint(stage.name)
-                bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
-            bus.emit("stage.complete", stage.name)
-            ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
-            if not continue_cycle:
+            if not self._run_stage(ctx, stage):
                 break
+
+    def _run_stage(self, ctx: CycleContext, stage: PipelineStage) -> bool:
+        bus = ctx.blackboard.events
+        bus.emit("stage.start", stage.name)
+        ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
+        continue_cycle = stage.run(ctx)
+        if stage.checkpoint:
+            ctx.blackboard.environment.checkpoint(stage.name)
+            bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
+        bus.emit("stage.complete", stage.name)
+        ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
+        return continue_cycle

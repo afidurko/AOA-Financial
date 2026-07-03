@@ -152,7 +152,7 @@ def _print_cycle(result: CycleResult) -> None:
 
 def _print_team(result: TeamCycleResult) -> None:
     if result.health:
-        print("\n=== Bob — systems health ===")
+        print("\n=== Bob — systems health & code integrity ===")
         print(f"  {result.health.summary}")
         for check in result.health.checks:
             print(f"  [{check.status.value.upper():<8}] {check.name}: {check.detail}")
@@ -160,13 +160,17 @@ def _print_team(result: TeamCycleResult) -> None:
         print("\n=== Tom — trend analysis ===")
         for t in result.trends:
             print(
-                f"  {t.symbol:<6} {t.direction.value:<8} strength={t.strength:.2f}  {t.rationale[:60]}"
+                f"  {t.symbol:<6} {t.direction.value:<8} strength={t.strength:.2f}  "
+                f"{t.rationale[:60]}"
             )
     if result.algorithms:
-        print("\n=== Julie — algorithm validation ===")
+        print("\n=== Julie — algorithm & code clarity ===")
         for a in result.algorithms:
             flag = "validated" if a.validated else "unvalidated"
-            print(f"  {a.symbol:<6} [{flag}] strength={a.adjusted_strength:.2f}  {a.method_notes[:50]}")
+            print(
+                f"  {a.symbol:<6} [{flag}] strength={a.adjusted_strength:.2f}  "
+                f"{a.method_notes[:50]}"
+            )
     if result.decision:
         print("\n=== Alan — decision brief ===")
         print(f"  {result.decision.summary} (confidence={result.decision.confidence:.2f})")
@@ -619,8 +623,8 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("loop", help="Run team cycles continuously.")
     team = sub.add_parser("team", help="Team-specific commands.")
     team_sub = team.add_subparsers(dest="team_command", required=True)
-    team_sub.add_parser("health", help="Run Bob's systems health check.")
-    team_sub.add_parser("brief", help="Run Tom→Julie→Alan analysis without trading.")
+    team_sub.add_parser("health", help="Run Bob's health and code-integrity checks.")
+    team_sub.add_parser("brief", help="Run Tom→Julie→Alan brief without trading.")
     sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")

@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 
-from aoa.agents.base import Direction, Signal, TradeProposal
+from aoa.agents.base import Direction, Signal, TradeProposal, parse_side
 from aoa.brokerage.base import BrokerError
-from aoa.brokerage.models import AssetClass, Side
-from aoa.data.market_data import SymbolSnapshot
+from aoa.brokerage.models import AssetClass, OptionContract, Side
+from aoa.data.market_data import PRIMARY_TIMEFRAME
+from aoa.execution.pricing import marketable_limit
 from aoa.swarm.context import CycleContext
+from aoa.swarm.environment import MeshedView
 from aoa.swarm.pipeline import PipelineStage
 
 
@@ -151,23 +153,26 @@ class AnalyzeStage(PipelineStage):
         new_pending: dict[str, dict] = {}
         n_learned = 0
         n_adapted = 0
+
         if workers == 1 or len(candidates) <= 1:
             for cand in candidates:
-                learned, adapted, pending = _analyze_one(ctx, cand, prior_pending)
-                n_learned += learned
-                n_adapted += adapted
-                new_pending.update(pending)
+                result = _compute_analysis(ctx, cand, prior_pending)
+                _apply_analysis(ctx, result)
+                n_learned += result.n_learned
+                n_adapted += result.n_adapted
+                new_pending.update(result.pending)
         else:
             with ThreadPoolExecutor(max_workers=workers) as pool:
                 futures = [
-                    pool.submit(_analyze_one, ctx, cand, prior_pending)
+                    pool.submit(_compute_analysis, ctx, cand, prior_pending)
                     for cand in candidates
                 ]
-                for fut in as_completed(futures):
-                    learned, adapted, pending = fut.result()
-                    n_learned += learned
-                    n_adapted += adapted
-                    new_pending.update(pending)
+                results = [fut.result() for fut in as_completed(futures)]
+            for result in sorted(results, key=lambda r: r.symbol):
+                _apply_analysis(ctx, result)
+                n_learned += result.n_learned
+                n_adapted += result.n_adapted
+                new_pending.update(result.pending)
 
         if ctx.signal_adapter is not None:
             ctx.adapt_pending.clear()
@@ -192,23 +197,8 @@ class PortfolioStage(PipelineStage):
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
-        account_ctx = {
-            "equity": bb.account.equity,
-            "settled_cash": bb.account.settled_cash,
-            "buying_power": bb.account.buying_power,
-            "options_level": bb.account.options_level,
-        }
-        positions_ctx = [
-            {
-                "symbol": p.symbol,
-                "asset_class": p.asset_class.value,
-                "qty": p.qty,
-                "avg_entry_price": p.avg_entry_price,
-                "market_value": p.market_value,
-                "unrealized_pl": p.unrealized_pl,
-            }
-            for p in bb.positions
-        ]
+        account_ctx = bb.account.to_context()
+        positions_ctx = [p.to_context() for p in bb.positions]
         pm = ctx.agents.portfolio.decide(
             bb.environment.per_symbol_context(),
             positions_ctx,
@@ -227,8 +217,7 @@ class PortfolioStage(PipelineStage):
             "portfolio",
             {"proposals": len(pm.get("proposals", []))},
         )
-        # Stash raw PM output for the materialize stage.
-        bb.environment.global_context["_pm_raw"] = pm
+        ctx.portfolio_output = pm
         return True
 
 
@@ -240,7 +229,7 @@ class MaterializeStage(PipelineStage):
 
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
-        raw = bb.environment.global_context.get("_pm_raw", {}).get("proposals", [])
+        raw = ctx.portfolio_output.get("proposals", [])
         bb.proposals = _materialize_proposals(raw, bb, journal=ctx.journal)
         return True
 
@@ -321,13 +310,26 @@ def default_stages() -> list[PipelineStage]:
 
 
 # ----------------------------------------------------------------- analysis
-def _analyze_one(
+@dataclass
+class SymbolAnalysisResult:
+    symbol: str
+    tech: Signal
+    fund: Signal
+    meshed: MeshedView
+    options_idea: dict | None = None
+    option_contract: OptionContract | None = None
+    n_learned: int = 0
+    n_adapted: int = 0
+    pending: dict[str, dict] = field(default_factory=dict)
+
+
+def _compute_analysis(
     ctx: CycleContext,
     cand: dict,
     prior_pending: dict[str, dict],
-) -> tuple[int, int, dict[str, dict]]:
+) -> SymbolAnalysisResult:
+    """Analyze one candidate without mutating shared cycle state (thread-safe)."""
     bb = ctx.blackboard
-    env = bb.environment
     symbol = cand.get("symbol", "").upper()
     snap = bb.snapshots.get(symbol) or ctx.market.snapshot(symbol)
     headlines = ctx.news_by_symbol.get(symbol, [])
@@ -348,9 +350,7 @@ def _analyze_one(
         fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
 
     if ctx.signal_adapter is not None:
-        price = (snap.quote.mid if snap.quote else None) or (
-            snap.technicals.get("last_close") if snap.technicals else None
-        )
+        price = snap.reference_price() if snap else None
         n_learned = _learn_from_prior(ctx.signal_adapter, prior_pending, symbol, price)
         if price:
             pending[symbol] = {
@@ -361,36 +361,18 @@ def _analyze_one(
         fund = ctx.signal_adapter.adapt_signal(fund)
         n_adapted = sum("adapted" in s.tags for s in (tech, fund))
 
-    bb.add_signal(tech)
-    bb.add_signal(fund)
-    env.set_domain(f"technical:{symbol}", {"symbol": symbol, "signal": tech.to_context()})
-    env.set_domain(f"fundamental:{symbol}", {"symbol": symbol, "signal": fund.to_context()})
-    bb.events.emit("domain.write", f"technical:{symbol}", {"direction": tech.direction.value})
-
     meshed = ctx.agents.meshing.mesh(
         symbol,
         [tech, fund],
         scanner_reason=cand.get("reason", ""),
         snapshot_context=snap.to_context() if snap else None,
     )
-    env.set_meshed(meshed)
-    bb.add_signal(meshed.to_signal())
-    ctx.journal.record("meshing.view", meshed.to_context())
-    bb.events.emit("domain.write", f"meshed:{symbol}", meshed.to_context())
 
-    _maybe_options(ctx, symbol, snap, meshed)
-    return n_learned, n_adapted, pending
-
-
-def _maybe_options(
-    ctx: CycleContext, symbol: str, snap: SymbolSnapshot, meshed
-) -> None:
-    bb = ctx.blackboard
+    options_idea = None
+    option_contract = None
     combined_dir = meshed.effective_direction
     combined_conv = meshed.effective_conviction
-    price = (snap.quote.mid if snap.quote else None) or (
-        snap.technicals.get("last_close") if snap.technicals else None
-    )
+    price = snap.reference_price() if snap else None
     if (
         combined_dir is not Direction.NEUTRAL
         and combined_conv >= 0.55
@@ -409,12 +391,52 @@ def _maybe_options(
             )
             idea = None
         if idea:
-            contract = idea.pop("_contract", None)
-            if contract is not None:
-                bb.option_contracts[contract.symbol] = contract
-            bb.options_ideas[symbol] = idea
-            bb.environment.set_domain(f"options:{symbol}", idea)
+            option_contract = idea.pop("_contract", None)
+            options_idea = idea
 
+    return SymbolAnalysisResult(
+        symbol=symbol,
+        tech=tech,
+        fund=fund,
+        meshed=meshed,
+        options_idea=options_idea,
+        option_contract=option_contract,
+        n_learned=n_learned,
+        n_adapted=n_adapted,
+        pending=pending,
+    )
+
+
+def _apply_analysis(ctx: CycleContext, result: SymbolAnalysisResult) -> None:
+    """Merge one candidate's analysis into the shared blackboard (main thread)."""
+    bb = ctx.blackboard
+    env = bb.environment
+    symbol = result.symbol
+
+    bb.add_signal(result.tech)
+    bb.add_signal(result.fund)
+    env.set_domain(
+        f"technical:{symbol}",
+        {"symbol": symbol, "signal": result.tech.to_context()},
+    )
+    env.set_domain(
+        f"fundamental:{symbol}",
+        {"symbol": symbol, "signal": result.fund.to_context()},
+    )
+    bb.events.emit(
+        "domain.write", f"technical:{symbol}", {"direction": result.tech.direction.value}
+    )
+
+    env.set_meshed(result.meshed)
+    bb.add_signal(result.meshed.to_signal())
+    ctx.journal.record("meshing.view", result.meshed.to_context())
+    bb.events.emit("domain.write", f"meshed:{symbol}", result.meshed.to_context())
+
+    if result.options_idea is not None:
+        if result.option_contract is not None:
+            bb.option_contracts[result.option_contract.symbol] = result.option_contract
+        bb.options_ideas[symbol] = result.options_idea
+        env.set_domain(f"options:{symbol}", result.options_idea)
 
 
 def _exit_review_candidates(bb) -> list[dict]:
@@ -448,14 +470,15 @@ def _materialize_proposals(
 ) -> list[TradeProposal]:
     proposals: list[TradeProposal] = []
     pos_by_symbol = {p.symbol: p for p in bb.positions}
-    # Re-entry guard: names we already hold or have a working order on.
     held_or_pending = {p.symbol for p in bb.positions if p.qty != 0}
     held_or_pending |= {o.symbol for o in bb.open_orders}
 
     for item in raw:
         symbol = item.get("symbol", "").upper()
         instrument = item.get("instrument", "equity")
-        side = Side(item.get("side", "buy"))
+        side = parse_side(item.get("side", "buy"))
+        if side is None:
+            continue
         target = float(item.get("target_notional", 0) or 0)
         if target <= 0 and side is Side.BUY:
             continue
@@ -490,14 +513,12 @@ def _materialize_proposals(
                     conviction=float(item.get("conviction", 0.5)),
                     rationale=item.get("rationale", ""),
                     est_price=price,
-                    limit_price=_marketable_limit(price, side),
+                    limit_price=marketable_limit(price, side),
                 )
             )
         else:
             snap = bb.snapshots.get(symbol)
-            price = (snap.quote.mid if snap and snap.quote else None) or (
-                snap.technicals.get("last_close") if snap and snap.technicals else None
-            )
+            price = snap.reference_price() if snap else None
             if not price or price <= 0:
                 continue
             pos = pos_by_symbol.get(symbol)
@@ -524,7 +545,7 @@ def _materialize_proposals(
                     conviction=float(item.get("conviction", 0.5)),
                     rationale=item.get("rationale", ""),
                     est_price=price,
-                    limit_price=_marketable_limit(price, side),
+                    limit_price=marketable_limit(price, side),
                     stop_price=stop_price,
                     take_profit_price=take_profit,
                 )
@@ -541,7 +562,8 @@ def _protective_levels(
     )
     levels = tech.key_levels if tech else {}
     snap = bb.snapshots.get(symbol)
-    atr = (snap.technicals.get("atr_14") if snap and snap.technicals else None) or 0.0
+    daily = snap.technicals.get(PRIMARY_TIMEFRAME, {}) if snap and snap.technicals else {}
+    atr = daily.get("atr_14") or 0.0
 
     stop = levels.get("stop")
     if not (isinstance(stop, (int, float)) and 0 < stop < price):
@@ -556,11 +578,6 @@ def _protective_levels(
         take_profit = price + 2 * (price - stop)
 
     return round(float(stop), 2), round(float(take_profit), 2)
-
-
-def _marketable_limit(price: float, side: Side) -> float:
-    pad = 1.01 if side is Side.BUY else 0.99
-    return round(price * pad, 2)
 
 
 def _pending_entry(signal: Signal) -> dict:

@@ -9,6 +9,10 @@ from datetime import datetime, timezone
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
 
 
+class CycleBusyError(RuntimeError):
+    """Raised when a cycle is already in progress."""
+
+
 @dataclass
 class LoopState:
     running: bool = False
@@ -28,6 +32,7 @@ class LoopRunner:
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
+        self._cycle_lock = threading.Lock()
 
     @property
     def broker(self):
@@ -55,18 +60,31 @@ class LoopRunner:
             self.state.running = False
 
     def run_once(self) -> TeamCycleResult:
-        result = self.team.run_cycle()
-        self.state.last_cycle_at = datetime.now(timezone.utc).isoformat()
-        self.state.last_result = result
-        self.state.cycles_completed += 1
-        self.state.last_error = result.halt_reason if result.halted else None
-        return result
+        if not self._cycle_lock.acquire(blocking=False):
+            raise CycleBusyError("A swarm cycle is already running")
+        try:
+            result = self.team.run_cycle()
+            with self._lock:
+                self.state.last_cycle_at = datetime.now(timezone.utc).isoformat()
+                self.state.last_result = result
+                self.state.cycles_completed += 1
+                self.state.last_error = result.halt_reason if result.halted else None
+            return result
+        except Exception as exc:
+            with self._lock:
+                self.state.last_error = str(exc)
+            raise
+        finally:
+            self._cycle_lock.release()
 
     def _run(self) -> None:
         while not self._stop.is_set():
             try:
                 if self.team.broker.is_market_open():
                     self.run_once()
+            except CycleBusyError:
+                pass
             except Exception as exc:  # noqa: BLE001 — background loop must survive
-                self.state.last_error = str(exc)
+                with self._lock:
+                    self.state.last_error = str(exc)
             self._stop.wait(self.cycle_seconds)

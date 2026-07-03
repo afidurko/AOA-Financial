@@ -35,6 +35,10 @@ from alpaca.trading.requests import (
 )
 
 from aoa.brokerage.base import Broker, BrokerError
+from aoa.brokerage.constants import (
+    VALID_ALPACA_BAR_ADJUSTMENTS,
+    VALID_ALPACA_DATA_FEEDS,
+)
 from aoa.brokerage.models import (
     Account,
     AssetClass,
@@ -59,9 +63,6 @@ _FEED_MAP = {
     "boats": DataFeed.BOATS,
     "otc": DataFeed.OTC,
 }
-
-_VALID_DATA_FEEDS = frozenset({"sip", "iex", "boats", "otc"})
-_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
 
 _ADJUSTMENT_MAP = {
     "raw": Adjustment.RAW,
@@ -94,6 +95,24 @@ def _f(value, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _settled_cash_from_alpaca(acct) -> float:
+    """Conservative settled cash for cash-account risk sizing.
+
+    Alpaca ``cash`` can include unsettled proceeds. Prefer the broker's
+    non-marginable / withdrawable figures when present.
+    """
+    cash = _f(acct.cash)
+    nmbp = getattr(acct, "non_marginable_buying_power", None)
+    if nmbp is not None:
+        settled = _f(nmbp)
+        return min(cash, settled) if cash > 0 else settled
+    withdrawable = getattr(acct, "cash_withdrawable", None)
+    if withdrawable is not None:
+        settled = _f(withdrawable)
+        return min(cash, settled) if cash > 0 else settled
+    return cash
 
 
 def _parse_timeframe(value: str) -> TimeFrame:
@@ -187,15 +206,15 @@ class AlpacaBroker(Broker):
         self.name = "alpaca-live" if live else "alpaca-paper"
         self._data_feed = data_feed.strip().lower()
         self._bar_adjustment = bar_adjustment.strip().lower() or "split"
-        if self._data_feed and self._data_feed not in _VALID_DATA_FEEDS:
+        if self._data_feed and self._data_feed not in VALID_ALPACA_DATA_FEEDS:
             raise BrokerError(
                 f"Invalid Alpaca data feed {self._data_feed!r}; "
-                f"expected one of {', '.join(sorted(_VALID_DATA_FEEDS))}."
+                f"expected one of {', '.join(sorted(VALID_ALPACA_DATA_FEEDS))}."
             )
-        if self._bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+        if self._bar_adjustment not in VALID_ALPACA_BAR_ADJUSTMENTS:
             raise BrokerError(
                 f"Invalid bar adjustment {self._bar_adjustment!r}; "
-                f"expected one of {', '.join(sorted(_VALID_BAR_ADJUSTMENTS))}."
+                f"expected one of {', '.join(sorted(VALID_ALPACA_BAR_ADJUSTMENTS))}."
             )
         paper = not live
         creds = {"api_key": key_id, "secret_key": secret_key}
@@ -250,9 +269,7 @@ class AlpacaBroker(Broker):
             equity=_f(acct.equity),
             cash=_f(acct.cash),
             buying_power=_f(acct.buying_power),
-            settled_cash=_f(
-                getattr(acct, "non_marginable_buying_power", None) or acct.cash
-            ),
+            settled_cash=_settled_cash_from_alpaca(acct),
             options_level=int(_f(acct.options_approved_level, 0)),
             daytrade_count=int(_f(acct.daytrade_count, 0)),
             pattern_day_trader=bool(acct.pattern_day_trader),

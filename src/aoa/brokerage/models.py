@@ -82,6 +82,17 @@ class Position:
     def is_long(self) -> bool:
         return self.qty > 0
 
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "asset_class": self.asset_class.value,
+            "qty": self.qty,
+            "avg_entry_price": self.avg_entry_price,
+            "market_value": self.market_value,
+            "unrealized_pl": self.unrealized_pl,
+            "current_price": self.current_price,
+        }
+
 
 @dataclass(frozen=True)
 class Account:
@@ -95,6 +106,15 @@ class Account:
     daytrade_count: int = 0
     pattern_day_trader: bool = False
     currency: str = "USD"
+
+    def to_context(self) -> dict:
+        return {
+            "equity": self.equity,
+            "cash": self.cash,
+            "buying_power": self.buying_power,
+            "settled_cash": self.settled_cash,
+            "options_level": self.options_level,
+        }
 
 
 @dataclass(frozen=True)

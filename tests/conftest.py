@@ -127,9 +127,6 @@ class FakeBroker(Broker):
             return list(self._open_orders)
         return []
 
-    def set_open_orders(self, orders: list[Order]) -> None:
-        self._open_orders = orders
-
     def cancel_order(self, order_id: str) -> None:
         pass
 
@@ -138,7 +135,21 @@ class FakeBroker(Broker):
 
 
 class FakeLLM:
-    """Routes ``structured()`` calls to canned responses by inspecting the schema."""
+    """Routes ``structured()`` calls by JSON-schema ``required`` keys."""
+
+    _MESHING = frozenset(
+        {"direction", "conviction", "horizon", "rationale", "corroboration"}
+    )
+    _TECHNICAL = frozenset({"direction", "conviction", "horizon", "rationale"})
+    _FUNDAMENTAL = frozenset({"direction", "conviction", "event_risk", "rationale"})
+    _OPTIONS = frozenset({"strategy", "rationale", "conviction"})
+    _PORTFOLIO = frozenset({"proposals", "portfolio_commentary"})
+    _RISK = frozenset({"vetoes", "assessment"})
+    _SCANNER = frozenset({"candidates"})
+    _TOM = frozenset({"direction", "strength", "timeframe", "rationale", "key_observations"})
+    _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
+    _ALAN = frozenset({"recommendations", "summary", "confidence"})
+    _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
 
     def __init__(self, *, candidates=None):
         self.candidates = candidates if candidates is not None else [
@@ -150,10 +161,10 @@ class FakeLLM:
         return "ok"
 
     def structured(self, system: str, prompt: str, schema: dict, **kwargs) -> dict:
-        props = set(schema.get("properties", {}).keys())
-        if "candidates" in props:
+        required = frozenset(schema.get("required") or ())
+        if required == self._SCANNER:
             return {"candidates": self.candidates}
-        if "corroboration" in props:  # meshing
+        if required == self._MESHING:
             return {
                 "direction": "bullish",
                 "conviction": 0.72,
@@ -163,22 +174,14 @@ class FakeLLM:
                 "conflicts": [],
                 "key_levels": {"support": 95.0, "resistance": 110.0},
             }
-        if "event_risk" in props:  # fundamental
+        if required == self._FUNDAMENTAL:
             return {
                 "direction": "bullish",
                 "conviction": 0.6,
                 "event_risk": "low",
                 "rationale": "stable large cap",
             }
-        if "key_observations" in props:  # tom — trends (before technical; shares horizon)
-            return {
-                "direction": "up",
-                "strength": 0.72,
-                "timeframe": "swing",
-                "rationale": "rising MA stack with higher lows",
-                "key_observations": ["above 50DMA", "RSI constructive"],
-            }
-        if "support" in props or "horizon" in props:  # technical
+        if required == self._TECHNICAL:
             return {
                 "direction": "bullish",
                 "conviction": 0.75,
@@ -188,7 +191,7 @@ class FakeLLM:
                 "resistance": 110.0,
                 "stop_suggestion": 92.0,
             }
-        if "strategy" in props and "max_premium_per_contract" in props:  # options
+        if required == self._OPTIONS:
             return {
                 "strategy": "long_call",
                 "contract_symbol": "AAPL250117C00100000",
@@ -197,7 +200,7 @@ class FakeLLM:
                 "rationale": "defined-risk bullish expression",
                 "conviction": 0.7,
             }
-        if "proposals" in props:  # portfolio
+        if required == self._PORTFOLIO:
             return {
                 "proposals": [
                     {
@@ -212,42 +215,63 @@ class FakeLLM:
                 ],
                 "portfolio_commentary": "one focused long",
             }
-        if "vetoes" in props:  # risk
+        if required == self._RISK:
             return {"vetoes": [], "assessment": "prudent"}
-        if "validated" in props:  # julie — algorithms
+        if required == self._TOM:
+            return {
+                "direction": "up",
+                "strength": 0.72,
+                "timeframe": "swing",
+                "rationale": "Higher highs with rising 50DMA support",
+                "key_observations": ["volume confirmation", "pullback held"],
+            }
+        if required == self._JULIE:
             return {
                 "validated": True,
                 "adjusted_strength": 0.68,
-                "method_notes": "MACD histogram positive; RSI not overbought",
-                "signals": ["sma_cross_bullish", "rsi_midrange"],
+                "method_notes": "RSI regime supports Tom's uptrend read",
+                "signals": ["sma_cross_bullish", "rsi_constructive"],
             }
-        if "recommendations" in props and "confidence" in props:  # alan
+        if required == self._ALAN:
             return {
                 "recommendations": [
                     {
                         "symbol": "AAPL",
                         "action": "consider_long",
                         "conviction": 0.7,
-                        "rationale": "validated uptrend",
+                        "rationale": "Tom and Julie aligned on bullish swing setup",
                     }
                 ],
-                "summary": "One high-quality long setup",
-                "confidence": 0.65,
+                "summary": "One high-quality corroborated long candidate",
+                "confidence": 0.72,
             }
-        if "team_status" in props:  # aaron — CEO
+        if required == self._AARON:
             return {
                 "overall_ok": True,
-                "summary": "Team completed all deliverables.",
+                "summary": "Team completed health, code audit, and decision brief.",
                 "user_notifications": [],
                 "team_status": [
-                    {"name": "Tom", "role": "Trend Analyst", "completed": True, "notes": "ok"},
-                    {"name": "Julie", "role": "Algorithm Specialist", "completed": True, "notes": "ok"},
-                    {"name": "Bob", "role": "Systems Health", "completed": True, "notes": "ok"},
-                    {"name": "Alan", "role": "Decision Aggregator", "completed": True, "notes": "ok"},
-                    {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
+                    {
+                        "name": "Bob",
+                        "role": "Systems Health & Code Integrity",
+                        "completed": True,
+                        "notes": "Code quality checks passed.",
+                    },
+                    {
+                        "name": "Julie",
+                        "role": "Algorithm Specialist & Code Clarity",
+                        "completed": True,
+                        "notes": "Validated Tom's read.",
+                    },
+                    {
+                        "name": "Alan",
+                        "role": "Decision Aggregator & Code Oversight",
+                        "completed": True,
+                        "notes": "Decision brief ready.",
+                    },
                 ],
             }
-        return {}
+        raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
 
 
 @pytest.fixture

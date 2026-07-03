@@ -100,6 +100,9 @@ class TeamOrchestrator:
         self.trading.market.clear_cache()
         snapshots = self.trading.market.snapshots(symbols)
 
+        code_quality = self.bob.audit_codebase()
+        self.journal.record("team.bob.code_quality", code_quality.to_context())
+
         trends = self.tom.analyze_trends(snapshots)
         self.journal.record(
             "team.tom.trends",
@@ -110,20 +113,26 @@ class TeamOrchestrator:
         for trend in trends:
             snap = snapshots.get(trend.symbol)
             if snap:
-                algorithms.append(self.julie.refine(trend, snap))
+                algorithms.append(
+                    self.julie.refine(trend, snap, code_quality=code_quality)
+                )
         self.journal.record(
             "team.julie.algorithms",
             {"reports": [a.to_context() for a in algorithms]},
         )
 
-        decision = self.alan.aggregate(trends, algorithms, scanner_context=scanner_context)
+        decision = self.alan.aggregate(
+            trends,
+            algorithms,
+            scanner_context=scanner_context,
+            code_quality=code_quality,
+        )
         self.journal.record("team.alan.decision", decision.to_context())
         return trends, algorithms, decision
 
     def run_cycle(self, *, max_candidates: int = 6) -> TeamCycleResult:
         result = TeamCycleResult()
 
-        # 1) Bob — systems health gate; Aaron may fix recoverable issues.
         health = self.run_health_check()
         remediation = self.aaron.attempt_health_recovery(
             health,
@@ -150,14 +159,12 @@ class TeamOrchestrator:
             self.journal.record("team.aaron.review", result.ceo.to_context())
             return result
 
-        # 2) Trading cycle with team-augmented analysis.
         cycle, team_remediation = self._run_team_trading_cycle(max_candidates=max_candidates)
         result.cycle = cycle
         result.trends = getattr(cycle, "_team_trends", [])
         result.algorithms = getattr(cycle, "_team_algorithms", [])
         result.decision = getattr(cycle, "_team_decision", None)
 
-        # 3) Aaron — CEO oversight, team fixes, iPhone alerts when needed.
         result.ceo = self.aaron.review(
             health=health,
             tom_done=len(result.trends) > 0 or not cycle.blackboard.universe,
@@ -193,6 +200,10 @@ class TeamOrchestrator:
         candidate_symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
         candidate_snaps = {s: bb.snapshots[s] for s in candidate_symbols if s in bb.snapshots}
 
+        code_quality = self.bob.audit_codebase()
+        self.journal.record("team.bob.code_quality", code_quality.to_context())
+        self.journal.record("team.julie.code_audit", code_quality.to_context())
+
         trends = self.tom.analyze_trends(candidate_snaps) if candidate_snaps else []
         if candidate_snaps and not trends:
             team_remediation.append(
@@ -211,13 +222,17 @@ class TeamOrchestrator:
         for trend in trends:
             snap = candidate_snaps.get(trend.symbol)
             if snap:
-                algorithms.append(self.julie.refine(trend, snap))
+                algorithms.append(
+                    self.julie.refine(trend, snap, code_quality=code_quality)
+                )
         if trends and len(algorithms) < len(trends):
             team_remediation.append(
                 self.remediator.retry_team_member(
                     "Julie",
                     lambda: [
-                        self.julie.refine(t, candidate_snaps[t.symbol])
+                        self.julie.refine(
+                            t, candidate_snaps[t.symbol], code_quality=code_quality
+                        )
                         for t in trends
                         if t.symbol in candidate_snaps
                     ],
@@ -225,7 +240,9 @@ class TeamOrchestrator:
                 )
             )
             algorithms = [
-                self.julie.refine(t, candidate_snaps[t.symbol])
+                self.julie.refine(
+                    t, candidate_snaps[t.symbol], code_quality=code_quality
+                )
                 for t in trends
                 if t.symbol in candidate_snaps
             ]
@@ -235,19 +252,28 @@ class TeamOrchestrator:
         )
 
         decision = self.alan.aggregate(
-            trends, algorithms, scanner_context=bb.candidates
+            trends,
+            algorithms,
+            scanner_context=bb.candidates,
+            code_quality=code_quality,
         )
         if trends and not decision.recommendations:
             team_remediation.append(
                 self.remediator.retry_team_member(
                     "Alan",
                     lambda: self.alan.aggregate(
-                        trends, algorithms, scanner_context=bb.candidates
+                        trends,
+                        algorithms,
+                        scanner_context=bb.candidates,
+                        code_quality=code_quality,
                     ),
                 )
             )
             decision = self.alan.aggregate(
-                trends, algorithms, scanner_context=bb.candidates
+                trends,
+                algorithms,
+                scanner_context=bb.candidates,
+                code_quality=code_quality,
             )
         self.journal.record("team.alan.decision", decision.to_context())
 

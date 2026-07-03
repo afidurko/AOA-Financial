@@ -84,15 +84,17 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 ### The agents
 
-The swarm is coordinated by a **five-member agent team** before trades are proposed:
+The swarm is coordinated by a **five-member agent team** before trades are proposed.
+**Bob**, **Julie**, and **Alan** also own code-health duties (shared helpers, lint,
+import integrity, and confidence adjustments when quality is degraded):
 
 | Member | Role |
 |--------|------|
 | **Tom** | Trend analyst — reads price action and characterizes prevailing trends. |
-| **Julie** | Algorithm specialist — validates and refines Tom's reads with quantitative methods. |
-| **Bob** | Systems health — checks config, broker connectivity, and code integrity (deterministic). |
-| **Alan** | Decision aggregator — synthesizes Tom and Julie into a focused decision brief. |
-| **Aaron** | CEO — fixes team issues when possible; pushes iPhone alerts (never email) when he can't fix or needs your verification. |
+| **Julie** | Algorithm specialist & code clarity — validates Tom's reads; reviews Bob's code audit. |
+| **Bob** | Systems health & code integrity — config, broker, imports, deterministic code audit. |
+| **Alan** | Decision aggregator & code oversight — synthesizes the team brief; lowers confidence when code quality fails. |
+| **Aaron** | CEO — fixes recoverable team issues; pushes iPhone alerts (never email) when he can't fix or needs your verification. |
 
 Behind them, specialized trading agents still handle scanning, fundamentals, options,
 portfolio sizing, risk, and execution:

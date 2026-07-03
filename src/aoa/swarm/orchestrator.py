@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 
 from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.base import Broker
-from aoa.brokerage.models import Side
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
 from aoa.data.news import NewsFeed, NullNewsFeed
@@ -122,9 +121,3 @@ class Orchestrator:
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,
         )
-
-
-def _marketable_limit(price: float, side: Side) -> float:
-    """A protective limit ~1% through the mid to improve fill odds without chasing."""
-    pad = 1.01 if side is Side.BUY else 0.99
-    return round(price * pad, 2)

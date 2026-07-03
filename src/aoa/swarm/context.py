@@ -40,6 +40,7 @@ class CycleContext:
     execution: ExecutionReport | None = None
     max_candidates: int = 6
     news_by_symbol: dict[str, list] = field(default_factory=dict)
+    portfolio_output: dict = field(default_factory=dict)
 
     # Daily-loss tracking (owned by the orchestrator, read by risk stage).
     equity_day: date | None = None

@@ -134,3 +134,10 @@ def clamp_conviction(value: object, default: float = 0.0) -> float:
         return max(0.0, min(1.0, float(value)))
     except (TypeError, ValueError):
         return default
+
+
+def parse_side(value: object) -> Side | None:
+    try:
+        return Side(str(value))
+    except (ValueError, TypeError):
+        return None
