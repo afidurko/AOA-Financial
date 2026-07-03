@@ -53,6 +53,9 @@ class FakeBroker(Broker):
     def get_quote(self, symbol: str) -> Quote:
         return Quote(symbol=symbol, bid=99.5, ask=100.5)
 
+    def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        return {s.upper(): self.get_quote(s.upper()) for s in symbols if s}
+
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
         # Synthetic gently-rising series with enough history for all indicators.
         base = datetime(2024, 1, 1, tzinfo=timezone.utc)

@@ -26,17 +26,19 @@ _SCHEMA = {
 class TechnicalAgent(Agent):
     name = "technical"
     system_prompt = (
-        "You are a technical analyst. Given a symbol's price action and indicators "
-        "(SMA/EMA stack, RSI, MACD, Bollinger bands, ATR, realized volatility, "
-        "recent returns), produce a single directional read with a calibrated "
-        "conviction in [0,1]. Be honest: most setups are neutral. Reserve high "
-        "conviction (>0.7) for genuinely clean, confluent setups. Identify nearby "
+        "You are a technical analyst. Given a symbol's multi-timeframe price "
+        "action and indicators (1m/3m/5m/15m/1h/daily/yearly bars with "
+        "SMA/EMA stack, RSI, MACD, Bollinger bands, ATR, volume, and returns), "
+        "produce a single directional read with a calibrated conviction in [0,1]. "
+        "Weigh higher timeframes for trend and lower timeframes for entry timing. "
+        "Be honest: most setups are neutral. Reserve high conviction (>0.7) for "
+        "genuinely clean, confluent setups across timeframes. Identify nearby "
         "support/resistance and a sensible stop based on ATR. Do not invent data "
         "that is not present."
     )
 
     def analyze(self, snap: SymbolSnapshot) -> Signal:
-        if snap.error or not snap.technicals:
+        if snap.error or not snap.has_technicals:
             return Signal(
                 symbol=snap.symbol,
                 source=self.name,
@@ -47,7 +49,7 @@ class TechnicalAgent(Agent):
         prompt = (
             f"Symbol: {snap.symbol}\n"
             f"Quote: {json.dumps(snap.to_context()['quote'])}\n"
-            f"Technicals: {json.dumps(snap.technicals, default=str)}\n\n"
+            f"Multi-timeframe technicals: {json.dumps(snap.technicals, default=str)}\n\n"
             "Return your technical read as JSON."
         )
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)

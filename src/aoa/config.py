@@ -11,6 +11,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
+
 
 def _load_dotenv(path: str | os.PathLike[str] = ".env") -> None:
     """Populate ``os.environ`` from a ``.env`` file if present.
@@ -76,6 +78,14 @@ class Config:
     universe: tuple[str, ...] = ()
     cycle_seconds: int = 900
 
+    # News (Alpaca market-data feed)
+    news_limit: int = 5
+    news_lookback_hours: int = 72
+
+    # Multi-timeframe historical bars (Alpaca bar API)
+    bar_timeframes: tuple[TimeframeSpec, ...] = DEFAULT_TIMEFRAMES
+    bar_feed: str = "iex"
+
     # Execution
     dry_run: bool = False
     parallel_workers: int = 4
@@ -119,6 +129,10 @@ class Config:
             alpaca_live=_bool("ALPACA_LIVE", False),
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
+            news_limit=_int("AOA_NEWS_LIMIT", 5),
+            news_lookback_hours=_int("AOA_NEWS_LOOKBACK_HOURS", 72),
+            bar_timeframes=parse_timeframes(os.environ.get("AOA_BAR_TIMEFRAMES", "")),
+            bar_feed=os.environ.get("AOA_BAR_FEED", "iex").strip().lower() or "iex",
             dry_run=_bool("AOA_DRY_RUN", False),
             parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
             journal_path=os.environ.get("AOA_JOURNAL_PATH", "journal/aoa.jsonl"),
@@ -150,4 +164,6 @@ class Config:
             problems.append("AOA_MAX_POSITION_PCT must be in (0, 1].")
         if not 0 <= r.min_cash_buffer_pct < 1:
             problems.append("AOA_MIN_CASH_BUFFER_PCT must be in [0, 1).")
+        if self.bar_feed not in {"iex", "sip", "otc", "boats"}:
+            problems.append("AOA_BAR_FEED must be one of: iex, sip, otc, boats.")
         return problems

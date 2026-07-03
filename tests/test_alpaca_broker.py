@@ -46,7 +46,7 @@ def test_verify_stock_bars_success():
     assert bar.timestamp == datetime(2024, 1, 2, tzinfo=timezone.utc)
     broker._stock_data.get_stock_bars.assert_called_once()
     request = broker._stock_data.get_stock_bars.call_args.args[0]
-    assert request.symbol_or_symbols == "AAPL"
+    assert request.symbol_or_symbols == ["AAPL"]
     assert request.limit == 1
 
 

@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import TypeVar
 
 from alpaca.common.exceptions import APIError
-from alpaca.data.enums import Adjustment, MostActivesBy, OptionsFeed
+from alpaca.data.enums import Adjustment, DataFeed, MostActivesBy, OptionsFeed
 from alpaca.data.historical import OptionHistoricalDataClient, StockHistoricalDataClient
 from alpaca.data.historical.screener import ScreenerClient
 from alpaca.data.requests import (
@@ -46,6 +46,12 @@ from aoa.brokerage.models import (
 T = TypeVar("T")
 
 _TIMEFRAME_RE = re.compile(r"^(\d+)(Min|Hour|Day|Week|Month)$")
+_FEED_MAP = {
+    "iex": DataFeed.IEX,
+    "sip": DataFeed.SIP,
+    "otc": DataFeed.OTC,
+    "boats": DataFeed.BOATS,
+}
 
 
 def _parse_ts(value: str | datetime | None) -> datetime | None:
@@ -88,11 +94,26 @@ def _parse_timeframe(value: str) -> TimeFrame:
     return TimeFrame(amount, unit_map[unit_key])
 
 
+def _data_feed(name: str) -> DataFeed:
+    return _FEED_MAP.get(name.lower(), DataFeed.IEX)
+
+
 def _sdk_error_message(exc: APIError) -> str:
     status = exc.status_code
     if status is not None:
         return f"Alpaca API {status}: {exc}"
     return f"Alpaca API error: {exc}"
+
+
+def _bar_from_sdk(row) -> Bar:
+    return Bar(
+        timestamp=_ensure_utc(row.timestamp),
+        open=_f(row.open),
+        high=_f(row.high),
+        low=_f(row.low),
+        close=_f(row.close),
+        volume=_f(row.volume),
+    )
 
 
 class AlpacaBroker(Broker):
@@ -102,12 +123,16 @@ class AlpacaBroker(Broker):
         secret_key: str,
         *,
         live: bool = False,
+        bar_feed: str = "iex",
         timeout: float = 20.0,
     ) -> None:
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required.")
+        if bar_feed not in _FEED_MAP:
+            raise BrokerError(f"Unsupported Alpaca bar feed: {bar_feed}")
         del timeout  # alpaca-py manages HTTP timeouts internally
         self.is_live = live
+        self.bar_feed = bar_feed
         self.name = "alpaca-live" if live else "alpaca-paper"
         paper = not live
         creds = {"api_key": key_id, "secret_key": secret_key}
@@ -177,43 +202,60 @@ class AlpacaBroker(Broker):
 
     # --- market data ---------------------------------------------------------
     def get_quote(self, symbol: str) -> Quote:
+        return self.get_quotes_many([symbol]).get(symbol.upper(), Quote(symbol=symbol, bid=0, ask=0))
+
+    def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        normalized = [s.upper() for s in symbols if s]
+        if not normalized:
+            return {}
         quotes = self._sdk_call(
             self._stock_data.get_stock_latest_quote,
-            StockLatestQuoteRequest(symbol_or_symbols=symbol),
+            StockLatestQuoteRequest(
+                symbol_or_symbols=normalized,
+                feed=_data_feed(self.bar_feed),
+            ),
         )
-        q = quotes[symbol]
-        return Quote(
-            symbol=symbol,
-            bid=_f(q.bid_price),
-            ask=_f(q.ask_price),
-            bid_size=_f(q.bid_size),
-            ask_size=_f(q.ask_size),
-            timestamp=_ensure_utc(q.timestamp),
-        )
+        out: dict[str, Quote] = {}
+        for sym in normalized:
+            q = quotes[sym]
+            out[sym] = Quote(
+                symbol=sym,
+                bid=_f(q.bid_price),
+                ask=_f(q.ask_price),
+                bid_size=_f(q.bid_size),
+                ask_size=_f(q.ask_size),
+                timestamp=_ensure_utc(q.timestamp),
+            )
+        return out
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
+        return self.get_bars_many([symbol], timeframe, limit).get(symbol.upper(), [])
+
+    def get_bars_many(
+        self,
+        symbols: list[str],
+        timeframe: str = "1Day",
+        limit: int = 120,
+        *,
+        feed: str | None = None,
+    ) -> dict[str, list[Bar]]:
+        normalized = [s.upper() for s in symbols if s]
+        if not normalized:
+            return {}
         bar_set = self._sdk_call(
             self._stock_data.get_stock_bars,
             StockBarsRequest(
-                symbol_or_symbols=symbol,
+                symbol_or_symbols=normalized,
                 timeframe=_parse_timeframe(timeframe),
                 limit=limit,
                 adjustment=Adjustment.SPLIT,
+                feed=_data_feed(feed or self.bar_feed),
             ),
         )
-        bars: list[Bar] = []
-        for row in bar_set[symbol]:
-            bars.append(
-                Bar(
-                    timestamp=_ensure_utc(row.timestamp),
-                    open=_f(row.open),
-                    high=_f(row.high),
-                    low=_f(row.low),
-                    close=_f(row.close),
-                    volume=_f(row.volume),
-                )
-            )
-        return bars
+        out: dict[str, list[Bar]] = {}
+        for sym in normalized:
+            out[sym] = [_bar_from_sdk(row) for row in bar_set[sym]]
+        return out
 
     def verify_stock_bars(self, symbol: str = "AAPL", limit: int = 1) -> Bar:
         """Probe the authenticated stocks bars API.

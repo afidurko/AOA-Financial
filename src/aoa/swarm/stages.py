@@ -22,6 +22,7 @@ class IntakeStage(PipelineStage):
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
         ctx.market.clear_cache()
+        ctx.news.clear_cache()
 
         bb.account = ctx.broker.get_account()
         bb.positions = ctx.broker.get_positions()
@@ -96,7 +97,7 @@ class AnalyzeStage(PipelineStage):
         bb = ctx.blackboard
         symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
         if ctx.config.news_enabled and symbols:
-            ctx.news_by_symbol = ctx.news.headlines(symbols, limit=5)
+            ctx.news_by_symbol = ctx.news.headlines(symbols, limit=ctx.config.news_limit)
             ctx.journal.record(
                 "news.fetched",
                 {

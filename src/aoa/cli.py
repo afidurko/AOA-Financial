@@ -25,7 +25,12 @@ from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
 
 def build_broker(cfg: Config) -> Broker:
-    return AlpacaBroker(cfg.alpaca_key_id, cfg.alpaca_secret_key, live=cfg.alpaca_live)
+    return AlpacaBroker(
+        cfg.alpaca_key_id,
+        cfg.alpaca_secret_key,
+        live=cfg.alpaca_live,
+        bar_feed=cfg.bar_feed,
+    )
 
 
 def build_llm(cfg: Config) -> LLMClient:
@@ -35,7 +40,11 @@ def build_llm(cfg: Config) -> LLMClient:
 def build_news(cfg: Config) -> NewsFeed:
     if not cfg.news_enabled or not cfg.has_brokerage_creds:
         return NullNewsFeed()
-    return AlpacaNewsFeed(cfg.alpaca_key_id, cfg.alpaca_secret_key)
+    return AlpacaNewsFeed(
+        cfg.alpaca_key_id,
+        cfg.alpaca_secret_key,
+        lookback_hours=cfg.news_lookback_hours,
+    )
 
 
 def build_orchestrator(cfg: Config) -> Orchestrator:
@@ -87,14 +96,17 @@ def _print_cycle(result: CycleResult) -> None:
 
 # --------------------------------------------------------------------- commands
 def cmd_doctor(cfg: Config) -> int:
-    print(f"AOA Financial — trading mode: {cfg.trading_mode.upper()}")
+    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
     problems = cfg.validate()
     if problems:
         print("Configuration problems:")
         for p in problems:
             print(f"  ✗ {p}")
         return 1
+    tf_keys = ", ".join(t.key for t in cfg.bar_timeframes)
     print("  ✓ Configuration looks complete.")
+    print(f"  ✓ Bar timeframes: {tf_keys}")
+    print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()

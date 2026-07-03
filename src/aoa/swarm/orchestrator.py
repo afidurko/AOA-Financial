@@ -44,7 +44,11 @@ class Orchestrator:
         self.llm = llm
         self.journal = journal or Journal(config.journal_path)
         self.news = news if news is not None else NullNewsFeed()
-        self.market = MarketDataService(broker)
+        self.market = MarketDataService(
+            broker,
+            timeframes=config.bar_timeframes,
+            bar_feed=config.bar_feed,
+        )
         self.agents = AgentTeam.from_llm(llm, broker, risk=config.risk)
         self.executor = Executor(broker, self.journal, dry_run=config.dry_run)
         self.pipeline = pipeline or Pipeline(stages=default_stages())

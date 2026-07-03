@@ -64,6 +64,7 @@ def test_atr_positive():
 def test_technical_snapshot_keys():
     bars = _bars([float(i) for i in range(1, 60)])
     snap = indicators.technical_snapshot(bars)
-    for key in ("last_close", "sma_20", "rsi_14", "macd", "bollinger", "atr_14"):
+    for key in ("last_close", "sma_20", "rsi_14", "macd", "bollinger", "atr_14", "volume"):
         assert key in snap
     assert snap["n_bars"] == 59
+    assert snap["volume"]["latest_volume"] == 1000
