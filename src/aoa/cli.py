@@ -22,6 +22,7 @@ from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
+from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
 
 
 def build_broker(cfg: Config) -> Broker:
@@ -51,6 +52,16 @@ def build_news(cfg: Config) -> NewsFeed:
 
 def build_orchestrator(cfg: Config) -> Orchestrator:
     return Orchestrator(
+        cfg,
+        build_broker(cfg),
+        build_llm(cfg),
+        Journal(cfg.journal_path),
+        build_news(cfg),
+    )
+
+
+def build_team(cfg: Config) -> TeamOrchestrator:
+    return TeamOrchestrator(
         cfg,
         build_broker(cfg),
         build_llm(cfg),
@@ -105,7 +116,67 @@ def _print_cycle(result: CycleResult) -> None:
         print(f"Note: {note}")
 
 
+def _print_team(result: TeamCycleResult) -> None:
+    if result.health:
+        print("\n=== Bob — systems health ===")
+        print(f"  {result.health.summary}")
+        for check in result.health.checks:
+            print(f"  [{check.status.value.upper():<8}] {check.name}: {check.detail}")
+    if result.trends:
+        print("\n=== Tom — trend analysis ===")
+        for t in result.trends:
+            print(
+                f"  {t.symbol:<6} {t.direction.value:<8} strength={t.strength:.2f}  {t.rationale[:60]}"
+            )
+    if result.algorithms:
+        print("\n=== Julie — algorithm validation ===")
+        for a in result.algorithms:
+            flag = "validated" if a.validated else "unvalidated"
+            print(f"  {a.symbol:<6} [{flag}] strength={a.adjusted_strength:.2f}  {a.method_notes[:50]}")
+    if result.decision:
+        print("\n=== Alan — decision brief ===")
+        print(f"  {result.decision.summary} (confidence={result.decision.confidence:.2f})")
+        for rec in result.decision.recommendations:
+            print(
+                f"  • {rec.get('symbol', '?'):<6} {rec.get('action', '?'):<18} "
+                f"conv={rec.get('conviction', 0):.2f}  {rec.get('rationale', '')[:50]}"
+            )
+    if result.remediation and result.remediation.actions:
+        print("\n=== Aaron — fixes applied ===")
+        for fix in result.remediation.actions:
+            flag = "fixed" if fix.success else "failed"
+            print(f"  [{flag}] {fix.target}: {fix.action} — {fix.detail}")
+    if result.ceo:
+        print("\n=== Aaron — CEO review ===")
+        print(f"  {result.ceo.summary}")
+        for m in result.ceo.team_status:
+            flag = "✓" if m.completed else "✗"
+            print(f"  {flag} {m.name} ({m.role}): {m.notes or 'ok'}")
+        if result.ceo.fixes_applied:
+            print("\n  Fixes applied this cycle:")
+            for fix in result.ceo.fixes_applied:
+                print(f"    • {fix.get('target')}: {fix.get('detail')}")
+        if result.ceo.user_notifications:
+            print("\n  ⚠ Escalated to your iPhone:")
+            for n in result.ceo.user_notifications:
+                print(f"    • {n}")
+        if result.ceo.iphone_notifications_sent:
+            print("\n  📱 iPhone delivery log:")
+            for n in result.ceo.iphone_notifications_sent:
+                print(f"    • {n}")
+    if result.halted:
+        print(f"\nCycle halted: {result.halt_reason}")
+    elif result.cycle:
+        _print_cycle(result.cycle)
+
+
 # --------------------------------------------------------------------- commands
+def _cycle_exit_code(result: CycleResult) -> int:
+    if result.execution and result.execution.errors:
+        return 1
+    return 0
+
+
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
     _print_environment(cfg)
@@ -171,39 +242,98 @@ def cmd_status(cfg: Config) -> int:
     return 0
 
 
-def _cycle_exit_code(result: CycleResult) -> int:
-    if result.execution and result.execution.errors:
-        return 1
-    return 0
-
-
 def cmd_run(cfg: Config) -> int:
-    orch = build_orchestrator(cfg)
-    if not orch.broker.is_market_open():
+    team = build_team(cfg)
+    if not team.broker.is_market_open():
         print("Market is closed. Running analysis anyway (orders may queue/reject).")
-    result = orch.run_cycle()
-    _print_cycle(result)
-    return _cycle_exit_code(result)
+    result = team.run_cycle()
+    _print_team(result)
+    if result.halted:
+        return 1
+    return _cycle_exit_code(result.cycle) if result.cycle else 0
 
 
 def cmd_loop(cfg: Config) -> int:
-    orch = build_orchestrator(cfg)
+    team = build_team(cfg)
     _print_environment(cfg)
     print(
-        f"Starting continuous loop: cadence={cfg.cycle_seconds}s. Ctrl-C to stop."
+        f"Starting continuous loop (team mode): cadence={cfg.cycle_seconds}s. Ctrl-C to stop."
     )
     try:
         while True:
-            if orch.broker.is_market_open():
-                result = orch.run_cycle()
-                _print_cycle(result)
-                if _cycle_exit_code(result):
+            if team.broker.is_market_open():
+                result = team.run_cycle()
+                _print_team(result)
+                if result.halted:
+                    print("Cycle halted — see CEO review above.", file=sys.stderr)
+                elif result.cycle and _cycle_exit_code(result.cycle):
                     print("Cycle finished with execution errors.", file=sys.stderr)
             else:
                 print("Market closed — sleeping.")
             time.sleep(cfg.cycle_seconds)
     except KeyboardInterrupt:
         print("\nStopped.")
+    return 0
+
+
+def cmd_team_health(cfg: Config) -> int:
+    team = build_team(cfg)
+    health = team.run_health_check()
+    _print_team(TeamCycleResult(health=health))
+    return 0 if health.can_proceed else 1
+
+
+def cmd_team_brief(cfg: Config) -> int:
+    team = build_team(cfg)
+    health = team.run_health_check()
+    remediation = team.aaron.attempt_health_recovery(
+        health,
+        market_cache_clear=team.trading.market.clear_cache,
+    )
+    if remediation.health:
+        health = remediation.health
+    if not health.can_proceed:
+        ceo = team.aaron.review(
+            health=health,
+            tom_done=False,
+            julie_done=False,
+            alan_done=False,
+            decision=None,
+            halted=True,
+            halt_reason=health.summary,
+            remediation=remediation,
+        )
+        _print_team(
+            TeamCycleResult(
+                health=health,
+                ceo=ceo,
+                remediation=remediation,
+                halted=True,
+                halt_reason=health.summary,
+            )
+        )
+        return 1
+    trends, algorithms, decision = team.run_team_brief()
+    ceo = team.aaron.review(
+        health=health,
+        tom_done=bool(trends),
+        julie_done=bool(algorithms),
+        alan_done=True,
+        decision=decision,
+        tom_count=len(trends),
+        julie_count=len(algorithms),
+        remediation=remediation,
+    )
+    _print_team(
+        TeamCycleResult(
+            health=health,
+            trends=trends,
+            algorithms=algorithms,
+            decision=decision,
+            ceo=ceo,
+            remediation=remediation,
+        )
+    )
     return 0
 
 
@@ -247,8 +377,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Validate config only; skip live broker and LLM checks.",
     )
     sub.add_parser("status", help="Show account, positions, and market clock.")
-    sub.add_parser("run", help="Run a single swarm cycle.")
-    sub.add_parser("loop", help="Run cycles continuously.")
+    sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
+    sub.add_parser("loop", help="Run team cycles continuously.")
+    team = sub.add_parser("team", help="Team-specific commands.")
+    team_sub = team.add_subparsers(dest="team_command", required=True)
+    team_sub.add_parser("health", help="Run Bob's systems health check.")
+    team_sub.add_parser("brief", help="Run Tom→Julie→Alan analysis without trading.")
     sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
@@ -265,6 +399,11 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(cfg)
         if args.command == "loop":
             return cmd_loop(cfg)
+        if args.command == "team":
+            if args.team_command == "health":
+                return cmd_team_health(cfg)
+            if args.team_command == "brief":
+                return cmd_team_brief(cfg)
         if args.command == "serve":
             return cmd_serve(cfg)
         if args.command == "journal":

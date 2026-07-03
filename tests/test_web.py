@@ -23,7 +23,7 @@ def client(fake_broker, fake_llm, monkeypatch, tmp_path):
         dry_run=True,
         news_enabled=False,
         web_auto_loop=False,
-        journal_path=tmp_path / "j.jsonl",
+        journal_path=str(tmp_path / "j.jsonl"),
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
     )
 
@@ -69,6 +69,15 @@ def test_api_run_cycle(client):
     assert r.status_code == 200
     data = r.json()
     assert "proposals" in data
+    assert data.get("health") is not None
+    assert data["health"]["can_proceed"] is True
+    assert "ceo" in data
+
+
+def test_api_config_team_mode(client):
+    r = client.get("/api/config")
+    assert r.status_code == 200
+    assert r.json()["team_mode"] is True
 
 
 def test_api_journal(client):
