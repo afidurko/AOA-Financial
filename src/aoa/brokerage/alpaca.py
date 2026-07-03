@@ -25,7 +25,6 @@ from aoa.brokerage.models import (
     Account,
     AssetClass,
     Bar,
-    NewsItem,
     OptionContract,
     OptionType,
     Order,
@@ -254,48 +253,6 @@ class AlpacaBroker(Broker):
             return []
         rows = d.get("most_actives", []) if isinstance(d, dict) else []
         return [r.get("symbol", "") for r in rows if r.get("symbol")]
-
-    def get_news(
-        self,
-        symbols: list[str],
-        *,
-        limit: int = 50,
-        lookback_hours: int = 72,
-    ) -> list[NewsItem]:
-        if not symbols:
-            return []
-        end = datetime.now(timezone.utc)
-        start = end - timedelta(hours=lookback_hours)
-        params = {
-            "symbols": ",".join(s.upper() for s in symbols),
-            "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "limit": max(1, min(limit, 50)),
-            "sort": "DESC",
-            "exclude_contentless": "true",
-        }
-        try:
-            d = self._data("GET", "/v1beta1/news", params=params)
-        except BrokerError:
-            return []
-        rows = d.get("news", []) if isinstance(d, dict) else []
-        items: list[NewsItem] = []
-        for r in rows:
-            headline = r.get("headline", "").strip()
-            if not headline:
-                continue
-            sym_list = tuple(s.upper() for s in r.get("symbols", []) if s)
-            items.append(
-                NewsItem(
-                    headline=headline,
-                    summary=(r.get("summary") or "").strip(),
-                    source=r.get("source", "unknown"),
-                    symbols=sym_list,
-                    published_at=_parse_ts(r.get("created_at") or r.get("updated_at")),
-                    url=r.get("url") or "",
-                )
-            )
-        return items
 
     # --- options -------------------------------------------------------------
     def get_option_chain(

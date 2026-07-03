@@ -11,7 +11,7 @@ from aoa.data.indicators import (
     volume_metrics,
 )
 from aoa.data.market_data import MarketDataService, SymbolSnapshot
-from aoa.data.news import NewsService
+from aoa.data.news import AlpacaNewsFeed, NewsFeed, NewsItem, NullNewsFeed
 from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
 
 __all__ = [
@@ -27,6 +27,9 @@ __all__ = [
     "TimeframeSpec",
     "parse_timeframes",
     "MarketDataService",
-    "NewsService",
+    "AlpacaNewsFeed",
+    "NewsFeed",
+    "NewsItem",
+    "NullNewsFeed",
     "SymbolSnapshot",
 ]

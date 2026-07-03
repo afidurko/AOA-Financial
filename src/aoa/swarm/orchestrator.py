@@ -32,7 +32,7 @@ from aoa.brokerage.base import Broker
 from aoa.brokerage.models import AssetClass, Side
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
-from aoa.data.news import NewsService
+from aoa.data.news import NewsFeed, NullNewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
@@ -53,20 +53,17 @@ class Orchestrator:
         broker: Broker,
         llm: LLMClient,
         journal: Journal | None = None,
+        news: NewsFeed | None = None,
     ) -> None:
         self.config = config
         self.broker = broker
         self.llm = llm
-        self.journal = journal or Journal()
+        self.journal = journal or Journal(config.journal_path)
+        self.news = news if news is not None else NullNewsFeed()
         self.market = MarketDataService(
             broker,
             timeframes=config.bar_timeframes,
             bar_feed=config.bar_feed,
-        )
-        self.news = NewsService(
-            broker,
-            limit_per_symbol=config.news_limit,
-            lookback_hours=config.news_lookback_hours,
         )
 
         # Agents.
@@ -197,14 +194,25 @@ class Orchestrator:
     def _analyze_candidates(self, bb: Blackboard) -> list[dict]:
         per_symbol: list[dict] = []
         symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
-        news_by_symbol = self.news.fetch(symbols) if symbols else {}
+        news_by_symbol: dict[str, list] = {}
+        if self.config.news_enabled and symbols:
+            news_by_symbol = self.news.headlines(symbols, limit=self.config.news_limit)
+            self.journal.record(
+                "news.fetched",
+                {
+                    "symbols": symbols,
+                    "counts": {sym: len(items) for sym, items in news_by_symbol.items()},
+                },
+            )
 
         for cand in bb.candidates:
             symbol = cand.get("symbol", "").upper()
             snap = bb.snapshots.get(symbol) or self.market.snapshot(symbol)
 
             tech = self.technical.analyze(snap)
-            fund = self.fundamental.analyze(snap, news=news_by_symbol.get(symbol, []))
+            fund = self.fundamental.analyze(
+                snap, headlines=news_by_symbol.get(symbol, [])
+            )
             bb.add_signal(tech)
             bb.add_signal(fund)
 

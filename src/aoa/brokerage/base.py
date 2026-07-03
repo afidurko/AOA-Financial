@@ -12,7 +12,6 @@ from abc import ABC, abstractmethod
 from aoa.brokerage.models import (
     Account,
     Bar,
-    NewsItem,
     OptionContract,
     Order,
     OrderRequest,
@@ -79,16 +78,6 @@ class Broker(ABC):
     @abstractmethod
     def get_most_active(self, limit: int = 25) -> list[str]:
         """Return symbols of the most active equities (scanner seed list)."""
-
-    @abstractmethod
-    def get_news(
-        self,
-        symbols: list[str],
-        *,
-        limit: int = 50,
-        lookback_hours: int = 72,
-    ) -> list[NewsItem]:
-        """Return recent news articles mentioning any of ``symbols`` (newest first)."""
 
     # --- Options -------------------------------------------------------------
     @abstractmethod

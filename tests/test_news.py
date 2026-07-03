@@ -1,20 +1,17 @@
-"""Tests for Alpaca news wiring and volume metrics."""
+"""Tests for Alpaca news feed, volume metrics, and fundamental integration."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from aoa.brokerage.models import NewsItem
+from aoa.agents.fundamental import FundamentalAgent
+from aoa.brokerage.models import Bar, Quote
 from aoa.data import indicators
-from aoa.data.news import NewsService
-from tests.conftest import FakeBroker
+from aoa.data.market_data import SymbolSnapshot
+from aoa.data.news import AlpacaNewsFeed, NewsItem, NullNewsFeed, _parse_news_row
 
 
 def test_volume_metrics_ratio():
-    from datetime import timedelta
-
-    from aoa.brokerage.models import Bar
-
     base = datetime(2024, 1, 1, tzinfo=timezone.utc)
     bars = [
         Bar(
@@ -34,10 +31,6 @@ def test_volume_metrics_ratio():
 
 
 def test_technical_snapshot_includes_volume():
-    from datetime import timedelta
-
-    from aoa.brokerage.models import Bar
-
     base = datetime(2024, 1, 1, tzinfo=timezone.utc)
     bars = [
         Bar(
@@ -55,28 +48,97 @@ def test_technical_snapshot_includes_volume():
     assert snap["volume"]["latest_volume"] is not None
 
 
-def test_news_service_groups_by_symbol():
-    class MultiNewsBroker(FakeBroker):
-        def get_news(self, symbols, *, limit=50, lookback_hours=72):
-            return [
-                NewsItem(
-                    headline="AAPL launches new product",
-                    summary="Product launch.",
-                    source="benzinga",
-                    symbols=("AAPL", "MSFT"),
-                    published_at=datetime.now(timezone.utc),
-                ),
-                NewsItem(
-                    headline="NVDA data-center demand rises",
-                    summary="Demand story.",
-                    source="benzinga",
-                    symbols=("NVDA",),
-                    published_at=datetime.now(timezone.utc),
-                ),
-            ]
+def test_parse_news_row():
+    row = {
+        "headline": "Apple beats estimates",
+        "summary": "Strong iPhone sales.",
+        "source": "Reuters",
+        "created_at": "2025-01-15T14:00:00Z",
+        "symbols": ["AAPL"],
+    }
+    item = _parse_news_row(row)
+    assert item is not None
+    assert item.headline == "Apple beats estimates"
+    assert item.symbols == ("AAPL",)
 
-    svc = NewsService(MultiNewsBroker(), limit_per_symbol=2)
-    grouped = svc.fetch(["AAPL", "NVDA"])
+
+def test_null_news_feed():
+    feed = NullNewsFeed()
+    result = feed.headlines(["AAPL", "MSFT"], limit=3)
+    assert result == {"AAPL": [], "MSFT": []}
+
+
+def test_alpaca_news_feed_groups_by_symbol(monkeypatch):
+    class FakeResp:
+        status_code = 200
+
+        def json(self):
+            return {
+                "news": [
+                    {
+                        "headline": "AAPL launches new product",
+                        "summary": "Product launch.",
+                        "source": "benzinga",
+                        "created_at": "2025-01-01T12:00:00Z",
+                        "symbols": ["AAPL", "MSFT"],
+                    },
+                    {
+                        "headline": "NVDA data-center demand rises",
+                        "summary": "Demand story.",
+                        "source": "benzinga",
+                        "created_at": "2025-01-01T11:00:00Z",
+                        "symbols": ["NVDA"],
+                    },
+                ]
+            }
+
+    class FakeClient:
+        def get(self, *args, **kwargs):
+            return FakeResp()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("aoa.data.news.httpx.Client", lambda **kw: FakeClient())
+    feed = AlpacaNewsFeed("key", "secret")
+    grouped = feed.headlines(["AAPL", "NVDA"], limit=2)
     assert len(grouped["AAPL"]) == 1
     assert grouped["AAPL"][0].headline.startswith("AAPL")
     assert len(grouped["NVDA"]) == 1
+
+
+def test_fundamental_agent_with_headlines(fake_llm):
+    agent = FundamentalAgent(fake_llm)
+    snap = SymbolSnapshot(
+        symbol="AAPL",
+        quote=Quote(symbol="AAPL", bid=99, ask=101),
+        technicals={"1Day": {"last_close": 100.0}},
+    )
+    headlines = [
+        NewsItem(
+            headline="Test headline",
+            summary="Test summary",
+            source="test",
+            created_at="2025-01-01",
+            symbols=("AAPL",),
+        )
+    ]
+    signal = agent.analyze(snap, headlines=headlines)
+    assert signal.symbol == "AAPL"
+    assert signal.source == "fundamental"
+
+
+def test_alpaca_news_feed_handles_http_error(monkeypatch):
+    import httpx
+
+    class FakeClient:
+        def get(self, *args, **kwargs):
+            raise httpx.HTTPError("network down")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr("aoa.data.news.httpx.Client", lambda **kw: FakeClient())
+    feed = AlpacaNewsFeed("key", "secret")
+    result = feed.headlines(["AAPL"])
+    assert result == {"AAPL": []}

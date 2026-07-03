@@ -1,0 +1,17 @@
+[Unit]
+Description=AOA Financial web dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aoa
+WorkingDirectory=/opt/aoa-financial
+EnvironmentFile=/opt/aoa-financial/.env
+Environment=AOA_JOURNAL_PATH=/var/lib/aoa/journal/aoa.jsonl
+ExecStart=/opt/aoa-financial/.venv/bin/aoa serve
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

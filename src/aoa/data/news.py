@@ -1,45 +1,146 @@
-"""News service: fetches and caches Alpaca headlines per symbol for agent prompts."""
+"""News feed abstraction — headlines for the fundamental agent.
+
+The default provider uses Alpaca's market-data news endpoint (included with
+standard Alpaca data credentials). When news is unavailable the feed returns
+empty lists and the fundamental agent falls back to qualitative reasoning.
+"""
 
 from __future__ import annotations
 
-from aoa.brokerage.base import Broker
-from aoa.brokerage.models import NewsItem
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+import httpx
+
+from aoa.brokerage.base import BrokerError
 
 
-class NewsService:
-    """Fetches broker news once per cycle and groups headlines by ticker."""
+@dataclass(frozen=True)
+class NewsItem:
+    headline: str
+    summary: str
+    source: str
+    created_at: str
+    symbols: tuple[str, ...] = ()
+
+    def to_context(self) -> dict:
+        return {
+            "headline": self.headline,
+            "summary": self.summary,
+            "source": self.source,
+            "created_at": self.created_at,
+            "symbols": list(self.symbols),
+        }
+
+
+class NewsFeed(ABC):
+    @abstractmethod
+    def headlines(self, symbols: list[str], *, limit: int = 5) -> dict[str, list[NewsItem]]:
+        """Return recent headlines keyed by symbol."""
+
+    def clear_cache(self) -> None:
+        """No-op unless a concrete feed caches per-cycle results."""
+
+
+class NullNewsFeed(NewsFeed):
+    """No-op feed — always returns empty lists."""
+
+    def headlines(self, symbols: list[str], *, limit: int = 5) -> dict[str, list[NewsItem]]:
+        return {sym.upper(): [] for sym in symbols}
+
+
+class AlpacaNewsFeed(NewsFeed):
+    """Fetch headlines from Alpaca Market Data ``/v1beta1/news``."""
+
+    _BASE = "https://data.alpaca.markets"
 
     def __init__(
         self,
-        broker: Broker,
+        key_id: str,
+        secret_key: str,
         *,
-        limit_per_symbol: int = 5,
         lookback_hours: int = 72,
+        timeout: float = 20.0,
     ) -> None:
-        self.broker = broker
-        self.limit_per_symbol = limit_per_symbol
+        if not key_id or not secret_key:
+            raise BrokerError("Alpaca credentials are required for the news feed.")
         self.lookback_hours = lookback_hours
+        self._client = httpx.Client(
+            headers={
+                "APCA-API-KEY-ID": key_id,
+                "APCA-API-SECRET-KEY": secret_key,
+            },
+            timeout=timeout,
+        )
         self._cache: dict[str, list[NewsItem]] = {}
+
+    def close(self) -> None:
+        self._client.close()
 
     def clear_cache(self) -> None:
         self._cache.clear()
 
-    def fetch(self, symbols: list[str]) -> dict[str, list[NewsItem]]:
-        """Return up to ``limit_per_symbol`` headlines per symbol (newest first)."""
+    def headlines(self, symbols: list[str], *, limit: int = 5) -> dict[str, list[NewsItem]]:
+        if not symbols:
+            return {}
         normalized = [s.upper() for s in symbols if s]
         missing = [s for s in normalized if s not in self._cache]
         if missing:
-            batch_limit = max(50, self.limit_per_symbol * len(missing))
-            articles = self.broker.get_news(
-                missing,
-                limit=batch_limit,
-                lookback_hours=self.lookback_hours,
-            )
-            grouped: dict[str, list[NewsItem]] = {s: [] for s in missing}
-            for article in articles:
-                for sym in article.symbols:
-                    if sym in grouped and len(grouped[sym]) < self.limit_per_symbol:
-                        grouped[sym].append(article)
-            for sym in missing:
-                self._cache[sym] = grouped[sym]
+            end = datetime.now(timezone.utc)
+            start = end - timedelta(hours=self.lookback_hours)
+            params = {
+                "symbols": ",".join(missing),
+                "start": start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "end": end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "limit": max(50, limit * len(missing)),
+                "sort": "DESC",
+                "exclude_contentless": "true",
+            }
+            try:
+                resp = self._client.get(f"{self._BASE}/v1beta1/news", params=params)
+            except httpx.HTTPError:
+                for sym in missing:
+                    self._cache[sym] = []
+            else:
+                if resp.status_code >= 400:
+                    for sym in missing:
+                        self._cache[sym] = []
+                else:
+                    payload = resp.json()
+                    rows = payload.get("news", []) if isinstance(payload, dict) else []
+                    grouped: dict[str, list[NewsItem]] = {sym: [] for sym in missing}
+                    for row in rows:
+                        item = _parse_news_row(row)
+                        if item is None:
+                            continue
+                        for sym in item.symbols:
+                            if sym in grouped and len(grouped[sym]) < limit:
+                                grouped[sym].append(item)
+                    for sym in missing:
+                        self._cache[sym] = grouped[sym]
         return {s: list(self._cache.get(s, [])) for s in normalized}
+
+
+def _parse_news_row(row: dict) -> NewsItem | None:
+    headline = (row.get("headline") or "").strip()
+    if not headline:
+        return None
+    summary = (row.get("summary") or row.get("content") or "").strip()
+    if len(summary) > 500:
+        summary = summary[:497] + "..."
+    created = row.get("created_at") or row.get("updated_at") or ""
+    if isinstance(created, datetime):
+        created = created.isoformat()
+    symbols = tuple(
+        s.upper()
+        for s in (row.get("symbols") or [])
+        if isinstance(s, str) and s.strip()
+    )
+    return NewsItem(
+        headline=headline,
+        summary=summary,
+        source=str(row.get("source") or row.get("author") or "unknown"),
+        created_at=str(created),
+        symbols=symbols,
+    )
