@@ -34,17 +34,32 @@ class Pipeline:
         self._run_stages(ctx, stop_before=stop_before)
 
     def _run_stages(self, ctx: CycleContext, *, stop_before: str | None = None) -> None:
-        bus = ctx.blackboard.events
         for stage in self.stages:
             if stop_before is not None and stage.name == stop_before:
                 break
-            bus.emit("stage.start", stage.name)
-            ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
-            continue_cycle = stage.run(ctx)
-            if stage.checkpoint:
-                ctx.blackboard.environment.checkpoint(stage.name)
-                bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
-            bus.emit("stage.complete", stage.name)
-            ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
-            if not continue_cycle:
+            if not self._run_stage(ctx, stage):
                 break
+
+    def run_from(self, ctx: CycleContext, start_at: str) -> None:
+        """Run stages starting at ``start_at`` (inclusive)."""
+        started = False
+        for stage in self.stages:
+            if not started:
+                if stage.name == start_at:
+                    started = True
+                else:
+                    continue
+            if not self._run_stage(ctx, stage):
+                break
+
+    def _run_stage(self, ctx: CycleContext, stage: PipelineStage) -> bool:
+        bus = ctx.blackboard.events
+        bus.emit("stage.start", stage.name)
+        ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
+        continue_cycle = stage.run(ctx)
+        if stage.checkpoint:
+            ctx.blackboard.environment.checkpoint(stage.name)
+            bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
+        bus.emit("stage.complete", stage.name)
+        ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
+        return continue_cycle

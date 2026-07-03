@@ -137,6 +137,10 @@ class FakeLLM:
     _PORTFOLIO = frozenset({"proposals", "portfolio_commentary"})
     _RISK = frozenset({"vetoes", "assessment"})
     _SCANNER = frozenset({"candidates"})
+    _TOM = frozenset({"direction", "strength", "timeframe", "rationale", "key_observations"})
+    _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
+    _ALAN = frozenset({"recommendations", "summary", "confidence"})
+    _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
 
     def __init__(self, *, candidates=None):
         self.candidates = candidates if candidates is not None else [
@@ -204,6 +208,60 @@ class FakeLLM:
             }
         if required == self._RISK:
             return {"vetoes": [], "assessment": "prudent"}
+        if required == self._TOM:
+            return {
+                "direction": "up",
+                "strength": 0.72,
+                "timeframe": "swing",
+                "rationale": "Higher highs with rising 50DMA support",
+                "key_observations": ["volume confirmation", "pullback held"],
+            }
+        if required == self._JULIE:
+            return {
+                "validated": True,
+                "adjusted_strength": 0.68,
+                "method_notes": "RSI regime supports Tom's uptrend read",
+                "signals": ["sma_cross_bullish", "rsi_constructive"],
+            }
+        if required == self._ALAN:
+            return {
+                "recommendations": [
+                    {
+                        "symbol": "AAPL",
+                        "action": "consider_long",
+                        "conviction": 0.7,
+                        "rationale": "Tom and Julie aligned on bullish swing setup",
+                    }
+                ],
+                "summary": "One high-quality corroborated long candidate",
+                "confidence": 0.72,
+            }
+        if required == self._AARON:
+            return {
+                "overall_ok": True,
+                "summary": "Team completed health, code audit, and decision brief.",
+                "user_notifications": [],
+                "team_status": [
+                    {
+                        "name": "Bob",
+                        "role": "Systems Health & Code Integrity",
+                        "completed": True,
+                        "notes": "Code quality checks passed.",
+                    },
+                    {
+                        "name": "Julie",
+                        "role": "Algorithm Specialist & Code Clarity",
+                        "completed": True,
+                        "notes": "Validated Tom's read.",
+                    },
+                    {
+                        "name": "Alan",
+                        "role": "Decision Aggregator & Code Oversight",
+                        "completed": True,
+                        "notes": "Decision brief ready.",
+                    },
+                ],
+            }
         raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
 
 
