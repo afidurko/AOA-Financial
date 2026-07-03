@@ -12,6 +12,7 @@ from aoa.data.news import NewsFeed, NullNewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
+from aoa.plasticity.store import PlasticityStore
 from aoa.swarm.blackboard import Blackboard
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import Pipeline
@@ -43,6 +44,13 @@ class Orchestrator:
         self.broker = broker
         self.llm = llm
         self.journal = journal or Journal(config.journal_path)
+        self.plasticity = PlasticityStore(
+            config.plasticity_path,
+            self.journal,
+            enabled=config.plasticity_enabled,
+            tail=config.plasticity_tail,
+            max_lessons=config.plasticity_max_lessons,
+        )
         self.news = news if news is not None else NullNewsFeed()
         self.market = MarketDataService(
             broker,
@@ -94,6 +102,7 @@ class Orchestrator:
             agents=self.agents,
             executor=self.executor,
             news=self.news,
+            plasticity=self.plasticity,
             max_candidates=max_candidates,
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,

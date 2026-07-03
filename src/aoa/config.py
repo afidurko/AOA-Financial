@@ -99,6 +99,13 @@ def journal_path_for(env: str) -> Path:
     return data_dir_for(env) / "journal" / "aoa.jsonl"
 
 
+def plasticity_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_PLASTICITY_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "journal" / "plasticity.json"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -114,6 +121,7 @@ class Config:
     profile: str = ""
     data_dir: Path = field(default_factory=lambda: data_dir_for("paper-dry"))
     journal_path: Path = field(default_factory=lambda: journal_path_for("paper-dry"))
+    plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
 
     anthropic_api_key: str = ""
     model: str = "claude-sonnet-4-20250514"
@@ -144,6 +152,10 @@ class Config:
     web_host: str = "0.0.0.0"
     web_port: int = 8080
     web_auto_loop: bool = False
+
+    plasticity_enabled: bool = True
+    plasticity_tail: int = 200
+    plasticity_max_lessons: int = 10
 
     risk: RiskLimits = field(default_factory=RiskLimits)
 
@@ -182,6 +194,7 @@ class Config:
             profile=os.environ.get("AOA_PROFILE", "").strip(),
             data_dir=data_dir_for(env),
             journal_path=journal_path_for(env),
+            plasticity_path=plasticity_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -203,6 +216,9 @@ class Config:
             web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
+            plasticity_enabled=_bool("AOA_PLASTICITY_ENABLED", True),
+            plasticity_tail=max(20, _int("AOA_PLASTICITY_TAIL", 200)),
+            plasticity_max_lessons=max(1, _int("AOA_PLASTICITY_MAX_LESSONS", 10)),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

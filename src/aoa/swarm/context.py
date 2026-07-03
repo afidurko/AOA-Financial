@@ -12,6 +12,7 @@ from aoa.data.news import NewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
+from aoa.plasticity.store import PlasticityStore
 from aoa.swarm.blackboard import Blackboard
 from aoa.swarm.team import AgentTeam
 
@@ -28,6 +29,7 @@ class CycleContext:
     agents: AgentTeam
     executor: Executor
     news: NewsFeed
+    plasticity: PlasticityStore | None = None
     blackboard: Blackboard = field(default_factory=Blackboard)
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None
