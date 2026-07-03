@@ -9,6 +9,8 @@ Install the optional extra first (pins upstream v0.3.0):
   pip install -e ".[tradingagents]"
   pip install -e ".[tradingagents-bedrock]"   # optional AWS Bedrock provider
 
+Upstream changelog: docs/tradingagents/CHANGELOG.md
+
 Configuration:
   TRADINGAGENTS_* env vars override DEFAULT_CONFIG (see upstream default_config.py).
   AOA's .env / profiles are loaded first so you can keep secrets in one place.

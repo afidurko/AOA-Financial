@@ -1,5 +1,6 @@
 # Upstream TradingAgents 0.3.0 (TauricResearch/TradingAgents)
 # https://github.com/TauricResearch/TradingAgents
+# Changelog: docs/tradingagents/CHANGELOG.md
 #
 # Prefer the AOA optional extra (pulls the same package + all deps):
 #   pip install -e ".[tradingagents]"

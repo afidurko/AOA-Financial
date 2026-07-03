@@ -8,6 +8,8 @@ separate from AOA's live Alpaca swarm pipeline.
 Install the optional extra first (pins upstream v0.3.0):
   pip install -e ".[tradingagents]"
 
+Upstream changelog: docs/tradingagents/CHANGELOG.md
+
 Examples:
   python scripts/test_yfinance_indicators.py AAPL macd 2024-11-01
   python scripts/test_yfinance_indicators.py NVDA rsi 2024-05-10 --lookback 14
