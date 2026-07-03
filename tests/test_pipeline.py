@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from aoa.swarm.team import AgentTeam
 from aoa.config import Config, RiskLimits
 from aoa.data.market_data import MarketDataService
 from aoa.data.news import NullNewsFeed
@@ -11,6 +10,7 @@ from aoa.journal.store import Journal
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import Pipeline
 from aoa.swarm.stages import AnalyzeStage, IntakeStage, ScanStage, default_stages
+from aoa.swarm.team import AgentTeam
 
 
 def _ctx(fake_broker, fake_llm, tmp_path, *, parallel_workers=1):
@@ -81,6 +81,14 @@ def test_pipeline_emits_stage_events(fake_broker, fake_llm, tmp_path):
     assert "stage.start" in kinds
     assert "stage.complete" in kinds
     assert "stage.checkpoint" in kinds
+
+
+def test_pipeline_run_until_journals_stages(fake_broker, fake_llm, tmp_path):
+    ctx = _ctx(fake_broker, fake_llm, tmp_path)
+    Pipeline(stages=[IntakeStage(), ScanStage()]).run_until(ctx, "analyze")
+    kinds = [r["event"] for r in ctx.journal.tail(20)]
+    assert "pipeline.stage.start" in kinds
+    assert "pipeline.stage.complete" in kinds
 
 
 def test_environment_checkpoints_after_marked_stages(fake_broker, fake_llm, tmp_path):

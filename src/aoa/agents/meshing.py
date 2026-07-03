@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 
 from aoa.agents.base import Agent, Direction, Signal
+from aoa.llm.client import LLMError
 from aoa.swarm.environment import MeshedView
 
 _SCHEMA = {
@@ -97,7 +98,7 @@ class MeshingAgent(Agent):
                 key_levels=levels,
                 tags=["meshed"],
             )
-        except Exception:
+        except (LLMError, KeyError, TypeError, ValueError):
             return _fallback_mesh(symbol, signals, source_ctx, scanner_reason)
 
 

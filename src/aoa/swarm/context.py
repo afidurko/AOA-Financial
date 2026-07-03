@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from aoa.swarm.team import AgentTeam
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
@@ -14,6 +13,7 @@ from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
 from aoa.swarm.blackboard import Blackboard
+from aoa.swarm.team import AgentTeam
 
 
 @dataclass

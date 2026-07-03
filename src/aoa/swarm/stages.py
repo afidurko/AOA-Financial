@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from aoa.agents.base import Direction, TradeProposal
 from aoa.brokerage.models import AssetClass, Side
 from aoa.data.market_data import SymbolSnapshot
+from aoa.execution.pricing import marketable_limit
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import PipelineStage
 
@@ -339,7 +340,7 @@ def _materialize_proposals(raw: list[dict], bb) -> list[TradeProposal]:
                     conviction=float(item.get("conviction", 0.5)),
                     rationale=item.get("rationale", ""),
                     est_price=price,
-                    limit_price=_marketable_limit(price, side),
+                    limit_price=marketable_limit(price, side),
                 )
             )
         else:
@@ -370,12 +371,7 @@ def _materialize_proposals(raw: list[dict], bb) -> list[TradeProposal]:
                     conviction=float(item.get("conviction", 0.5)),
                     rationale=item.get("rationale", ""),
                     est_price=price,
-                    limit_price=_marketable_limit(price, side),
+                    limit_price=marketable_limit(price, side),
                 )
             )
     return proposals
-
-
-def _marketable_limit(price: float, side: Side) -> float:
-    pad = 1.01 if side is Side.BUY else 0.99
-    return round(price * pad, 2)

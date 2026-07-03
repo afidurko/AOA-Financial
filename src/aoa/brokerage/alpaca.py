@@ -28,6 +28,10 @@ from alpaca.trading.enums import TimeInForce as AlpacaTimeInForce
 from alpaca.trading.requests import GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
 
 from aoa.brokerage.base import Broker, BrokerError
+from aoa.brokerage.constants import (
+    VALID_ALPACA_BAR_ADJUSTMENTS,
+    VALID_ALPACA_DATA_FEEDS,
+)
 from aoa.brokerage.models import (
     Account,
     AssetClass,
@@ -46,9 +50,6 @@ from aoa.brokerage.models import (
 T = TypeVar("T")
 
 _TIMEFRAME_RE = re.compile(r"^(\d+)(Min|Hour|Day|Week|Month)$")
-
-_VALID_DATA_FEEDS = frozenset({"sip", "iex", "boats", "otc"})
-_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
 
 _ADJUSTMENT_MAP = {
     "raw": Adjustment.RAW,
@@ -162,15 +163,15 @@ class AlpacaBroker(Broker):
         self.name = "alpaca-live" if live else "alpaca-paper"
         self._data_feed = data_feed.strip().lower()
         self._bar_adjustment = bar_adjustment.strip().lower() or "split"
-        if self._data_feed and self._data_feed not in _VALID_DATA_FEEDS:
+        if self._data_feed and self._data_feed not in VALID_ALPACA_DATA_FEEDS:
             raise BrokerError(
                 f"Invalid Alpaca data feed {self._data_feed!r}; "
-                f"expected one of {', '.join(sorted(_VALID_DATA_FEEDS))}."
+                f"expected one of {', '.join(sorted(VALID_ALPACA_DATA_FEEDS))}."
             )
-        if self._bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+        if self._bar_adjustment not in VALID_ALPACA_BAR_ADJUSTMENTS:
             raise BrokerError(
                 f"Invalid bar adjustment {self._bar_adjustment!r}; "
-                f"expected one of {', '.join(sorted(_VALID_BAR_ADJUSTMENTS))}."
+                f"expected one of {', '.join(sorted(VALID_ALPACA_BAR_ADJUSTMENTS))}."
             )
         paper = not live
         creds = {"api_key": key_id, "secret_key": secret_key}
