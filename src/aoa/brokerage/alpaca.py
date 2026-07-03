@@ -51,6 +51,25 @@ def _f(value, default: float = 0.0) -> float:
         return default
 
 
+def _bars_from_rows(rows: list) -> list[Bar]:
+    bars: list[Bar] = []
+    for r in rows:
+        ts = _parse_ts(r.get("t"))
+        if ts is None:
+            continue
+        bars.append(
+            Bar(
+                timestamp=ts,
+                open=_f(r.get("o")),
+                high=_f(r.get("h")),
+                low=_f(r.get("l")),
+                close=_f(r.get("c")),
+                volume=_f(r.get("v")),
+            )
+        )
+    return bars
+
+
 class AlpacaBroker(Broker):
     def __init__(
         self,
@@ -154,25 +173,55 @@ class AlpacaBroker(Broker):
         )
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
-        params = {"timeframe": timeframe, "limit": limit, "adjustment": "split"}
-        d = self._data("GET", f"/v2/stocks/{symbol}/bars", params=params)
-        rows = d.get("bars", []) if isinstance(d, dict) else []
-        bars: list[Bar] = []
-        for r in rows:
-            ts = _parse_ts(r.get("t"))
-            if ts is None:
-                continue
-            bars.append(
-                Bar(
-                    timestamp=ts,
-                    open=_f(r.get("o")),
-                    high=_f(r.get("h")),
-                    low=_f(r.get("l")),
-                    close=_f(r.get("c")),
-                    volume=_f(r.get("v")),
-                )
-            )
-        return bars
+        batch = self.get_bars_batch([symbol], timeframe, limit)
+        return batch.get(symbol.upper(), [])
+
+    def get_bars_batch(
+        self,
+        symbols: list[str],
+        timeframe: str = "1Day",
+        limit: int = 120,
+    ) -> dict[str, list[Bar]]:
+        """Fetch OHLCV bars via ``GET /v2/stocks/bars`` (multi-symbol endpoint).
+
+        Alpaca paginates batch results by symbol first, then timestamp, and the
+        ``limit`` parameter caps total bars across all symbols — so we page until
+        every requested symbol has ``limit`` bars or the feed is exhausted.
+        """
+        uniq = list(dict.fromkeys(s.upper() for s in symbols if s))
+        if not uniq:
+            return {}
+
+        out: dict[str, list[Bar]] = {sym: [] for sym in uniq}
+        params: dict = {
+            "symbols": ",".join(uniq),
+            "timeframe": timeframe,
+            "adjustment": "split",
+            "sort": "asc",
+            "limit": min(10_000, max(limit, limit * len(uniq))),
+        }
+        page_token: str | None = None
+
+        while True:
+            req_params = dict(params)
+            if page_token:
+                req_params["page_token"] = page_token
+            d = self._data("GET", "/v2/stocks/bars", params=req_params)
+            bars_by_sym = d.get("bars", {}) if isinstance(d, dict) else {}
+            if isinstance(bars_by_sym, dict):
+                for sym, rows in bars_by_sym.items():
+                    key = sym.upper()
+                    if key in out and isinstance(rows, list):
+                        out[key].extend(_bars_from_rows(rows))
+
+            page_token = d.get("next_page_token") if isinstance(d, dict) else None
+            if not page_token or all(len(out[s]) >= limit for s in uniq):
+                break
+
+        for sym in uniq:
+            if len(out[sym]) > limit:
+                out[sym] = out[sym][-limit:]
+        return out
 
     def get_most_active(self, limit: int = 25) -> list[str]:
         params = {"by": "volume", "top": limit}
