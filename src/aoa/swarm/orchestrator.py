@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
@@ -11,6 +12,8 @@ from aoa.data.news import NewsFeed, NullNewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
+from aoa.plasticity.store import PlasticityStore
+from aoa.state import StateStore
 from aoa.swarm.blackboard import Blackboard
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import Pipeline
@@ -37,20 +40,35 @@ class Orchestrator:
         news: NewsFeed | None = None,
         *,
         pipeline: Pipeline | None = None,
+        signal_adapter: SignalAdapter | None = None,
     ) -> None:
         self.config = config
         self.broker = broker
         self.llm = llm
         self.journal = journal or Journal(config.journal_path)
+        self.plasticity = PlasticityStore(
+            config.plasticity_path,
+            self.journal,
+            enabled=config.plasticity_enabled,
+            tail=config.plasticity_tail,
+            max_lessons=config.plasticity_max_lessons,
+        )
         self.news = news if news is not None else NullNewsFeed()
+        self.state = StateStore(config.state_path)
         self.market = MarketDataService(
             broker,
             timeframes=config.bar_timeframes,
             bar_feed=config.bar_feed,
         )
         self.agents = AgentTeam.from_llm(llm, broker, risk=config.risk)
-        self.executor = Executor(broker, self.journal, dry_run=config.dry_run)
+        self.executor = Executor(
+            broker, self.journal, dry_run=config.dry_run, state=self.state
+        )
         self.pipeline = pipeline or Pipeline(stages=default_stages())
+
+        # Optional low-rank online adaptation of agent signals.
+        self.signal_adapter = signal_adapter
+        self._adapt_pending: dict[str, dict] = {}
 
         # Preserve attributes referenced by tests and CLI.
         self.scanner = self.agents.scanner
@@ -63,13 +81,15 @@ class Orchestrator:
 
         # Daily-loss tracking lives on the context each cycle.
         self._ctx: CycleContext | None = None
-        self._starting_equity: float = 0.0
+
+    @property
+    def _starting_equity(self) -> float:
+        return self._ctx.starting_equity if self._ctx else 0.0
 
     def run_cycle(self, *, max_candidates: int = 6) -> CycleResult:
         ctx = self._build_context(max_candidates=max_candidates)
         self.pipeline.run(ctx)
         self._ctx = ctx
-        self._starting_equity = ctx.starting_equity
         return CycleResult(
             blackboard=ctx.blackboard,
             execution=ctx.execution,
@@ -93,6 +113,10 @@ class Orchestrator:
             agents=self.agents,
             executor=self.executor,
             news=self.news,
+            state=self.state,
+            signal_adapter=self.signal_adapter,
+            adapt_pending=self._adapt_pending,
+            plasticity=self.plasticity,
             max_candidates=max_candidates,
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,

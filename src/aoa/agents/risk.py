@@ -64,6 +64,7 @@ class RiskManagerAgent(Agent):
         positions: list[Position],
         *,
         starting_equity: float,
+        plasticity_context: str = "",
     ) -> list[TradeProposal]:
         # 1) Deterministic guards (binding).
         self.guards.evaluate_cycle(
@@ -84,9 +85,11 @@ class RiskManagerAgent(Agent):
                 f"Existing positions: "
                 f"{json.dumps([_pos_ctx(p) for p in positions], default=str)}\n"
                 f"Approved proposals: "
-                f"{json.dumps([p.to_context() for p in approved], default=str)}\n\n"
-                "Return any vetoes as JSON."
+                f"{json.dumps([p.to_context() for p in approved], default=str)}\n"
             )
+            if plasticity_context:
+                prompt += f"Cross-cycle memory:\n{plasticity_context}\n"
+            prompt += "\nReturn any vetoes as JSON."
             r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
         except LLMError:
             # Fail safe: if the second opinion is unavailable, keep deterministic result.

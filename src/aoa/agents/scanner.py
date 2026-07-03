@@ -6,7 +6,6 @@ import json
 
 from aoa.agents.base import Agent
 from aoa.data.market_data import SymbolSnapshot
-from aoa.llm.client import LLMError
 
 _SCHEMA = {
     "type": "object",
@@ -59,10 +58,12 @@ class ScannerAgent(Agent):
             f"Select up to {max_candidates} candidates with the strongest setups. "
             "Assign each a priority from 0 (weak) to 1 (strong). Return JSON."
         )
-        try:
-            result = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
-        except LLMError:
-            return []
+        result = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {"candidates": []},
+        )
         candidates = result.get("candidates", [])
         candidates.sort(key=lambda c: c.get("priority", 0), reverse=True)
         return candidates[:max_candidates]
