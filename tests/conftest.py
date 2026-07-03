@@ -130,6 +130,16 @@ class FakeLLM:
         props = set(schema.get("properties", {}).keys())
         if "candidates" in props:
             return {"candidates": self.candidates}
+        if "corroboration" in props:  # meshing
+            return {
+                "direction": "bullish",
+                "conviction": 0.72,
+                "horizon": "swing",
+                "rationale": "technical and fundamental aligned",
+                "corroboration": "strong",
+                "conflicts": [],
+                "key_levels": {"support": 95.0, "resistance": 110.0},
+            }
         if "event_risk" in props:  # fundamental
             return {
                 "direction": "bullish",

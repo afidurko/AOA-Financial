@@ -2,6 +2,7 @@
 
 from aoa.agents.base import Agent, Direction, Signal, TradeProposal
 from aoa.agents.fundamental import FundamentalAgent
+from aoa.agents.meshing import MeshingAgent
 from aoa.agents.options import OptionsStrategistAgent
 from aoa.agents.portfolio import PortfolioManagerAgent
 from aoa.agents.risk import RiskManagerAgent
@@ -16,6 +17,7 @@ __all__ = [
     "ScannerAgent",
     "TechnicalAgent",
     "FundamentalAgent",
+    "MeshingAgent",
     "OptionsStrategistAgent",
     "PortfolioManagerAgent",
     "RiskManagerAgent",

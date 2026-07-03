@@ -24,10 +24,17 @@ blackboard:
    │  account, positions, quotes, bars, option chains
    ▼
 ┌──────────────┐   shortlist    ┌──────────────┐   signals    ┌────────────────┐
-│   Scanner    │ ─────────────▶ │  Technical   │ ───────────▶ │   Portfolio    │
-│ (universe →  │                │  Fundamental │              │    Manager     │
-│  candidates) │                │  Options     │              │ (synthesize →  │
-└──────────────┘                └──────────────┘              │  target trades)│
+│   Scanner    │ ─────────────▶ │  Technical   │ ───────────▶ │   Meshing    │
+│ (universe →  │                │  Fundamental │              │  (unified    │
+│  candidates) │                │              │              │   per-symbol │
+└──────────────┘                └──────────────┘              │   view)      │
+                                                              └───────┬────────┘
+                                                                      │
+                                                              ┌───────▼────────┐
+                                                              │   Portfolio    │
+                                                              │    Manager     │
+                                                              │ (synthesize →  │
+                                                              │  target trades)│
                                                               └───────┬────────┘
                                                                       │ proposals
                                                                       ▼
@@ -54,6 +61,7 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 | **Scanner** | Narrows the universe to a shortlist of the strongest setups. |
 | **Technical** | Reads indicators (SMA/EMA/RSI/MACD/Bollinger/ATR/vol) → directional signal. |
 | **Fundamental** | Qualitative catalyst & event-risk view (never fabricates news). |
+| **Meshing** | Synthesizes specialist signals into a cohesive, editable per-symbol view. |
 | **Options strategist** | Proposes a cash-account-appropriate options structure from the live chain. |
 | **Portfolio manager** | Synthesizes all signals + positions + account into target trades. |
 | **Risk manager** | Enforces hard guardrails, then an LLM second-opinion veto. |
@@ -118,8 +126,8 @@ src/aoa/
   brokerage/           # broker abstraction (base) + Alpaca impl + neutral models
   data/                # market-data assembly + pure-Python indicators
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
-  agents/              # scanner, technical, fundamental, options, portfolio, risk
-  swarm/               # blackboard + orchestrator (the cycle)
+  agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk
+  swarm/               # blackboard, environment, orchestrator (the cycle)
   risk/                # deterministic cash-account guardrails
   execution/           # proposal → broker order
   journal/             # append-only JSONL audit log
@@ -145,6 +153,8 @@ canned-response fake LLM — no network, no API keys, no real orders.
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
 - **Add a news feed**: wire it into `FundamentalAgent` (its prompt is the integration point).
 - **Add an agent**: subclass `aoa.agents.base.Agent` and call it from the `Orchestrator`.
+- **Edit the cycle environment**: use `blackboard.environment.edit_meshed()` for unified
+  per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 
 ## Disclaimer

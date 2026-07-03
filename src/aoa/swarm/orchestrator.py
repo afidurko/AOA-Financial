@@ -7,12 +7,13 @@ Pipeline per cycle:
 3. Build market-data snapshots (quotes, bars, indicators).
 4. Scanner shortlists candidates.
 5. Technical + fundamental agents emit signals per candidate.
-6. Options strategist proposes structures where conviction is directional.
-7. Portfolio manager synthesizes everything into target trades.
-8. Convert targets to share/contract quantities.
-9. Risk manager (deterministic guards + LLM veto) vets the batch.
-10. Executor submits approved trades (or simulates in dry-run).
-11. Everything is journaled.
+6. Meshing agent synthesizes signals into a cohesive per-symbol view.
+7. Options strategist proposes structures where meshed conviction is directional.
+8. Portfolio manager synthesizes everything into target trades.
+9. Convert targets to share/contract quantities.
+10. Risk manager (deterministic guards + LLM veto) vets the batch.
+11. Executor submits approved trades (or simulates in dry-run).
+12. Everything is journaled.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from datetime import date
 
 from aoa.agents.base import Direction, Signal, TradeProposal
 from aoa.agents.fundamental import FundamentalAgent
+from aoa.agents.meshing import MeshingAgent
 from aoa.agents.options import OptionsStrategistAgent
 from aoa.agents.portfolio import PortfolioManagerAgent
 from aoa.agents.risk import RiskManagerAgent
@@ -63,6 +65,7 @@ class Orchestrator:
         self.scanner = ScannerAgent(llm)
         self.technical = TechnicalAgent(llm)
         self.fundamental = FundamentalAgent(llm)
+        self.meshing = MeshingAgent(llm)
         self.options = OptionsStrategistAgent(llm, broker)
         self.portfolio = PortfolioManagerAgent(llm)
         self.risk = RiskManagerAgent(llm, config.risk)
@@ -109,10 +112,10 @@ class Orchestrator:
             notes.append("Scanner returned no candidates.")
             # Still run the PM on existing positions to consider exits.
 
-        # 5 & 6) Per-candidate analysis.
-        per_symbol = self._analyze_candidates(bb)
+        # 5–7) Per-candidate analysis + meshing.
+        self._analyze_candidates(bb)
 
-        # 7) Portfolio decision.
+        # 8) Portfolio decision.
         account_ctx = {
             "equity": bb.account.equity,
             "settled_cash": bb.account.settled_cash,
@@ -131,7 +134,7 @@ class Orchestrator:
             for p in bb.positions
         ]
         pm = self.portfolio.decide(
-            per_symbol,
+            bb.environment.per_symbol_context(),
             positions_ctx,
             account_ctx,
             max_new_positions=self.config.risk.max_orders_per_cycle,
@@ -142,10 +145,10 @@ class Orchestrator:
             {"proposals": pm.get("proposals", []), "commentary": bb.commentary},
         )
 
-        # 8) Convert to concrete proposals.
+        # 9) Convert to concrete proposals.
         bb.proposals = self._materialize_proposals(pm.get("proposals", []), bb)
 
-        # 9) Risk review.
+        # 10) Risk review.
         self.risk.review(
             bb.proposals,
             bb.account,
@@ -157,7 +160,7 @@ class Orchestrator:
             {"proposals": [p.to_context() for p in bb.proposals]},
         )
 
-        # 10) Execute.
+        # 11) Execute.
         report = self.executor.execute(bb.proposals)
         self.journal.record(
             "cycle.end",
@@ -183,8 +186,23 @@ class Orchestrator:
         active = self.broker.get_most_active(limit=25)
         return active
 
-    def _analyze_candidates(self, bb: Blackboard) -> list[dict]:
-        per_symbol: list[dict] = []
+    def _analyze_candidates(self, bb: Blackboard) -> None:
+        env = bb.environment
+        env.global_context = {
+            "mode": self.config.trading_mode,
+            "universe_size": len(bb.universe),
+            "n_candidates": len(bb.candidates),
+        }
+        env.set_domain(
+            "scanner",
+            {
+                "candidates": bb.candidates,
+                "by_symbol": {
+                    c.get("symbol", "").upper(): c for c in bb.candidates if c.get("symbol")
+                },
+            },
+        )
+
         for cand in bb.candidates:
             symbol = cand.get("symbol", "").upper()
             snap = bb.snapshots.get(symbol) or self.market.snapshot(symbol)
@@ -194,14 +212,27 @@ class Orchestrator:
             bb.add_signal(tech)
             bb.add_signal(fund)
 
-            entry: dict = {
-                "symbol": symbol,
-                "scanner_reason": cand.get("reason", ""),
-                "signals": [tech.to_context(), fund.to_context()],
-            }
+            env.set_domain(
+                f"technical:{symbol}",
+                {"symbol": symbol, "signal": tech.to_context()},
+            )
+            env.set_domain(
+                f"fundamental:{symbol}",
+                {"symbol": symbol, "signal": fund.to_context()},
+            )
 
-            # Options idea when there is a corroborated directional view.
-            combined_dir, combined_conv = _combine(tech, fund)
+            meshed = self.meshing.mesh(
+                symbol,
+                [tech, fund],
+                scanner_reason=cand.get("reason", ""),
+                snapshot_context=snap.to_context() if snap else None,
+            )
+            env.set_meshed(meshed)
+            bb.add_signal(meshed.to_signal())
+            self.journal.record("meshing.view", meshed.to_context())
+
+            combined_dir = meshed.effective_direction
+            combined_conv = meshed.effective_conviction
             price = (snap.quote.mid if snap.quote else None) or (
                 snap.technicals.get("last_close") if snap.technicals else None
             )
@@ -218,11 +249,7 @@ class Orchestrator:
                     if contract is not None:
                         bb.option_contracts[contract.symbol] = contract
                     bb.options_ideas[symbol] = idea
-                    entry["options_idea"] = {
-                        k: v for k, v in idea.items() if not k.startswith("_")
-                    }
-            per_symbol.append(entry)
-        return per_symbol
+                    env.set_domain(f"options:{symbol}", idea)
 
     def _materialize_proposals(self, raw: list[dict], bb: Blackboard) -> list[TradeProposal]:
         proposals: list[TradeProposal] = []
@@ -294,16 +321,6 @@ class Orchestrator:
                     )
                 )
         return proposals
-
-
-def _combine(tech: Signal, fund: Signal) -> tuple[Direction, float]:
-    """Combine technical & fundamental signals into a single directional view."""
-    if tech.direction == fund.direction and tech.direction is not Direction.NEUTRAL:
-        return tech.direction, min(1.0, (tech.conviction + fund.conviction) / 1.6)
-    # Technicals lead when they disagree, but conviction is discounted.
-    if tech.direction is not Direction.NEUTRAL:
-        return tech.direction, tech.conviction * 0.6
-    return Direction.NEUTRAL, 0.0
 
 
 def _marketable_limit(price: float, side: Side) -> float:
