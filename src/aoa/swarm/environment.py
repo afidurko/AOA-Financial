@@ -212,6 +212,9 @@ class SwarmEnvironment:
                     if name.endswith(f":{symbol}") or name == "scanner"
                 },
             }
+            research = self.domains.get(f"research:{symbol}")
+            if research:
+                row["research_debate"] = research.effective()
             if options_idea:
                 row["options_idea"] = {
                     k: v for k, v in options_idea.items() if not str(k).startswith("_")

@@ -201,7 +201,49 @@ class FakeLLM:
                 ],
                 "portfolio_commentary": "one focused long",
             }
-        if "vetoes" in props:  # risk
+        if "vetoes" in props and "assessment" in props:  # risk manager
+            return {"vetoes": [], "assessment": "prudent"}
+        if "approved" in props and "commentary" in props:  # fund manager
+            return {"approved": True, "vetoes": [], "commentary": "fund manager approved"}
+        if "perspectives" in props:  # risk debate team
+            return {
+                "perspectives": [
+                    {"stance": "risk_seeking", "assessment": "ok", "recommendation": "hold"},
+                    {"stance": "neutral", "assessment": "ok", "recommendation": "hold"},
+                    {"stance": "risk_conservative", "assessment": "ok", "recommendation": "hold"},
+                ],
+                "facilitator_summary": "balanced risk",
+                "vetoes": [],
+            }
+        if "prevailing_view" in props:  # research facilitator
+            return {
+                "prevailing_view": "bullish",
+                "conviction": 0.65,
+                "rationale": "bull case stronger",
+            }
+        if "argument" in props and "key_points" in props:  # bull/bear researchers
+            return {
+                "argument": "constructive setup",
+                "key_points": ["momentum", "sentiment"],
+                "conviction": 0.7,
+            }
+        if "sentiment_score" in props:  # sentiment analyst
+            return {
+                "direction": "bullish",
+                "conviction": 0.55,
+                "sentiment_score": 0.4,
+                "summary": "positive headline tone",
+                "drivers": ["earnings optimism"],
+            }
+        if "key_events" in props:  # news analyst
+            return {
+                "direction": "neutral",
+                "conviction": 0.4,
+                "summary": "no major catalysts",
+                "key_events": ["sector rotation"],
+                "macro_risk": "low",
+            }
+        if "vetoes" in props:  # risk (fallback)
             return {"vetoes": [], "assessment": "prudent"}
         return {}
 

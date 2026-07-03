@@ -12,6 +12,7 @@ from aoa.brokerage.models import AssetClass, Side
 from aoa.data.market_data import SymbolSnapshot
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import PipelineStage
+from aoa.swarm.trading_protocol import AnalystReport, report_from_signal
 
 
 @dataclass
@@ -226,6 +227,51 @@ class RiskStage(PipelineStage):
 
 
 @dataclass
+class RiskDebateStage(PipelineStage):
+    """TradingAgents risk-management debate (risk-seeking / neutral / conservative)."""
+
+    name: str = "risk_debate"
+
+    def run(self, ctx: CycleContext) -> bool:
+        if not ctx.config.trading_agents_enabled:
+            return True
+        bb = ctx.blackboard
+        debate = ctx.agents.risk_debate.deliberate(
+            bb.proposals, bb.account, bb.positions
+        )
+        ctx.agents.risk_debate.apply_vetoes(bb.proposals, debate)
+        ctx.journal.record("risk.debate", debate.to_context())
+        bb.environment.set_domain("risk_debate", debate.to_context())
+        return True
+
+
+@dataclass
+class FundManagerStage(PipelineStage):
+    """TradingAgents fund manager final approval before execution."""
+
+    name: str = "fund_manager"
+
+    def run(self, ctx: CycleContext) -> bool:
+        if not ctx.config.trading_agents_enabled:
+            return True
+        bb = ctx.blackboard
+        risk_summary = ""
+        risk_slice = bb.environment.domains.get("risk_debate")
+        if risk_slice:
+            risk_summary = str(risk_slice.effective().get("facilitator_summary", ""))
+        decision = ctx.agents.fund_manager.review(
+            bb.proposals,
+            bb.account,
+            risk_debate_summary=risk_summary,
+            portfolio_commentary=bb.commentary,
+        )
+        ctx.agents.fund_manager.apply_decision(bb.proposals, decision)
+        ctx.journal.record("fund_manager.review", decision)
+        bb.environment.set_domain("fund_manager", decision)
+        return True
+
+
+@dataclass
 class ExecuteStage(PipelineStage):
     """Submit approved trades (or simulate in dry-run)."""
 
@@ -268,6 +314,8 @@ def default_stages() -> list[PipelineStage]:
         PortfolioStage(),
         MaterializeStage(),
         RiskStage(),
+        RiskDebateStage(),
+        FundManagerStage(),
         ExecuteStage(),
         PlasticityStage(),
     ]
@@ -275,6 +323,13 @@ def default_stages() -> list[PipelineStage]:
 
 # ----------------------------------------------------------------- analysis
 def _analyze_one(ctx: CycleContext, cand: dict) -> None:
+    if ctx.config.trading_agents_enabled:
+        _analyze_one_trading_agents(ctx, cand)
+    else:
+        _analyze_one_legacy(ctx, cand)
+
+
+def _analyze_one_legacy(ctx: CycleContext, cand: dict) -> None:
     bb = ctx.blackboard
     env = bb.environment
     symbol = cand.get("symbol", "").upper()
@@ -304,6 +359,69 @@ def _analyze_one(ctx: CycleContext, cand: dict) -> None:
         [tech, fund],
         scanner_reason=cand.get("reason", ""),
         snapshot_context=snap.to_context() if snap else None,
+    )
+    env.set_meshed(meshed)
+    bb.add_signal(meshed.to_signal())
+    ctx.journal.record("meshing.view", meshed.to_context())
+    bb.events.emit("domain.write", f"meshed:{symbol}", meshed.to_context())
+
+    _maybe_options(ctx, symbol, snap, meshed)
+
+
+def _analyze_one_trading_agents(ctx: CycleContext, cand: dict) -> None:
+    """TradingAgents analyst team → research debate → mesh (arXiv:2412.20138)."""
+    bb = ctx.blackboard
+    env = bb.environment
+    symbol = cand.get("symbol", "").upper()
+    snap = bb.snapshots.get(symbol) or ctx.market.snapshot(symbol)
+    headlines = ctx.news_by_symbol.get(symbol, [])
+
+    workers = min(4, max(1, ctx.config.parallel_workers))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
+        fund_fut = pool.submit(ctx.agents.fundamental.analyze, snap, headlines=None)
+        news_fut = pool.submit(ctx.agents.news.analyze, snap, headlines=headlines)
+        sent_fut = pool.submit(ctx.agents.sentiment.analyze, snap, headlines=headlines)
+        tech = tech_fut.result()
+        fund = fund_fut.result()
+        news = news_fut.result()
+        sentiment = sent_fut.result()
+
+    signals = [tech, fund, news, sentiment]
+    reports = [
+        report_from_signal(tech, analyst="technical"),
+        report_from_signal(fund, analyst="fundamental"),
+        report_from_signal(news, analyst="news"),
+        report_from_signal(sentiment, analyst="sentiment"),
+    ]
+
+    for sig in signals:
+        bb.add_signal(sig)
+    env.set_domain(
+        f"analyst_reports:{symbol}",
+        {"symbol": symbol, "reports": [r.to_context() for r in reports]},
+    )
+    for sig in signals:
+        env.set_domain(f"{sig.source}:{symbol}", {"symbol": symbol, "signal": sig.to_context()})
+        ctx.journal.record(
+            "analyst.report",
+            {"symbol": symbol, "analyst": sig.source, "signal": sig.to_context()},
+        )
+
+    debate = ctx.agents.research.debate(
+        symbol,
+        reports,
+        rounds=ctx.config.trading_agents_debate_rounds,
+    )
+    env.set_domain(f"research:{symbol}", debate.to_context())
+    ctx.journal.record("research.debate", debate.to_context())
+
+    meshed = ctx.agents.meshing.mesh(
+        symbol,
+        signals,
+        scanner_reason=cand.get("reason", ""),
+        snapshot_context=snap.to_context() if snap else None,
+        research_context=debate.to_context(),
     )
     env.set_meshed(meshed)
     bb.add_signal(meshed.to_signal())
