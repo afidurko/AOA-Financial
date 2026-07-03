@@ -137,6 +137,81 @@ State that must survive process restarts lives in a small JSON file
 
 ---
 
+## Market-trend analysis & scenario simulation
+
+Alongside the live trading swarm, the `aoa.simulation` package analyzes **past**
+market behavior and recreates plausible **future** scenarios — entirely offline,
+with **no LLM and no orders**. It's pure-Python (no numpy/pandas) and fully
+seedable, so every result is reproducible.
+
+**1. Trend analysis** (`aoa.simulation.trends`) — characterizes a bar history:
+trend direction & strength (regression slope + R²), CAGR, the full daily-return
+distribution (vol, skew, fat-tailedness), a labeled regime (`bull` / `bear` /
+`choppy_volatile` / `sideways` …), and every drawdown deeper than a threshold
+(depth, duration, whether it recovered).
+
+**2. Scenario library** (`aoa.simulation.scenarios` + `aoa.simulation.historical`)
+— two kinds of named stress scenarios:
+
+- **Stylized** (`[synth]`) — reproducible, *seeded* recreations of well-known
+  episodes (1987, 2008, the 2020 COVID crash, the 2022 rate shock, melt-ups,
+  V-recoveries, …), each calibrated to its headline drawdown/duration/vol.
+- **Real historical tapes** (`[real]`) — the *actual* daily-return sequences of a
+  major index across famous windows (1929, 1987, Oct-2008, Feb–Mar-2020), taken
+  from public closes. These reproduce history's exact path, gap-downs and all.
+
+You can also **extract** a scenario from any window of live bars to replay it
+against a current position.
+
+**3. Monte-Carlo simulator** (`aoa.simulation.simulator`) — fits a return process
+to history and projects many forward paths:
+
+- **GBM** — geometric Brownian motion from the estimated drift/vol (smooth, parametric).
+- **Block bootstrap** — resamples contiguous blocks of real returns, preserving
+  fat tails and short-run autocorrelation.
+- **Scenario replay / stress test** — deterministically applies any scenario to
+  the current price.
+
+The simulator summarizes the outcome distribution: expected return, P(profit),
+ending-price percentiles (p5…p95), and **95% VaR / CVaR**.
+
+**4. Live, adaptive tracking** (`aoa.simulation.live`) — the analysis above is
+static; `LiveMarketTracker` makes it **dynamic**. It polls the broker for fresh
+quotes and bars, and on every refresh it:
+
+- anchors the projection to the **live quote mid** (not the last completed bar);
+- re-fits the model with **recency-weighted (EWMA) drift/vol** — older returns
+  decay by ½ every `halflife` bars, so it tracks the *current* regime instead of
+  averaging stale history;
+- diffs against the previous refresh to flag **regime shifts**, large spot moves,
+  fresh drawdowns, and volatility spikes;
+- writes each update to the JSONL journal for the same audit trail the swarm keeps.
+
+It depends only on the abstract `Broker`, so it adapts to live Alpaca, the paper
+sandbox, or a test broker identically.
+
+```python
+from aoa.simulation import analyze_trends, MarketSimulator, SimulationConfig, list_scenarios
+from aoa.simulation import LiveMarketTracker
+
+bars = broker.get_bars("AAPL", "1Day", 252)
+print(analyze_trends(bars, "AAPL").to_dict())
+
+sim = MarketSimulator(seed=1)
+result = sim.simulate(bars, SimulationConfig(method="gbm", horizon=21, n_paths=5000), symbol="AAPL")
+print(result.summary())
+for s in sim.stress_test(result.start_price, list_scenarios()):
+    print(s.scenario, s.total_return_pct, s.max_drawdown_pct)
+
+# Live, adaptive: re-analyze + re-simulate as the market moves.
+tracker = LiveMarketTracker(broker, ewma_halflife=63)
+tracker.stream(["AAPL", "MSFT"], interval=30,
+               on_update=lambda u: print(u.summary()),
+               market_gate=broker.is_market_open)
+```
+
+---
+
 ## Install
 
 ```bash
@@ -198,6 +273,13 @@ aoa team brief    # Tom→Julie→Alan analysis without trading
 aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 aoa report     # activity summary (from journal) + live P&L snapshot
+
+# Market-trend analysis & scenario simulation (no LLM, no orders):
+aoa analyze AAPL                       # characterize the historical trend & drawdowns
+aoa simulate AAPL --paths 5000 --seed 1   # Monte-Carlo forward paths + scenario stress test
+aoa simulate AAPL --method bootstrap   # block-bootstrap (keeps fat tails) instead of GBM
+aoa scenarios                          # list the built-in stress-scenario library
+aoa watch AAPL MSFT --interval 30      # LIVE: re-analyze & re-simulate as prices move
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -379,6 +461,7 @@ src/aoa/
   config.py            # env-driven configuration + risk limits
   brokerage/           # broker abstraction (base) + Alpaca impl + neutral models
   data/                # market-data assembly + pure-Python indicators
+  simulation/          # trend analysis, scenario library, Monte-Carlo + live adaptive tracker
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
   agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk
   team/                # Tom, Julie, Bob, Alan, Aaron + team orchestrator
