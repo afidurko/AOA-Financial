@@ -13,6 +13,7 @@ Commands:
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa workloop   Run the autonomous discover→merge improvement loop.
+  aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
 from __future__ import annotations
@@ -733,6 +734,57 @@ def cmd_report(cfg: Config) -> int:
     return 0
 
 
+def cmd_burnin(cfg: Config, *, cycles: int, pause: int) -> int:
+    """Run multiple team cycles for paper-trading validation."""
+    if cfg.alpaca_live and not cfg.dry_run:
+        print(
+            "Warning: burn-in on a live account — set AOA_PROFILE=paper-dry or "
+            "AOA_DRY_RUN=true for validation.",
+            file=sys.stderr,
+        )
+    team = build_team(cfg)
+    _print_environment(cfg)
+    journal = Journal(cfg.journal_path)
+    start_count = len(journal.read_all())
+    halted = 0
+    exec_errors = 0
+
+    print(
+        f"Burn-in: {cycles} cycle(s), pause={pause}s, mode={cfg.trading_mode}, "
+        f"trading_agents={'on' if cfg.trading_agents_enabled else 'off'}"
+    )
+    for i in range(1, cycles + 1):
+        print(f"\n--- Burn-in cycle {i}/{cycles} ---")
+        if not team.broker.is_market_open():
+            print("Market closed — running analysis anyway.")
+        result = team.run_cycle()
+        _print_team(result)
+        save_signal_adapter(cfg, team.trading.signal_adapter)
+        if result.halted:
+            halted += 1
+        elif result.cycle and _cycle_exit_code(result.cycle):
+            exec_errors += 1
+        if i < cycles and pause > 0:
+            time.sleep(pause)
+
+    summary = summarize_journal(journal.read_all()[start_count:])
+    print("\n=== Burn-in summary ===")
+    print(f"Cycles completed: {summary.cycles}  halted: {halted}  exec errors: {exec_errors}")
+    print(
+        f"Orders: submitted={summary.orders_submitted} dry-run={summary.dry_runs} "
+        f"errors={summary.errors} re-entry skips={summary.reentry_skips}"
+    )
+    if cfg.trading_agents_enabled:
+        print(
+            f"TradingAgents: debates={summary.research_debates} "
+            f"risk_debates={summary.risk_debates} "
+            f"fund_manager={summary.fund_manager_reviews}"
+        )
+    if summary.blocked:
+        print(f"Risk-blocked proposals: {len(summary.blocked)}")
+    return 1 if halted or exec_errors else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -753,6 +805,19 @@ def main(argv: list[str] | None = None) -> int:
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
     sub.add_parser("report", help="Summarize activity and live P&L.")
+    bp = sub.add_parser(
+        "burnin",
+        help="Run N paper cycles and print a burn-in summary.",
+    )
+    bp.add_argument(
+        "-n", "--cycles", type=int, default=10, help="Number of cycles (default 10)."
+    )
+    bp.add_argument(
+        "--pause",
+        type=int,
+        default=0,
+        help="Seconds between cycles (default: AOA_CYCLE_SECONDS or 60).",
+    )
 
     ap = sub.add_parser("analyze", help="Analyze the historical trend of a symbol.")
     ap.add_argument("symbol", help="Ticker to analyze, e.g. AAPL.")
@@ -844,6 +909,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_journal(cfg, args.n)
         if args.command == "report":
             return cmd_report(cfg)
+        if args.command == "burnin":
+            pause = args.pause or cfg.cycle_seconds or 60
+            return cmd_burnin(cfg, cycles=max(1, args.cycles), pause=pause)
         if args.command == "analyze":
             return cmd_analyze(cfg, args.symbol, args.timeframe, args.limit)
         if args.command == "simulate":

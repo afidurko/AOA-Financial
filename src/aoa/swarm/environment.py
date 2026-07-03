@@ -217,6 +217,9 @@ class SwarmEnvironment:
             research = self.domains.get(f"research:{symbol}")
             if research:
                 row["research_debate"] = research.effective()
+            analyst_reports = self.domains.get(f"analyst_reports:{symbol}")
+            if analyst_reports:
+                row["analyst_reports"] = analyst_reports.effective().get("reports", [])
             if options_idea:
                 row["options_idea"] = {
                     k: v for k, v in options_idea.items() if not str(k).startswith("_")

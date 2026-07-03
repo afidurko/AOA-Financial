@@ -206,6 +206,7 @@ class PortfolioStage(PipelineStage):
             account_ctx,
             max_new_positions=ctx.config.risk.max_orders_per_cycle,
             plasticity_context=ctx.plasticity.prompt_block() if ctx.plasticity else "",
+            trading_agents_enabled=ctx.config.trading_agents_enabled,
         )
         bb.commentary = pm.get("portfolio_commentary", "")
         bb.environment.set_domain("portfolio", pm)

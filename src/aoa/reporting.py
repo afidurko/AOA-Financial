@@ -24,6 +24,9 @@ class JournalSummary:
     dry_runs: int = 0
     errors: int = 0
     reentry_skips: int = 0
+    research_debates: int = 0
+    risk_debates: int = 0
+    fund_manager_reviews: int = 0
     blocked: list[tuple[str, str]] = field(default_factory=list)
     first_ts: str | None = None
     last_ts: str | None = None
@@ -59,6 +62,12 @@ def summarize_journal(entries: list[dict]) -> JournalSummary:
             s.errors += 1
         elif event == "proposal.skipped":
             s.reentry_skips += 1
+        elif event == "research.debate":
+            s.research_debates += 1
+        elif event == "risk.debate":
+            s.risk_debates += 1
+        elif event == "fund_manager.review":
+            s.fund_manager_reviews += 1
         elif event == "risk.review":
             for p in e.get("proposals", []) or []:
                 if not p.get("approved"):
