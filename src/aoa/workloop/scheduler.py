@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from aoa.config import Config
-from aoa.workloop.approval import ApprovalRequired, check_approval
+from aoa.workloop.approval import ApprovalRequired, check_approval, required_approver_for_run
 from aoa.workloop.orchestrator import WorkloopOrchestrator, WorkloopResult
 from aoa.workloop.store import WorkloopStore
 
@@ -127,11 +127,12 @@ class WorkloopScheduler:
         )
 
     def _tick_awaiting_approval(self, existing, sched: SchedulerState, *, dry_run: bool) -> LoopIterationResult:
+        approver = required_approver_for_run(existing, self.orchestrator.config)
         try:
             check_approval(
                 self.store,
                 run_id=existing.run_id,
-                approver=self.orchestrator.config.workloop_approver,
+                approver=approver,
             )
         except ApprovalRequired:
             self._persist_scheduler(status="awaiting_approval", iteration=existing.iteration or sched.iteration)

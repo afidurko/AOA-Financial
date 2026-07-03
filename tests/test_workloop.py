@@ -36,9 +36,27 @@ def _config(tmp_path: Path, **kwargs) -> Config:
     return Config(**defaults)
 
 
-def test_default_workloop_has_ten_stages():
+def test_default_workloop_has_eleven_stages():
     names = [s.name for s in default_stages()]
     assert names == list(STAGE_ORDER)
+    assert "team_review" in names
+
+
+def _stub_team_review(monkeypatch, *, verdict="approve", required_approver="Aaron"):
+    def _fake(**kwargs):
+        return {
+            "run_id": kwargs.get("run_id", ""),
+            "verdict": verdict,
+            "required_approver": required_approver,
+            "summary": f"stub team review ({verdict})",
+            "escalation_messages": [],
+            "bob": {"can_proceed": True},
+            "julie": {"status": "ok"},
+            "alan": {"recommendation": verdict},
+            "aaron": {"verdict": verdict, "required_approver": required_approver},
+        }
+
+    monkeypatch.setattr("aoa.workloop.stages.review_change_proposal", _fake)
 
 
 def test_discover_sources_finds_core_materials(tmp_path):
@@ -98,6 +116,7 @@ def test_workloop_halts_at_approval_without_signoff(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     orch = WorkloopOrchestrator(cfg, repo_root=Path(__file__).resolve().parents[1])
 
+    _stub_team_review(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
 
@@ -105,12 +124,14 @@ def test_workloop_halts_at_approval_without_signoff(tmp_path, monkeypatch):
     assert result.halted is True
     assert result.run.status == "awaiting_approval"
     assert result.run.stage == "approval"
+    assert result.run.team_review.get("verdict") == "approve"
 
 
 def test_workloop_resumes_after_aaron_approves(tmp_path, monkeypatch):
     cfg = _config(tmp_path)
     orch = WorkloopOrchestrator(cfg, repo_root=Path(__file__).resolve().parents[1])
 
+    _stub_team_review(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
     monkeypatch.setattr(
@@ -180,6 +201,7 @@ def test_scheduler_polls_approval_then_resumes(tmp_path, monkeypatch):
     orch = WorkloopOrchestrator(cfg, repo_root=repo)
     scheduler = WorkloopScheduler(orch, interval_seconds=60, sleep_fn=lambda _s: None)
 
+    _stub_team_review(monkeypatch)
     monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
     monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
     monkeypatch.setattr(
@@ -215,4 +237,78 @@ def test_extract_includes_prior_workloop_learnings(tmp_path):
     assert "avoid repeat vetoes on AAPL" in extracted["workloop_lessons"]
     assert extracted["prior_iterations"] == 2
     assert extracted["previous_run_id"] == "abc"
+
+
+def test_team_review_rejects_when_bob_blocks(tmp_path, monkeypatch):
+    from aoa.team.code_engineering import CodeFinding, CodeQualityReport, HealthStatus
+    from aoa.workloop import team_review as tr_mod
+
+    monkeypatch.setattr(
+        tr_mod,
+        "run_code_quality_audit",
+        lambda **kwargs: CodeQualityReport(
+            findings=[CodeFinding("ruff", HealthStatus.CRITICAL, "broken")],
+            can_proceed=False,
+            summary="critical",
+        ),
+    )
+    review = tr_mod.review_change_proposal(
+        proposal={"has_changes": True, "changed_files": ["src/aoa/cli.py"], "summary": "cli"},
+        adaptations=[],
+        repo_root=Path(__file__).resolve().parents[1],
+        config=_config(tmp_path),
+        run_id="run-test",
+        llm=None,
+    )
+    assert review["verdict"] == "reject"
+
+
+def test_team_review_escalates_sensitive_paths(tmp_path, monkeypatch):
+    from aoa.team.code_engineering import CodeQualityReport
+    from aoa.workloop import team_review as tr_mod
+
+    monkeypatch.setattr(
+        tr_mod,
+        "run_code_quality_audit",
+        lambda **kwargs: CodeQualityReport(can_proceed=True, summary="ok"),
+    )
+    review = tr_mod.review_change_proposal(
+        proposal={
+            "has_changes": True,
+            "changed_files": [".env.production"],
+            "summary": "secrets",
+        },
+        adaptations=[],
+        repo_root=Path(__file__).resolve().parents[1],
+        config=_config(tmp_path),
+        run_id="run-sensitive",
+        llm=None,
+    )
+    assert review["verdict"] == "escalate_user"
+    assert review["required_approver"] == "user"
+
+
+def test_workloop_escalated_changes_require_user_approval(tmp_path, monkeypatch):
+    cfg = _config(tmp_path, workloop_user_approver="user")
+    orch = WorkloopOrchestrator(cfg, repo_root=Path(__file__).resolve().parents[1])
+    _stub_team_review(monkeypatch, verdict="escalate_user", required_approver="user")
+    monkeypatch.setattr("aoa.workloop.stages.run_verify", lambda _root: {"passed": True})
+    monkeypatch.setattr("aoa.workloop.stages.run_upgrade", lambda _root: {"ok": True})
+    monkeypatch.setattr(
+        "aoa.workloop.stages.run_merge",
+        lambda proposal, **kwargs: {"message": "merge skipped"},
+    )
+
+    halted = orch.run(dry_run=False)
+    assert halted.halted is True
+    assert halted.run.team_review["required_approver"] == "user"
+
+    orch.approve(approver="Aaron", note="wrong approver")
+    still = orch.run(resume=True, from_stage="approval")
+    assert still.halted is True
+
+    orch.approve(approver="user", note="confirmed")
+    done = orch.run(resume=True, from_stage="approval")
+    assert done.halted is False
+    assert done.run.status == "completed"
 

@@ -10,6 +10,7 @@ STAGE_ORDER = (
     "extract",
     "adapt",
     "propose",
+    "team_review",
     "approval",
     "execute",
     "verify",
@@ -44,6 +45,7 @@ class WorkloopRun:
     extracted: dict[str, Any] = field(default_factory=dict)
     adaptations: list[dict[str, Any]] = field(default_factory=list)
     proposal: dict[str, Any] = field(default_factory=dict)
+    team_review: dict[str, Any] = field(default_factory=dict)
     approval: dict[str, Any] | None = None
     execution: dict[str, Any] = field(default_factory=dict)
     verify: dict[str, Any] = field(default_factory=dict)
@@ -64,6 +66,7 @@ class WorkloopRun:
             "extracted": self.extracted,
             "adaptations": self.adaptations,
             "proposal": self.proposal,
+            "team_review": self.team_review,
             "approval": self.approval,
             "execution": self.execution,
             "verify": self.verify,
@@ -86,6 +89,7 @@ class WorkloopRun:
             extracted=dict(data.get("extracted", {})),
             adaptations=list(data.get("adaptations", [])),
             proposal=dict(data.get("proposal", {})),
+            team_review=dict(data.get("team_review", {})),
             approval=data.get("approval"),
             execution=dict(data.get("execution", {})),
             verify=dict(data.get("verify", {})),

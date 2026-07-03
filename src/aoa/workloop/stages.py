@@ -6,7 +6,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from aoa.workloop.adapt import write_adaptations
-from aoa.workloop.approval import ApprovalRequired, check_approval
+from aoa.workloop.approval import (
+    ApprovalRequired,
+    TeamRejected,
+    check_approval,
+    check_team_review_gate,
+    required_approver_for_run,
+)
 from aoa.workloop.discover import discover_sources
 from aoa.workloop.execute import execute_changes
 from aoa.workloop.extract import extract_insights
@@ -14,6 +20,7 @@ from aoa.workloop.merge import run_merge
 from aoa.workloop.models import STAGE_ORDER, WorkloopRun
 from aoa.workloop.propose import build_proposal
 from aoa.workloop.store import WorkloopStore
+from aoa.workloop.team_review import push_escalation_alerts, review_change_proposal
 from aoa.workloop.upgrade import run_upgrade
 from aoa.workloop.verify import run_verify
 
@@ -94,6 +101,63 @@ class ProposeStage(WorkloopStage):
         return True
 
 
+class TeamReviewStage(WorkloopStage):
+    """Bob, Julie, Alan, and Aaron review proposed changes before sign-off."""
+
+    name = "team_review"
+
+    def run(self, ctx: WorkloopContext) -> bool:
+        if not ctx.config.workloop_team_review_enabled:
+            ctx.run.notes.append("Team review disabled (AOA_WORKLOOP_TEAM_REVIEW_ENABLED=false).")
+            return True
+        if ctx.dry_run:
+            ctx.run.team_review = {
+                "verdict": "approve",
+                "required_approver": ctx.config.workloop_approver,
+                "summary": "Dry-run team review bypass.",
+            }
+            ctx.run.notes.append("Dry-run: team review bypassed.")
+            return True
+
+        llm = _optional_llm(ctx.config)
+        review = review_change_proposal(
+            proposal=ctx.run.proposal,
+            adaptations=ctx.run.adaptations,
+            repo_root=ctx.repo_root,
+            config=ctx.config,
+            run_id=ctx.run.run_id,
+            llm=llm,
+        )
+        ctx.run.team_review = review
+        ctx.store.record(
+            "workloop.team_review",
+            {
+                "run_id": ctx.run.run_id,
+                "verdict": review.get("verdict"),
+                "required_approver": review.get("required_approver"),
+            },
+        )
+        ctx.run.notes.append(f"Team review: {review.get('summary', '')}")
+
+        try:
+            check_team_review_gate(review)
+        except TeamRejected as exc:
+            ctx.run.status = "rejected_by_team"
+            ctx.run.error = str(exc)
+            ctx.run.notes.append(str(exc))
+            return False
+
+        if review.get("verdict") == "escalate_user":
+            alerts = push_escalation_alerts(
+                ctx.config,
+                list(review.get("escalation_messages") or []),
+                run_id=ctx.run.run_id,
+            )
+            for alert in alerts:
+                ctx.run.notes.append(alert)
+        return True
+
+
 class ApprovalStage(WorkloopStage):
     name = "approval"
 
@@ -105,11 +169,25 @@ class ApprovalStage(WorkloopStage):
             }
             ctx.run.notes.append("Dry-run: approval gate bypassed.")
             return True
+
+        approver = required_approver_for_run(ctx.run, ctx.config)
+        if (
+            not ctx.run.proposal.get("has_changes")
+            and (ctx.run.team_review or {}).get("verdict") == "approve"
+        ):
+            ctx.run.approval = {
+                "approver": approver,
+                "approved_at": "",
+                "note": "auto-approved: no repo changes after team review",
+            }
+            ctx.run.notes.append(f"Auto-approved by team ({approver}): no diff to implement.")
+            return True
+
         try:
             ctx.run.approval = check_approval(
                 ctx.store,
                 run_id=ctx.run.run_id,
-                approver=ctx.config.workloop_approver,
+                approver=approver,
             )
             ctx.run.notes.append(f"Approved by {ctx.run.approval.get('approver')}.")
             return True
@@ -117,7 +195,13 @@ class ApprovalStage(WorkloopStage):
             ctx.run.status = "awaiting_approval"
             ctx.run.error = str(exc)
             ctx.run.notes.append(str(exc))
-            ctx.store.record("workloop.awaiting_approval", {"run_id": ctx.run.run_id})
+            ctx.store.record(
+                "workloop.awaiting_approval",
+                {
+                    "run_id": ctx.run.run_id,
+                    "required_approver": approver,
+                },
+            )
             return False
 
 
@@ -205,6 +289,7 @@ def default_stages() -> list[WorkloopStage]:
         ExtractStage(),
         AdaptStage(),
         ProposeStage(),
+        TeamReviewStage(),
         ApprovalStage(),
         ExecuteStage(),
         VerifyStage(),
@@ -212,6 +297,21 @@ def default_stages() -> list[WorkloopStage]:
         ReverifyStage(),
         MergeStage(),
     ]
+
+
+def _optional_llm(config):
+    if not config.anthropic_api_key:
+        return None
+    try:
+        from aoa.llm.client import LLMClient
+
+        return LLMClient(
+            config.anthropic_api_key,
+            model=config.model,
+            effort=config.effort,
+        )
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def stage_index(name: str) -> int:
