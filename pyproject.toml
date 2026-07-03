@@ -17,6 +17,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "pytest-mock>=3.12.0", "ruff>=0.6.0"]
+web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
+all = ["aoa-financial[dev,web]"]
 
 [project.scripts]
 aoa = "aoa.cli:main"

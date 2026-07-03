@@ -145,6 +145,14 @@ class Config:
     dry_run: bool = False
     live_acknowledged: bool = False
 
+    # News feed
+    news_enabled: bool = True
+
+    # Web server
+    web_host: str = "0.0.0.0"
+    web_port: int = 8080
+    web_auto_loop: bool = False
+
     # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
 
@@ -193,6 +201,10 @@ class Config:
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             dry_run=_bool("AOA_DRY_RUN", False),
             live_acknowledged=live_ack,
+            news_enabled=_bool("AOA_NEWS_ENABLED", True),
+            web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
+            web_port=_int("AOA_WEB_PORT", 8080),
+            web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),
