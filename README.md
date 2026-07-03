@@ -200,8 +200,8 @@ Adjust `User`, `WorkingDirectory`, and paths in the unit files for your host.
 
 ## News feed
 
-When `AOA_NEWS_ENABLED=true` (the default), the orchestrator fetches recent
-headlines from Alpaca's market-data news API for each scanner candidate and
+When `AOA_NEWS_ENABLED=true` (the default), the **Analyze** pipeline stage fetches
+recent headlines from Alpaca's market-data news API for each scanner candidate and
 passes them to the **Fundamental** agent. If the feed is unavailable the agent
 falls back to qualitative reasoning without fabricating headlines.
 
@@ -217,7 +217,7 @@ falls back to qualitative reasoning without fabricating headlines.
                              │ Config.from_env()
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Orchestrator — composable pipeline                             │
+│  Orchestrator — composable pipeline (intake → … → execute)      │
 │  intake → scan → analyze(+news) → mesh → portfolio → risk       │
 └──────┬──────────────────┬──────────────────┬────────────────────┘
        │                  │                  │
@@ -266,7 +266,8 @@ canned-response fake LLM — no network, no API keys, no real orders.
 ## Extending
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
-- **Add a news feed**: implement `aoa.data.news.NewsFeed` and pass it to `Orchestrator`.
+- **Add a news feed**: implement `aoa.data.news.NewsFeed` and pass it to `Orchestrator`
+  (or enable the built-in Alpaca feed via `AOA_NEWS_ENABLED`).
 - **Add an agent**: subclass `aoa.agents.base.Agent`, register it in `AgentTeam`
   (`aoa.swarm.team`), and add or extend a pipeline stage in `aoa.swarm.stages`.
 - **Customize the pipeline**: pass a custom `Pipeline(stages=[...])` to
@@ -275,6 +276,14 @@ canned-response fake LLM — no network, no API keys, no real orders.
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 - **Add a UI panel**: extend `aoa/web/app.py` dashboard or add API routes.
+
+```python
+from aoa.swarm.pipeline import Pipeline
+from aoa.swarm.stages import default_stages, PortfolioStage
+
+custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
+orch = Orchestrator(config, broker, llm, pipeline=custom)
+```
 
 ## Disclaimer
 
