@@ -108,7 +108,10 @@ def _filter_chain(
     out = [
         c
         for c in chain
-        if lo <= c.strike <= hi and c.bid > 0 and c.ask > 0 and c.open_interest >= 10
+        if lo <= c.strike <= hi
+        and c.bid > 0
+        and c.ask > 0
+        and (c.open_interest == 0 or c.open_interest >= 10)
     ]
     # Keep the nearest expiration cluster (the chain is sorted by expiration).
     if out:

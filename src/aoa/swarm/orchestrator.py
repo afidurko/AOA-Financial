@@ -111,6 +111,8 @@ class Orchestrator:
 
         # 5 & 6) Per-candidate analysis.
         per_symbol = self._analyze_candidates(bb)
+        if not per_symbol and bb.positions:
+            per_symbol = self._positions_for_exit_review(bb)
 
         # 7) Portfolio decision.
         account_ctx = {
@@ -174,7 +176,15 @@ class Orchestrator:
     def _update_starting_equity(self, equity: float) -> None:
         today = date.today()
         if self._equity_day != today:
-            self._equity_day = today
+            stored_day_raw, stored_equity = self.journal.load_daily_equity_baseline()
+            if stored_day_raw == today.isoformat() and stored_equity > 0:
+                self._equity_day = today
+                self._starting_equity = stored_equity
+            else:
+                self._equity_day = today
+                self._starting_equity = equity
+                self.journal.save_daily_equity_baseline(today, equity)
+        elif self._starting_equity <= 0:
             self._starting_equity = equity
 
     def _resolve_universe(self) -> list[str]:
@@ -210,7 +220,7 @@ class Orchestrator:
                 and combined_conv >= 0.55
                 and price
                 and bb.account
-                and bb.account.options_level >= 1
+                and bb.account.options_level >= 2
             ):
                 idea = self.options.propose(symbol, combined_dir, combined_conv, price)
                 if idea:
@@ -223,6 +233,36 @@ class Orchestrator:
                     }
             per_symbol.append(entry)
         return per_symbol
+
+    def _positions_for_exit_review(self, bb: Blackboard) -> list[dict]:
+        """When the scanner finds nothing, still give the PM context on open positions."""
+        entries: list[dict] = []
+        for pos in bb.positions:
+            if pos.qty <= 0:
+                continue
+            symbol = pos.symbol.upper()
+            if pos.asset_class is AssetClass.OPTION:
+                entries.append(
+                    {
+                        "symbol": symbol,
+                        "scanner_reason": "existing position — reviewing for exit",
+                        "signals": [],
+                    }
+                )
+                continue
+            snap = bb.snapshots.get(symbol) or self.market.snapshot(symbol)
+            tech = self.technical.analyze(snap)
+            fund = self.fundamental.analyze(snap)
+            bb.add_signal(tech)
+            bb.add_signal(fund)
+            entries.append(
+                {
+                    "symbol": symbol,
+                    "scanner_reason": "existing position — reviewing for exit",
+                    "signals": [tech.to_context(), fund.to_context()],
+                }
+            )
+        return entries
 
     def _materialize_proposals(self, raw: list[dict], bb: Blackboard) -> list[TradeProposal]:
         proposals: list[TradeProposal] = []

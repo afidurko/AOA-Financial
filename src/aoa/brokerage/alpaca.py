@@ -109,9 +109,10 @@ class AlpacaBroker(Broker):
             equity=_f(d.get("equity")),
             cash=_f(d.get("cash")),
             buying_power=_f(d.get("buying_power")),
-            # In a cash account Alpaca reports non-marginable buying power as the
-            # settled, immediately usable cash.
-            settled_cash=_f(d.get("cash")),
+            # Non-marginable buying power is the immediately usable cash in a cash account.
+            settled_cash=_f(
+                d.get("non_marginable_buying_power", d.get("cash"))
+            ),
             options_level=int(_f(d.get("options_approved_level", 0))),
             daytrade_count=int(_f(d.get("daytrade_count", 0))),
             pattern_day_trader=bool(d.get("pattern_day_trader", False)),
@@ -200,6 +201,7 @@ class AlpacaBroker(Broker):
         except BrokerError:
             return []
         snapshots = d.get("snapshots", {}) if isinstance(d, dict) else {}
+        oi_by_symbol = self._fetch_open_interest(underlying, expiration=expiration)
         contracts: list[OptionContract] = []
         for occ_symbol, snap in snapshots.items():
             parsed = _parse_occ(occ_symbol)
@@ -209,6 +211,9 @@ class AlpacaBroker(Broker):
             quote = snap.get("latestQuote", {}) or {}
             trade = snap.get("latestTrade", {}) or {}
             greeks = snap.get("greeks", {}) or {}
+            oi = oi_by_symbol.get(occ_symbol)
+            if oi is None:
+                oi = _f(snap.get("openInterest"))
             contracts.append(
                 OptionContract(
                     symbol=occ_symbol,
@@ -219,7 +224,7 @@ class AlpacaBroker(Broker):
                     bid=_f(quote.get("bp")),
                     ask=_f(quote.get("ap")),
                     last=_f(trade.get("p")),
-                    open_interest=_f(snap.get("openInterest")),
+                    open_interest=oi,
                     implied_volatility=(
                         _f(snap.get("impliedVolatility"))
                         if snap.get("impliedVolatility") is not None
@@ -230,6 +235,28 @@ class AlpacaBroker(Broker):
             )
         contracts.sort(key=lambda c: (c.expiration, c.option_type.value, c.strike))
         return contracts
+
+    def _fetch_open_interest(
+        self, underlying: str, *, expiration: str | None = None
+    ) -> dict[str, float]:
+        """Open interest lives on the trading API, not the data snapshot."""
+        params: dict = {
+            "underlying_symbols": underlying,
+            "status": "active",
+            "limit": 1000,
+        }
+        if expiration:
+            params["expiration_date"] = expiration
+        try:
+            rows = self._trading("GET", "/v2/options/contracts", params=params)
+        except BrokerError:
+            return {}
+        out: dict[str, float] = {}
+        for row in rows if isinstance(rows, list) else []:
+            sym = row.get("symbol")
+            if sym:
+                out[sym] = _f(row.get("open_interest"))
+        return out
 
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:
