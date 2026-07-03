@@ -547,6 +547,7 @@ def cmd_journal(cfg: Config, n: int) -> int:
 
 def _print_workloop_result(result, *, approver: str = "Aaron") -> None:
     run = result.run
+    required = (run.team_review or {}).get("required_approver") or approver
     print("\n=== Work-loop summary ===")
     print(f"Run: {run.run_id} | stage: {run.stage} | status: {run.status}")
     if run.discovered:
@@ -560,6 +561,13 @@ def _print_workloop_result(result, *, approver: str = "Aaron") -> None:
                 print(f"  • {action}")
     if run.proposal:
         print(f"Proposal: {run.proposal.get('summary', '')}")
+    if run.team_review:
+        print(
+            "Team review: "
+            f"{run.team_review.get('verdict', 'n/a')} — "
+            f"{run.team_review.get('summary', '')}"
+        )
+        print(f"Required approver: {required}")
     if run.approval:
         print(
             f"Approval: {run.approval.get('approver')} at {run.approval.get('approved_at', 'n/a')}"
@@ -580,7 +588,12 @@ def _print_workloop_result(result, *, approver: str = "Aaron") -> None:
     for note in run.notes:
         print(f"  - {note}")
     if result.halted and run.status == "awaiting_approval":
-        print(f"\nAwaiting approval from {approver}. Run: aoa workloop approve")
+        print(
+            f"\nAwaiting approval from {required}. "
+            f"Run: aoa workloop approve --approver {required}"
+        )
+    elif result.halted and run.status == "rejected_by_team":
+        print("\nChange rejected by the team — fix issues and start a new run.")
 
 
 def cmd_workloop_run(

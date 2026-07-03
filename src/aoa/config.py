@@ -201,6 +201,9 @@ class Config:
     # Autonomous work loop (discover → merge with Aaron approval gate)
     workloop_enabled: bool = True
     workloop_approver: str = "Aaron"
+    workloop_user_approver: str = "user"
+    workloop_team_review_enabled: bool = True
+    workloop_escalation_file_threshold: int = 12
     workloop_journal_tail: int = 100
     workloop_max_lessons: int = 20
     workloop_auto_commit: bool = False
@@ -299,6 +302,11 @@ class Config:
             adapt_lr=_float("AOA_ADAPT_LR", 0.05),
             workloop_enabled=_bool("AOA_WORKLOOP_ENABLED", True),
             workloop_approver=os.environ.get("AOA_WORKLOOP_APPROVER", "Aaron").strip() or "Aaron",
+            workloop_user_approver=os.environ.get("AOA_WORKLOOP_USER_APPROVER", "user").strip() or "user",
+            workloop_team_review_enabled=_bool("AOA_WORKLOOP_TEAM_REVIEW_ENABLED", True),
+            workloop_escalation_file_threshold=max(
+                1, _int("AOA_WORKLOOP_ESCALATION_FILE_THRESHOLD", 12)
+            ),
             workloop_journal_tail=max(20, _int("AOA_WORKLOOP_JOURNAL_TAIL", 100)),
             workloop_max_lessons=max(1, _int("AOA_WORKLOOP_MAX_LESSONS", 20)),
             workloop_auto_commit=_bool("AOA_WORKLOOP_AUTO_COMMIT", False),

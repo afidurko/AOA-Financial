@@ -1,4 +1,4 @@
-"""Aaron approval gate for work-loop execution."""
+"""Aaron / user approval gate for work-loop execution."""
 
 from __future__ import annotations
 
@@ -10,6 +10,24 @@ from aoa.workloop.store import WorkloopStore
 
 class ApprovalRequired(RuntimeError):
     """Raised when a run must pause until the configured approver signs off."""
+
+
+class TeamRejected(RuntimeError):
+    """Raised when the five-member team rejects a change proposal."""
+
+
+def required_approver_for_run(run, config) -> str:
+    review = getattr(run, "team_review", None) or {}
+    return str(review.get("required_approver") or config.workloop_approver)
+
+
+def check_team_review_gate(team_review: dict[str, Any] | None) -> None:
+    if not team_review:
+        return
+    verdict = team_review.get("verdict")
+    if verdict == "reject":
+        summary = team_review.get("summary") or "Change rejected by team review."
+        raise TeamRejected(summary)
 
 
 def check_approval(
