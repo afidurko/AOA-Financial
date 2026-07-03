@@ -5,24 +5,26 @@ from __future__ import annotations
 from aoa.agents.base import Direction
 from aoa.brokerage.models import Side
 from aoa.config import Config, RiskLimits
+from aoa.execution.pricing import marketable_limit
 from aoa.journal.store import Journal
-from aoa.swarm.orchestrator import Orchestrator, _marketable_limit
+from aoa.swarm.orchestrator import Orchestrator
 
 
-def _config(dry_run=False):
+def _config(tmp_path, dry_run=False):
     return Config(
         anthropic_api_key="x",
         alpaca_key_id="x",
         alpaca_secret_key="x",
         universe=("AAPL",),
         dry_run=dry_run,
+        state_path=str(tmp_path / "state.json"),
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
     )
 
 
 def test_full_cycle_submits_order(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=False), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path), fake_broker, fake_llm, journal)
 
     result = orch.run_cycle()
 
@@ -43,7 +45,7 @@ def test_full_cycle_submits_order(fake_broker, fake_llm, tmp_path):
 
 def test_dry_run_submits_nothing(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path, dry_run=True), fake_broker, fake_llm, journal)
 
     result = orch.run_cycle()
 
@@ -54,7 +56,7 @@ def test_dry_run_submits_nothing(fake_broker, fake_llm, tmp_path):
 
 def test_journal_records_cycle(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path, dry_run=True), fake_broker, fake_llm, journal)
     orch.run_cycle()
     events = {e["event"] for e in journal.tail(50)}
     assert "cycle.start" in events
@@ -65,7 +67,7 @@ def test_journal_records_cycle(fake_broker, fake_llm, tmp_path):
 
 def test_cycle_populates_swarm_environment(fake_broker, fake_llm, tmp_path):
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path, dry_run=True), fake_broker, fake_llm, journal)
     result = orch.run_cycle()
 
     env = result.blackboard.environment
@@ -76,8 +78,8 @@ def test_cycle_populates_swarm_environment(fake_broker, fake_llm, tmp_path):
 
 
 def test_marketable_limit_padding():
-    assert _marketable_limit(100.0, Side.BUY) == 101.0
-    assert _marketable_limit(100.0, Side.SELL) == 99.0
+    assert marketable_limit(100.0, Side.BUY) == 101.0
+    assert marketable_limit(100.0, Side.SELL) == 99.0
 
 
 def test_empty_scanner_still_reviews_open_positions(fake_broker, fake_llm, tmp_path):
@@ -86,7 +88,7 @@ def test_empty_scanner_still_reviews_open_positions(fake_broker, fake_llm, tmp_p
     fake_llm.candidates = []
     fake_broker.set_positions([make_position("AAPL", qty=50, price=100.0)])
     journal = Journal(tmp_path / "j.jsonl")
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    orch = Orchestrator(_config(tmp_path, dry_run=True), fake_broker, fake_llm, journal)
 
     result = orch.run_cycle()
 
@@ -96,8 +98,12 @@ def test_empty_scanner_still_reviews_open_positions(fake_broker, fake_llm, tmp_p
 
 
 def test_daily_equity_baseline_persists_across_restarts(fake_broker, fake_llm, tmp_path):
-    journal = Journal(tmp_path / "j.jsonl")
-    journal.save_daily_equity_baseline(__import__("datetime").date.today(), 100_000.0)
+    from datetime import date
+
+    from aoa.state import StateStore
+
+    cfg = _config(tmp_path, dry_run=True)
+    StateStore(cfg.state_path).starting_equity_for_today(100_000, date.today())
     fake_broker._account = fake_broker._account.__class__(
         equity=96_000,
         cash=96_000,
@@ -105,7 +111,8 @@ def test_daily_equity_baseline_persists_across_restarts(fake_broker, fake_llm, t
         settled_cash=96_000,
         options_level=2,
     )
-    orch = Orchestrator(_config(dry_run=True), fake_broker, fake_llm, journal)
+    journal = Journal(tmp_path / "j.jsonl")
+    orch = Orchestrator(cfg, fake_broker, fake_llm, journal)
     orch.run_cycle()
     assert orch._starting_equity == 100_000.0
 
@@ -120,7 +127,7 @@ def test_universe_broker_error_surfaces_in_notes(fake_broker, fake_llm, tmp_path
 
     fake_broker.get_most_active = boom
     journal = Journal(tmp_path / "j.jsonl")
-    cfg = replace(_config(dry_run=True), universe=())
+    cfg = replace(_config(tmp_path, dry_run=True), universe=())
     orch = Orchestrator(cfg, fake_broker, fake_llm, journal)
 
     result = orch.run_cycle()

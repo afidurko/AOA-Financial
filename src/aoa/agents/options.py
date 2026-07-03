@@ -13,7 +13,6 @@ import json
 from aoa.agents.base import Agent, Direction
 from aoa.brokerage.base import Broker
 from aoa.brokerage.models import OptionContract
-from aoa.llm.client import LLMError
 
 _CASH_STRATEGIES = ["long_call", "long_put", "covered_call", "cash_secured_put", "none"]
 
@@ -86,10 +85,16 @@ class OptionsStrategistAgent(Agent):
             "Propose at most one cash-account options structure as JSON. If nothing "
             "is attractive, set strategy to 'none'."
         )
-        try:
-            r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
-        except LLMError:
-            return None
+        r = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "strategy": "none",
+                "rationale": "LLM unavailable.",
+                "conviction": 0.0,
+            },
+        )
         if r.get("strategy") in (None, "none"):
             return None
         # Resolve the chosen contract for downstream sizing/pricing.
@@ -109,16 +114,21 @@ def _filter_chain(
         return []
     lo = underlying_price * (1 - width)
     hi = underlying_price * (1 + width)
-    out = [
-        c
-        for c in chain
-        if lo <= c.strike <= hi
-        and c.bid > 0
-        and c.ask > 0
-        and (c.open_interest == 0 or c.open_interest >= 10)
-    ]
+    out = [c for c in chain if lo <= c.strike <= hi and _is_liquid_contract(c)]
     # Keep the nearest expiration cluster (the chain is sorted by expiration).
     if out:
         nearest_exp = out[0].expiration
         out = [c for c in out if c.expiration == nearest_exp]
     return out[:20]
+
+
+def _is_liquid_contract(contract: OptionContract) -> bool:
+    if contract.bid <= 0 or contract.ask <= 0:
+        return False
+    if contract.open_interest >= 10:
+        return True
+    # Alpaca's indicative feed often omits OI — accept tight two-sided quotes.
+    if contract.open_interest == 0 and contract.mid > 0:
+        spread_pct = (contract.ask - contract.bid) / contract.mid
+        return spread_pct <= 0.15
+    return False

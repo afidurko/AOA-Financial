@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
+from aoa.agents.research import ResearchTeamAgent
 from aoa.config import Config, RiskLimits
 from aoa.journal.store import Journal
 from aoa.swarm.orchestrator import Orchestrator
 from aoa.swarm.stages import default_stages
 from aoa.swarm.trading_protocol import AnalystReport
-from aoa.agents.research import ResearchTeamAgent
 
 
 def _config(**kwargs):

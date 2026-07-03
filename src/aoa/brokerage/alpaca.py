@@ -23,16 +23,22 @@ from alpaca.data.requests import (
 )
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import ContractType, OrderSide, QueryOrderStatus
+from alpaca.trading.enums import ContractType, OrderClass, OrderSide, QueryOrderStatus
 from alpaca.trading.enums import TimeInForce as AlpacaTimeInForce
 from alpaca.trading.requests import (
     GetOptionContractsRequest,
     GetOrdersRequest,
     LimitOrderRequest,
     MarketOrderRequest,
+    StopLossRequest,
+    TakeProfitRequest,
 )
 
 from aoa.brokerage.base import Broker, BrokerError
+from aoa.brokerage.constants import (
+    VALID_ALPACA_BAR_ADJUSTMENTS,
+    VALID_ALPACA_DATA_FEEDS,
+)
 from aoa.brokerage.models import (
     Account,
     AssetClass,
@@ -57,9 +63,6 @@ _FEED_MAP = {
     "boats": DataFeed.BOATS,
     "otc": DataFeed.OTC,
 }
-
-_VALID_DATA_FEEDS = frozenset({"sip", "iex", "boats", "otc"})
-_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
 
 _ADJUSTMENT_MAP = {
     "raw": Adjustment.RAW,
@@ -92,6 +95,24 @@ def _f(value, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _settled_cash_from_alpaca(acct) -> float:
+    """Conservative settled cash for cash-account risk sizing.
+
+    Alpaca ``cash`` can include unsettled proceeds. Prefer the broker's
+    non-marginable / withdrawable figures when present.
+    """
+    cash = _f(acct.cash)
+    nmbp = getattr(acct, "non_marginable_buying_power", None)
+    if nmbp is not None:
+        settled = _f(nmbp)
+        return min(cash, settled) if cash > 0 else settled
+    withdrawable = getattr(acct, "cash_withdrawable", None)
+    if withdrawable is not None:
+        settled = _f(withdrawable)
+        return min(cash, settled) if cash > 0 else settled
+    return cash
 
 
 def _parse_timeframe(value: str) -> TimeFrame:
@@ -185,15 +206,15 @@ class AlpacaBroker(Broker):
         self.name = "alpaca-live" if live else "alpaca-paper"
         self._data_feed = data_feed.strip().lower()
         self._bar_adjustment = bar_adjustment.strip().lower() or "split"
-        if self._data_feed and self._data_feed not in _VALID_DATA_FEEDS:
+        if self._data_feed and self._data_feed not in VALID_ALPACA_DATA_FEEDS:
             raise BrokerError(
                 f"Invalid Alpaca data feed {self._data_feed!r}; "
-                f"expected one of {', '.join(sorted(_VALID_DATA_FEEDS))}."
+                f"expected one of {', '.join(sorted(VALID_ALPACA_DATA_FEEDS))}."
             )
-        if self._bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+        if self._bar_adjustment not in VALID_ALPACA_BAR_ADJUSTMENTS:
             raise BrokerError(
                 f"Invalid bar adjustment {self._bar_adjustment!r}; "
-                f"expected one of {', '.join(sorted(_VALID_BAR_ADJUSTMENTS))}."
+                f"expected one of {', '.join(sorted(VALID_ALPACA_BAR_ADJUSTMENTS))}."
             )
         paper = not live
         creds = {"api_key": key_id, "secret_key": secret_key}
@@ -248,9 +269,7 @@ class AlpacaBroker(Broker):
             equity=_f(acct.equity),
             cash=_f(acct.cash),
             buying_power=_f(acct.buying_power),
-            settled_cash=_f(
-                getattr(acct, "non_marginable_buying_power", None) or acct.cash
-            ),
+            settled_cash=_settled_cash_from_alpaca(acct),
             options_level=int(_f(acct.options_approved_level, 0)),
             daytrade_count=int(_f(acct.daytrade_count, 0)),
             pattern_day_trader=bool(acct.pattern_day_trader),
@@ -384,7 +403,9 @@ class AlpacaBroker(Broker):
             quote = snap.latest_quote
             trade = snap.latest_trade
             greeks = snap.greeks
-            oi = oi_by_symbol.get(occ_symbol, 0.0)
+            oi = oi_by_symbol.get(occ_symbol)
+            if oi is None:
+                oi = _f(getattr(snap, "open_interest", 0))
             contracts.append(
                 OptionContract(
                     symbol=occ_symbol,
@@ -395,7 +416,7 @@ class AlpacaBroker(Broker):
                     bid=_f(quote.bid_price) if quote else 0.0,
                     ask=_f(quote.ask_price) if quote else 0.0,
                     last=_f(trade.price) if trade else 0.0,
-                    open_interest=oi,
+                    open_interest=oi or _f(getattr(snap, "open_interest", 0) or 0),
                     implied_volatility=(
                         float(snap.implied_volatility)
                         if snap.implied_volatility is not None
@@ -435,18 +456,36 @@ class AlpacaBroker(Broker):
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:
         side = OrderSide.BUY if request.side is Side.BUY else OrderSide.SELL
+        is_protected = request.is_protected and request.asset_class is AssetClass.EQUITY
         tif = (
-            AlpacaTimeInForce.DAY
-            if request.time_in_force is TimeInForce.DAY
-            else AlpacaTimeInForce.GTC
+            AlpacaTimeInForce.GTC
+            if is_protected
+            else (
+                AlpacaTimeInForce.DAY
+                if request.time_in_force is TimeInForce.DAY
+                else AlpacaTimeInForce.GTC
+            )
         )
-        common = {
+        common: dict = {
             "symbol": request.symbol,
             "qty": request.qty,
             "side": side,
             "time_in_force": tif,
             "client_order_id": request.client_order_id,
         }
+        if is_protected:
+            has_tp = request.take_profit_price is not None
+            has_sl = request.stop_loss_price is not None
+            common["order_class"] = (
+                OrderClass.BRACKET if (has_tp and has_sl) else OrderClass.OTO
+            )
+            if has_tp:
+                common["take_profit"] = TakeProfitRequest(
+                    limit_price=request.take_profit_price
+                )
+            if has_sl:
+                common["stop_loss"] = StopLossRequest(stop_price=request.stop_loss_price)
+
         if request.order_type is OrderType.LIMIT:
             sdk_request = LimitOrderRequest(
                 **common,

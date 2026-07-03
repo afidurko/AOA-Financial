@@ -1,5 +1,25 @@
-# Core runtime dependencies
+# =============================================================================
+# src/aoa trading swarm — core runtime
+# =============================================================================
 alpaca-py>=0.40.0       # Official Alpaca SDK (trading + market data)
 anthropic>=0.40.0      # Claude API — the reasoning engine for every agent
+
+# =============================================================================
+# aoa_financial optional deep-analysis engine — optional accelerators
+# =============================================================================
+# The aoa_financial core runs on the Python standard library alone. Packages
+# below are detected at runtime and used when present, with graceful fallback.
+
+# --- Optional numerical acceleration --------------------------------------
+numpy>=1.24              # vectorised math: hot paths in analysis/_backend.py
+                         # (~4× faster on full 1960-to-date series)
+
+# --- Optional tabular / DataFrame layer -----------------------------------
+pandas>=1.5              # analysis/frames.py: DataFrame/CSV IO, indicator panel,
+                         # cross-ticker panels, `frame`/`corr` CLI commands
+
+# --- Optional live market-data feeds --------------------------------------
+requests>=2.28           # Stooq price loader and live fundamentals feed
+                         # (Alpha Vantage / FMP / Finnhub via env-var API keys)
 
 # Dev / test (optional, install with: pip install -r requirements-dev.txt)

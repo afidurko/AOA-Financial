@@ -224,9 +224,19 @@ __marimo__/
 .env.enterprise
 reports/
 
+# Generated data stores (aoa_financial)
+.aoa_data/
+.aoa_demo/
+*.db
+*.db-wal
+*.db-shm
+
 # AOA runtime state (per-environment journals, plasticity, workloop)
 data/
 journal/*.jsonl
 
-# macOS
+# Learned low-rank adapter state
+.aoa/
+
+# OS / editor
 .DS_Store

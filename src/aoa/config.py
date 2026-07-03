@@ -5,6 +5,10 @@ Configuration load order (lowest → highest priority):
 1. Environment profile — ``profiles/{AOA_PROFILE or AOA_ENV}.env``
 2. Local secrets file — ``.env``
 3. Shell / process environment (always wins)
+
+Set ``AOA_PROFILE=paper-dry`` or ``AOA_ENV=paper-dry`` to pick a profile. Named
+environments also apply default ``AOA_DRY_RUN`` / ``ALPACA_LIVE`` values unless
+those variables are already set.
 """
 
 from __future__ import annotations
@@ -13,6 +17,10 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from aoa.brokerage.constants import (
+    VALID_ALPACA_BAR_ADJUSTMENTS,
+    VALID_ALPACA_DATA_FEEDS,
+)
 from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
 
 VALID_ENVS = frozenset({"test", "paper-dry", "paper", "live"})
@@ -22,11 +30,10 @@ _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
     "paper": {"dry_run": False, "alpaca_live": False},
     "live": {"dry_run": False, "alpaca_live": True},
 }
-_VALID_DATA_FEEDS = frozenset({"", "sip", "iex", "boats", "otc"})
-_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
 
 
 def _load_dotenv(path: str | os.PathLike[str]) -> None:
+    """Populate ``os.environ`` from a dotenv file using ``setdefault``."""
     p = Path(path)
     if not p.exists():
         return
@@ -56,6 +63,7 @@ def _resolve_profile_path(name: str) -> Path | None:
 
 
 def load_env_files() -> None:
+    """Load profile and local dotenv files into ``os.environ``."""
     profile_name = os.environ.get("AOA_PROFILE") or os.environ.get("AOA_ENV")
     if profile_name:
         profile_path = _resolve_profile_path(profile_name.strip())
@@ -66,8 +74,12 @@ def load_env_files() -> None:
 
 def _apply_env_defaults(env: str) -> None:
     defaults = _ENV_DEFAULTS.get(env, _ENV_DEFAULTS["paper-dry"])
-    os.environ.setdefault("AOA_DRY_RUN", "true" if defaults["dry_run"] else "false")
-    os.environ.setdefault("ALPACA_LIVE", "true" if defaults["alpaca_live"] else "false")
+    os.environ.setdefault(
+        "AOA_DRY_RUN", "true" if defaults["dry_run"] else "false"
+    )
+    os.environ.setdefault(
+        "ALPACA_LIVE", "true" if defaults["alpaca_live"] else "false"
+    )
 
 
 def _bool(name: str, default: bool = False) -> bool:
@@ -94,7 +106,8 @@ def _parse_csv_paths(name: str) -> tuple[str, ...]:
 
 
 def data_dir_for(env: str) -> Path:
-    return Path(os.environ.get("AOA_DATA_DIR", "data")) / env
+    base = Path(os.environ.get("AOA_DATA_DIR", "data"))
+    return base / env
 
 
 def journal_path_for(env: str) -> Path:
@@ -129,6 +142,7 @@ class RiskLimits:
 
 @dataclass(frozen=True)
 class Config:
+    # Environment
     env: str = "paper-dry"
     profile: str = ""
     data_dir: Path = field(default_factory=lambda: data_dir_for("paper-dry"))
@@ -136,6 +150,7 @@ class Config:
     plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
     workloop_path: Path = field(default_factory=lambda: workloop_path_for("paper-dry"))
 
+    # LLM
     anthropic_api_key: str = ""
     model: str = "claude-sonnet-4-20250514"
     effort: str = "high"
@@ -166,10 +181,24 @@ class Config:
     web_port: int = 8080
     web_auto_loop: bool = False
 
+    # Aaron — iPhone push alerts (never email)
+    custom_app_webhook_url: str = ""
+    custom_app_api_key: str = ""
+    custom_app_device_id: str = ""
+    pushover_user_key: str = ""
+    pushover_app_token: str = ""
+    ntfy_topic: str = ""
+    ntfy_server: str = "https://ntfy.sh"
+
+    # Persistent state (daily-loss baseline + settlement ledger).
+    state_path: str = "journal/state.json"
+
+    # Journal-driven cross-cycle memory (neuroplasticity).
     plasticity_enabled: bool = True
     plasticity_tail: int = 200
     plasticity_max_lessons: int = 10
 
+    # Autonomous work loop (discover → merge with Aaron approval gate)
     workloop_enabled: bool = True
     workloop_approver: str = "Aaron"
     workloop_journal_tail: int = 100
@@ -184,6 +213,13 @@ class Config:
     trading_agents_debate_rounds: int = 1
 
     risk: RiskLimits = field(default_factory=RiskLimits)
+
+    # Low-rank signal adaptation (LoRA-style online conviction recalibration)
+    adapt_enabled: bool = False
+    adapt_path: str = ".aoa/signal_adapter.json"
+    adapt_rank: int = 4
+    adapt_alpha: float = 8.0
+    adapt_lr: float = 0.05
 
     @property
     def has_brokerage_creds(self) -> bool:
@@ -243,9 +279,24 @@ class Config:
             web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
+            custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
+            custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
+            custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),
+            pushover_user_key=os.environ.get("AOA_PUSHOVER_USER_KEY", ""),
+            pushover_app_token=os.environ.get("AOA_PUSHOVER_APP_TOKEN", ""),
+            ntfy_topic=os.environ.get("AOA_NTFY_TOPIC", ""),
+            ntfy_server=os.environ.get("AOA_NTFY_SERVER", "https://ntfy.sh"),
+            state_path=os.environ.get(
+                "AOA_STATE_PATH", str(data_dir_for(env) / "state.json")
+            ),
             plasticity_enabled=_bool("AOA_PLASTICITY_ENABLED", True),
             plasticity_tail=max(20, _int("AOA_PLASTICITY_TAIL", 200)),
             plasticity_max_lessons=max(1, _int("AOA_PLASTICITY_MAX_LESSONS", 10)),
+            adapt_enabled=_bool("AOA_ADAPT_ENABLED", False),
+            adapt_path=os.environ.get("AOA_ADAPT_PATH", ".aoa/signal_adapter.json"),
+            adapt_rank=_int("AOA_ADAPT_RANK", 4),
+            adapt_alpha=_float("AOA_ADAPT_ALPHA", 8.0),
+            adapt_lr=_float("AOA_ADAPT_LR", 0.05),
             workloop_enabled=_bool("AOA_WORKLOOP_ENABLED", True),
             workloop_approver=os.environ.get("AOA_WORKLOOP_APPROVER", "Aaron").strip() or "Aaron",
             workloop_journal_tail=max(20, _int("AOA_WORKLOOP_JOURNAL_TAIL", 100)),
@@ -284,11 +335,11 @@ class Config:
                     "ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY are not set — "
                     "no market data or order execution is possible."
                 )
-        if self.alpaca_data_feed and self.alpaca_data_feed not in _VALID_DATA_FEEDS - {""}:
+        if self.alpaca_data_feed and self.alpaca_data_feed not in VALID_ALPACA_DATA_FEEDS:
             problems.append(
                 "ALPACA_DATA_FEED must be one of: sip, iex, boats, otc (or leave blank)."
             )
-        if self.alpaca_bar_adjustment not in _VALID_BAR_ADJUSTMENTS:
+        if self.alpaca_bar_adjustment not in VALID_ALPACA_BAR_ADJUSTMENTS:
             problems.append(
                 "ALPACA_BAR_ADJUSTMENT must be one of: raw, split, dividend, all, spin-off."
             )

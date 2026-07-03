@@ -62,6 +62,9 @@ class TradeProposal:
     limit_price: float | None = None
     strategy: str = ""  # e.g. "long_equity", "long_call", "covered_call"
     est_price: float = 0.0  # per-share/contract price used for sizing
+    # Protective exits for an equity entry (attached as a broker bracket/OTO).
+    stop_price: float | None = None
+    take_profit_price: float | None = None
     # Populated by the risk manager:
     approved: bool = False
     risk_notes: list[str] = field(default_factory=list)
@@ -81,6 +84,8 @@ class TradeProposal:
             "strategy": self.strategy,
             "est_price": self.est_price,
             "est_notional": round(self.est_notional, 2),
+            "stop_price": self.stop_price,
+            "take_profit_price": self.take_profit_price,
             "conviction": round(self.conviction, 2),
             "rationale": self.rationale,
             "approved": self.approved,
@@ -129,3 +134,10 @@ def clamp_conviction(value: object, default: float = 0.0) -> float:
         return max(0.0, min(1.0, float(value)))
     except (TypeError, ValueError):
         return default
+
+
+def parse_side(value: object) -> Side | None:
+    try:
+        return Side(str(value))
+    except (ValueError, TypeError):
+        return None

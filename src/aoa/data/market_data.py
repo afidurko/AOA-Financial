@@ -35,6 +35,17 @@ class SymbolSnapshot:
         daily = self.technicals.get(PRIMARY_TIMEFRAME, {})
         return daily.get("last_close")
 
+    def reference_price(self) -> float | None:
+        """Best available mark: quote mid, else primary-timeframe last close."""
+        if self.quote:
+            mid = self.quote.mid
+            if mid and mid > 0:
+                return mid
+        last = self.last_close()
+        if last and last > 0:
+            return float(last)
+        return None
+
     def to_context(self) -> dict:
         """Compact JSON-serializable view for prompting the agents."""
         q = self.quote

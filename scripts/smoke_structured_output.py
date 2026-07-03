@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from aoa.agents import fund_manager as fund_manager_mod
 from aoa.agents import fundamental as fundamental_mod

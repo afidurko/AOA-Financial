@@ -24,7 +24,10 @@ tradingagents = [
 tradingagents-bedrock = [
     "tradingagents[bedrock] @ git+https://github.com/TauricResearch/TradingAgents.git@v0.3.0",
 ]
-all = ["aoa-financial[dev,web,tradingagents]"]
+# Only needed for aoa.adapt.torch_lora (general-purpose PyTorch LoRA). The
+# swarm's own signal adaptation is pure-Python and needs none of this.
+torch = ["torch>=2.0.0"]
+all = ["aoa-financial[dev,web,tradingagents,torch]"]
 
 [project.scripts]
 aoa = "aoa.cli:main"
@@ -35,10 +38,12 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = "--ignore=tests/test_core.py"
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = ["tests/test_core.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]

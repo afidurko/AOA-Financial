@@ -6,7 +6,6 @@ import json
 
 from aoa.agents.base import Agent, Direction, Signal, clamp_conviction, parse_direction
 from aoa.data.market_data import SymbolSnapshot
-from aoa.llm.client import LLMError
 
 _SCHEMA = {
     "type": "object",
@@ -53,16 +52,17 @@ class TechnicalAgent(Agent):
             f"Multi-timeframe technicals: {json.dumps(snap.technicals, default=str)}\n\n"
             "Return your technical read as JSON."
         )
-        try:
-            r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
-        except LLMError as exc:
-            return Signal(
-                symbol=snap.symbol,
-                source=self.name,
-                direction=Direction.NEUTRAL,
-                conviction=0.0,
-                rationale=f"LLM unavailable ({exc}).",
-            )
+        r = self.structured_safe(
+            self.system_prompt,
+            prompt,
+            _SCHEMA,
+            {
+                "direction": "neutral",
+                "conviction": 0.0,
+                "horizon": "swing",
+                "rationale": "LLM unavailable; defaulting to neutral.",
+            },
+        )
         levels = {}
         if r.get("support") is not None:
             levels["support"] = r["support"]

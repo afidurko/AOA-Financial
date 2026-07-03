@@ -14,10 +14,10 @@ from aoa.workloop.discover import discover_sources
 from aoa.workloop.extract import extract_insights
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
-from aoa.workloop.scheduler import WorkloopScheduler
 from aoa.workloop.propose import build_proposal
-from aoa.workloop.store import WorkloopStore
+from aoa.workloop.scheduler import WorkloopScheduler
 from aoa.workloop.stages import default_stages
+from aoa.workloop.store import WorkloopStore
 
 
 def _config(tmp_path: Path, **kwargs) -> Config:

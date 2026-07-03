@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Callable
 
 from aoa.config import Config
 from aoa.workloop.approval import ApprovalRequired, check_approval
 from aoa.workloop.orchestrator import WorkloopOrchestrator, WorkloopResult
 from aoa.workloop.store import WorkloopStore
-
 
 SleepFn = Callable[[float], None]
 
