@@ -45,6 +45,16 @@ class Broker(ABC):
     @abstractmethod
     def get_quote(self, symbol: str) -> Quote: ...
 
+    def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        """Return latest quotes for each symbol."""
+        out: dict[str, Quote] = {}
+        for sym in symbols:
+            if not sym:
+                continue
+            key = sym.upper()
+            out[key] = self.get_quote(key)
+        return out
+
     @abstractmethod
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
         """Return recent OHLCV bars, oldest first."""
@@ -54,6 +64,8 @@ class Broker(ABC):
         symbols: list[str],
         timeframe: str = "1Day",
         limit: int = 120,
+        *,
+        feed: str | None = None,
     ) -> dict[str, list[Bar]]:
         """Return recent OHLCV bars for each symbol (oldest first within each list)."""
         out: dict[str, list[Bar]] = {}

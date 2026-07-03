@@ -7,6 +7,7 @@ timeframes (1m → yearly) and condensed into per-timeframe technical snapshots.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from aoa.brokerage.base import Broker, BrokerError
@@ -61,9 +62,11 @@ class MarketDataService:
         broker: Broker,
         *,
         timeframes: tuple[TimeframeSpec, ...] = DEFAULT_TIMEFRAMES,
+        bar_feed: str | None = None,
     ) -> None:
         self.broker = broker
         self.timeframes = timeframes
+        self.bar_feed = bar_feed
         self._cache: dict[str, SymbolSnapshot] = {}
 
     def clear_cache(self) -> None:
@@ -73,9 +76,8 @@ class MarketDataService:
         symbol = symbol.upper()
         if symbol in self._cache:
             return self._cache[symbol]
-        snap = self._build(symbol)
-        self._cache[symbol] = snap
-        return snap
+        snaps = self.snapshots([symbol])
+        return snaps[symbol]
 
     def snapshots(self, symbols: list[str]) -> dict[str, SymbolSnapshot]:
         normalized = [s.upper() for s in symbols if s]
@@ -83,11 +85,16 @@ class MarketDataService:
             return {}
 
         missing = [s for s in normalized if s not in self._cache]
+        quotes_by_symbol: dict[str, Quote] = {}
         bars_by_tf_symbol: dict[str, dict[str, list[Bar]]] = {}
+
         if missing:
-            for tf in self.timeframes:
-                batch = self.broker.get_bars_many(missing, tf.alpaca, tf.limit)
-                bars_by_tf_symbol[tf.key] = batch
+            try:
+                quotes_by_symbol = self.broker.get_quotes_many(missing)
+            except BrokerError:
+                quotes_by_symbol = {}
+
+            bars_by_tf_symbol = self._fetch_bars_parallel(missing)
 
         out: dict[str, SymbolSnapshot] = {}
         for sym in normalized:
@@ -98,25 +105,49 @@ class MarketDataService:
                 tf.key: bars_by_tf_symbol.get(tf.key, {}).get(sym, [])
                 for tf in self.timeframes
             }
-            snap = self._build(sym, bars_by_timeframe=tf_bars)
+            snap = self._assemble(
+                sym,
+                quote=quotes_by_symbol.get(sym),
+                bars_by_timeframe=tf_bars,
+            )
             self._cache[sym] = snap
             out[sym] = snap
         return out
 
-    def _build(
+    def _fetch_bars_parallel(
+        self, symbols: list[str]
+    ) -> dict[str, dict[str, list[Bar]]]:
+        bars_by_tf_symbol: dict[str, dict[str, list[Bar]]] = {}
+        if not self.timeframes:
+            return bars_by_tf_symbol
+
+        def fetch(tf: TimeframeSpec) -> tuple[str, dict[str, list[Bar]]]:
+            batch = self.broker.get_bars_many(
+                symbols,
+                tf.alpaca,
+                tf.limit,
+                feed=self.bar_feed,
+            )
+            return tf.key, batch
+
+        max_workers = min(len(self.timeframes), 8)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(fetch, tf) for tf in self.timeframes]
+            for fut in as_completed(futures):
+                key, batch = fut.result()
+                bars_by_tf_symbol[key] = batch
+        return bars_by_tf_symbol
+
+    def _assemble(
         self,
         symbol: str,
         *,
-        bars_by_timeframe: dict[str, list[Bar]] | None = None,
+        quote: Quote | None,
+        bars_by_timeframe: dict[str, list[Bar]],
     ) -> SymbolSnapshot:
         try:
-            quote = self.broker.get_quote(symbol)
-            if bars_by_timeframe is None:
-                bars_by_timeframe = {}
-                for tf in self.timeframes:
-                    bars_by_timeframe[tf.key] = self.broker.get_bars(
-                        symbol, tf.alpaca, tf.limit
-                    )
+            if quote is None:
+                quote = self.broker.get_quote(symbol)
             technicals = {
                 tf: technical_snapshot(bars) if bars else {}
                 for tf, bars in bars_by_timeframe.items()

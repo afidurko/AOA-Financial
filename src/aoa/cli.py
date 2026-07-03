@@ -23,7 +23,12 @@ from aoa.swarm.orchestrator import CycleResult, Orchestrator
 
 
 def build_broker(cfg: Config) -> Broker:
-    return AlpacaBroker(cfg.alpaca_key_id, cfg.alpaca_secret_key, live=cfg.alpaca_live)
+    return AlpacaBroker(
+        cfg.alpaca_key_id,
+        cfg.alpaca_secret_key,
+        live=cfg.alpaca_live,
+        bar_feed=cfg.bar_feed,
+    )
 
 
 def build_llm(cfg: Config) -> LLMClient:
@@ -73,19 +78,25 @@ def _print_cycle(result: CycleResult) -> None:
 
 # --------------------------------------------------------------------- commands
 def cmd_doctor(cfg: Config) -> int:
-    print(f"AOA Financial — trading mode: {cfg.trading_mode.upper()}")
+    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
     problems = cfg.validate()
     if problems:
         print("Configuration problems:")
         for p in problems:
             print(f"  ✗ {p}")
         return 1
+    tf_keys = ", ".join(t.key for t in cfg.bar_timeframes)
     print("  ✓ Configuration looks complete.")
+    print(f"  ✓ Bar timeframes: {tf_keys}")
+    print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
         print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
         print(f"  ✓ Market open: {broker.is_market_open()}")
+        probe = broker.get_bars_many(["SPY"], "1Day", 5, feed=cfg.bar_feed)
+        n_bars = len(probe.get("SPY", []))
+        print(f"  ✓ Market data OK (SPY daily bars: {n_bars}).")
     except BrokerError as exc:
         print(f"  ✗ Broker check failed: {exc}")
         return 1

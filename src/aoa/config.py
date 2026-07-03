@@ -84,6 +84,7 @@ class Config:
 
     # Multi-timeframe historical bars (Alpaca bar API)
     bar_timeframes: tuple[TimeframeSpec, ...] = DEFAULT_TIMEFRAMES
+    bar_feed: str = "iex"
 
     # Execution
     dry_run: bool = False
@@ -121,6 +122,7 @@ class Config:
             news_limit=_int("AOA_NEWS_LIMIT", 5),
             news_lookback_hours=_int("AOA_NEWS_LOOKBACK_HOURS", 72),
             bar_timeframes=parse_timeframes(os.environ.get("AOA_BAR_TIMEFRAMES", "")),
+            bar_feed=os.environ.get("AOA_BAR_FEED", "iex").strip().lower() or "iex",
             dry_run=_bool("AOA_DRY_RUN", False),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
@@ -146,4 +148,6 @@ class Config:
             problems.append("AOA_MAX_POSITION_PCT must be in (0, 1].")
         if not 0 <= r.min_cash_buffer_pct < 1:
             problems.append("AOA_MIN_CASH_BUFFER_PCT must be in [0, 1).")
+        if self.bar_feed not in {"iex", "sip", "otc", "boats"}:
+            problems.append("AOA_BAR_FEED must be one of: iex, sip, otc, boats.")
         return problems

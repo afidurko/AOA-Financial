@@ -58,7 +58,11 @@ class Orchestrator:
         self.broker = broker
         self.llm = llm
         self.journal = journal or Journal()
-        self.market = MarketDataService(broker, timeframes=config.bar_timeframes)
+        self.market = MarketDataService(
+            broker,
+            timeframes=config.bar_timeframes,
+            bar_feed=config.bar_feed,
+        )
         self.news = NewsService(
             broker,
             limit_per_symbol=config.news_limit,

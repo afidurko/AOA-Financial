@@ -16,6 +16,7 @@ Endpoint references:
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 
 import httpx
 
@@ -77,11 +78,15 @@ class AlpacaBroker(Broker):
         secret_key: str,
         *,
         live: bool = False,
+        bar_feed: str = "iex",
         timeout: float = 20.0,
     ) -> None:
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required.")
+        if bar_feed not in {"iex", "sip", "otc", "boats"}:
+            raise BrokerError(f"Unsupported Alpaca bar feed: {bar_feed}")
         self.is_live = live
+        self.bar_feed = bar_feed
         self.name = "alpaca-live" if live else "alpaca-paper"
         self._trading_base = TRADING_LIVE if live else TRADING_PAPER
         headers = {
@@ -90,11 +95,13 @@ class AlpacaBroker(Broker):
             "Content-Type": "application/json",
         }
         self._client = httpx.Client(headers=headers, timeout=timeout)
+        self._lock = Lock()
 
     # --- low-level helpers ---------------------------------------------------
     def _request(self, method: str, url: str, **kwargs) -> dict | list:
         try:
-            resp = self._client.request(method, url, **kwargs)
+            with self._lock:
+                resp = self._client.request(method, url, **kwargs)
         except httpx.HTTPError as exc:  # network error
             raise BrokerError(f"Alpaca network error: {exc}") from exc
         if resp.status_code >= 400:
@@ -161,16 +168,27 @@ class AlpacaBroker(Broker):
 
     # --- market data ---------------------------------------------------------
     def get_quote(self, symbol: str) -> Quote:
-        d = self._data("GET", f"/v2/stocks/{symbol}/quotes/latest")
-        q = d.get("quote", {}) if isinstance(d, dict) else {}
-        return Quote(
-            symbol=symbol,
-            bid=_f(q.get("bp")),
-            ask=_f(q.get("ap")),
-            bid_size=_f(q.get("bs")),
-            ask_size=_f(q.get("as")),
-            timestamp=_parse_ts(q.get("t")),
-        )
+        return self.get_quotes_many([symbol]).get(symbol.upper(), Quote(symbol=symbol, bid=0, ask=0))
+
+    def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        normalized = [s.upper() for s in symbols if s]
+        if not normalized:
+            return {}
+        params = {"symbols": ",".join(normalized), "feed": self.bar_feed}
+        d = self._data("GET", "/v2/stocks/quotes/latest", params=params)
+        quote_map = d.get("quotes", {}) if isinstance(d, dict) else {}
+        out: dict[str, Quote] = {}
+        for sym in normalized:
+            q = quote_map.get(sym, {}) if isinstance(quote_map, dict) else {}
+            out[sym] = Quote(
+                symbol=sym,
+                bid=_f(q.get("bp")),
+                ask=_f(q.get("ap")),
+                bid_size=_f(q.get("bs")),
+                ask_size=_f(q.get("as")),
+                timestamp=_parse_ts(q.get("t")),
+            )
+        return out
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
         return self.get_bars_many([symbol], timeframe, limit).get(symbol.upper(), [])
@@ -180,6 +198,8 @@ class AlpacaBroker(Broker):
         symbols: list[str],
         timeframe: str = "1Day",
         limit: int = 120,
+        *,
+        feed: str | None = None,
     ) -> dict[str, list[Bar]]:
         """Fetch historical bars via ``GET /v2/stocks/bars`` (multi-symbol + pagination)."""
         normalized = [s.upper() for s in symbols if s]
@@ -189,6 +209,7 @@ class AlpacaBroker(Broker):
         collected: dict[str, list[Bar]] = {sym: [] for sym in normalized}
         page_token: str | None = None
         request_limit = max(limit, min(10_000, limit * len(normalized)))
+        data_feed = feed or self.bar_feed
 
         for _ in range(20):
             if all(len(collected[s]) >= limit for s in normalized):
@@ -199,6 +220,7 @@ class AlpacaBroker(Broker):
                 "limit": request_limit,
                 "adjustment": "split",
                 "sort": "asc",
+                "feed": data_feed,
             }
             if page_token:
                 params["page_token"] = page_token

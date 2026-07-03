@@ -21,7 +21,7 @@ blackboard:
 
 ```
  broker (Alpaca)
-   │  account, positions, quotes, bars, option chains
+   │  account, positions, quotes, multi-TF bars, news, option chains
    ▼
 ┌──────────────┐   shortlist    ┌──────────────┐   signals    ┌────────────────┐
 │   Scanner    │ ─────────────▶ │  Technical   │ ───────────▶ │   Portfolio    │
@@ -52,8 +52,8 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 | Agent | Role |
 |-------|------|
 | **Scanner** | Narrows the universe to a shortlist of the strongest setups. |
-| **Technical** | Reads indicators (SMA/EMA/RSI/MACD/Bollinger/ATR/vol) → directional signal. |
-| **Fundamental** | Qualitative catalyst & event-risk view (never fabricates news). |
+| **Technical** | Multi-timeframe indicators (1m→yearly: SMA/EMA/RSI/MACD/Bollinger/ATR/vol) → signal. |
+| **Fundamental** | Alpaca news headlines + catalyst/event-risk view (never fabricates news). |
 | **Options strategist** | Proposes a cash-account-appropriate options structure from the live chain. |
 | **Portfolio manager** | Synthesizes all signals + positions + account into target trades. |
 | **Risk manager** | Enforces hard guardrails, then an LLM second-opinion veto. |
@@ -107,6 +107,21 @@ aoa journal -n 30   # tail the decision/trade journal
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.
+
+### Market data (Alpaca)
+
+All quotes, bars, news, and screeners come from Alpaca using your existing API keys.
+
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| `AOA_UNIVERSE` | (most-actives) | Tickers to scan, or blank for Alpaca volume leaders |
+| `AOA_BAR_TIMEFRAMES` | `1Min,3Min,5Min,15Min,1Hour,1Day,12Month` | Intraday → yearly bar stack |
+| `AOA_BAR_FEED` | `iex` | Data feed: `iex` (free tier) or `sip` (all US exchanges) |
+| `AOA_NEWS_LIMIT` | `5` | Headlines per symbol per cycle |
+| `AOA_NEWS_LOOKBACK_HOURS` | `72` | News search window |
+
+Each cycle batches multi-symbol quote and bar requests (7 timeframes × 1 batch per
+universe) and caches results for the duration of the cycle.
 
 ---
 

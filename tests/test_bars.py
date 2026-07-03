@@ -35,9 +35,9 @@ def test_market_data_service_batches_bar_requests():
     calls: list[tuple[list[str], str, int]] = []
 
     class TrackingBroker(FakeBroker):
-        def get_bars_many(self, symbols, timeframe="1Day", limit=120):
+        def get_bars_many(self, symbols, timeframe="1Day", limit=120, *, feed=None):
             calls.append((list(symbols), timeframe, limit))
-            return super().get_bars_many(symbols, timeframe, limit)
+            return super().get_bars_many(symbols, timeframe, limit, feed=feed)
 
     broker = TrackingBroker()
     daily = (TimeframeSpec("1Day", "1Day", 30),)
