@@ -11,6 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "tradingagents_propagate.py"
+INDICATORS_SCRIPT = ROOT / "scripts" / "test_yfinance_indicators.py"
 
 
 def _upstream_installed() -> bool:
@@ -36,3 +37,15 @@ def test_propagate_script_help():
     )
     assert proc.returncode == 0
     assert "trade_date" in proc.stdout
+
+
+def test_yfinance_indicators_script_help():
+    proc = subprocess.run(
+        [sys.executable, str(INDICATORS_SCRIPT), "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert "lookback" in proc.stdout
+    assert "indicator" in proc.stdout
