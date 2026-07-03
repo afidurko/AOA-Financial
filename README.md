@@ -572,6 +572,9 @@ aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 aoa report     # activity summary (from journal) + live P&L snapshot
 
+# Loop engineering (daily triage, L1 report-only — see LOOP.md):
+# Cursor Agent: run loop-triage skill; state in STATE.md
+
 # Market-trend analysis & scenario simulation (no LLM, no orders):
 aoa analyze AAPL                       # characterize the historical trend & drawdowns
 aoa simulate AAPL --paths 5000 --seed 1   # Monte-Carlo forward paths + scenario stress test
@@ -856,6 +859,7 @@ model.merge()                        # fold the delta in for fast inference
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 - **Add a UI panel**: extend `aoa/web/app.py` dashboard or add API routes.
+- **Loop engineering**: daily agent triage via `LOOP.md`, `STATE.md`, and `.cursor/skills/loop-*` (from [loop-engineering](https://github.com/afidurko/loop-engineering)).
 - **Adapt signals**: enable LoRA-style conviction recalibration with `AOA_ADAPT_*`,
   or reuse `aoa.adapt.torch_lora.LoRALinear` for neural-net fine-tuning elsewhere.
 

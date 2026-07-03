@@ -59,7 +59,8 @@ class BobAgent:
                 "aoa.risk.guards",
                 "aoa.team.orchestrator",
                 "aoa.web.app",
-            )
+            ),
+            optional=frozenset({"aoa.web.app"}),
         )
         report.findings.append(import_check)
         if import_check.status is HealthStatus.CRITICAL:

@@ -213,11 +213,23 @@ def _check_ruff_if_available(root: Path) -> CodeFinding:
     return CodeFinding("ruff", HealthStatus.OK, "ruff check src tests passed.")
 
 
-def import_sweep(modules: tuple[str, ...]) -> CodeFinding:
+def import_sweep(
+    modules: tuple[str, ...],
+    *,
+    optional: frozenset[str] = frozenset(),
+) -> CodeFinding:
     failed: list[str] = []
+    skipped: list[str] = []
+    imported = 0
     for mod in modules:
         try:
             importlib.import_module(mod)
+            imported += 1
+        except ImportError as exc:
+            if mod in optional:
+                skipped.append(f"{mod}: {exc}")
+                continue
+            failed.append(f"{mod}: {exc}")
         except Exception as exc:  # noqa: BLE001
             failed.append(f"{mod}: {exc}")
     if failed:
@@ -225,6 +237,13 @@ def import_sweep(modules: tuple[str, ...]) -> CodeFinding:
             "imports",
             HealthStatus.CRITICAL,
             "Import failures: " + "; ".join(failed),
+        )
+    if skipped:
+        return CodeFinding(
+            "imports",
+            HealthStatus.OK,
+            f"{imported} core modules import cleanly; "
+            f"{len(skipped)} optional skipped ({'; '.join(skipped)}).",
         )
     return CodeFinding(
         "imports",
