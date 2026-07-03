@@ -86,11 +86,32 @@ Requires Python 3.10+.
 
 ## Configure
 
+Configuration loads in this order (lowest → highest priority):
+
+1. `profiles/{AOA_PROFILE or AOA_ENV}.env` — named environment profile
+2. `.env` — your local secrets
+3. Shell environment variables — always win
+
 ```bash
 cp .env.example .env
-# Edit .env: set ANTHROPIC_API_KEY and your Alpaca keys.
-# Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
+export AOA_PROFILE=paper-dry    # recommended starting point
+# Edit .env: set ANTHROPIC_API_KEY and Alpaca paper keys.
+aoa doctor && aoa run
 ```
+
+### Named environments
+
+| `AOA_ENV` | Broker | Orders | Use case |
+|-----------|--------|--------|----------|
+| `test` | n/a | dry-run | Unit tests / CI (no API keys required) |
+| `paper-dry` | Alpaca paper | dry-run | Watch decisions without submitting |
+| `paper` | Alpaca paper | enabled | Paper trading with real sandbox fills |
+| `live` | Alpaca live | enabled | Real money — requires `AOA_LIVE_ACK=I_UNDERSTAND` |
+
+Runtime state (journal, daily-loss baseline) is isolated under `data/{AOA_ENV}/`.
+
+Profiles live in `profiles/` — e.g. `profiles/paper-dry.env`. Override the data
+root with `AOA_DATA_DIR` or the journal file with `AOA_JOURNAL_PATH`.
 
 Get free Alpaca paper keys at <https://alpaca.markets>. Options trading requires
 options approval on the account (the swarm checks `options_level`).
@@ -122,8 +143,10 @@ src/aoa/
   swarm/               # blackboard + orchestrator (the cycle)
   risk/                # deterministic cash-account guardrails
   execution/           # proposal → broker order
-  journal/             # append-only JSONL audit log
+  journal/             # append-only JSONL audit log (legacy default path)
   cli.py               # `aoa` command-line entry point
+profiles/              # environment profiles (paper-dry, paper, live, …)
+data/                  # per-environment runtime state (gitignored)
 tests/                 # unit + end-to-end tests (fake broker + fake LLM)
 ```
 

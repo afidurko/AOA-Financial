@@ -21,6 +21,7 @@ htmlcov/
 
 # Runtime state / journals
 journal/*.jsonl
+data/
 data_cache/
 *.log
 

@@ -31,7 +31,21 @@ def build_llm(cfg: Config) -> LLMClient:
 
 
 def build_orchestrator(cfg: Config) -> Orchestrator:
-    return Orchestrator(cfg, build_broker(cfg), build_llm(cfg), Journal())
+    return Orchestrator(
+        cfg,
+        build_broker(cfg),
+        build_llm(cfg),
+        Journal(cfg.journal_path),
+    )
+
+
+def _print_environment(cfg: Config) -> None:
+    profile = cfg.profile or cfg.env
+    print(
+        f"Environment: {cfg.env} | profile: {profile} | "
+        f"mode: {cfg.trading_mode} | data: {cfg.data_dir}"
+    )
+    print(f"Journal: {cfg.journal_path}")
 
 
 # --------------------------------------------------------------------- output
@@ -73,7 +87,7 @@ def _print_cycle(result: CycleResult) -> None:
 
 # --------------------------------------------------------------------- commands
 def cmd_doctor(cfg: Config) -> int:
-    print(f"AOA Financial — trading mode: {cfg.trading_mode.upper()}")
+    _print_environment(cfg)
     problems = cfg.validate()
     if problems:
         print("Configuration problems:")
@@ -81,6 +95,9 @@ def cmd_doctor(cfg: Config) -> int:
             print(f"  ✗ {p}")
         return 1
     print("  ✓ Configuration looks complete.")
+    if cfg.is_test:
+        print("  ✓ Test environment — skipping broker/LLM connectivity checks.")
+        return 0
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
@@ -101,6 +118,7 @@ def cmd_doctor(cfg: Config) -> int:
 
 
 def cmd_status(cfg: Config) -> int:
+    _print_environment(cfg)
     broker = build_broker(cfg)
     acct = broker.get_account()
     print(f"Mode: {cfg.trading_mode} | Broker: {broker.name}")
@@ -139,9 +157,9 @@ def cmd_run(cfg: Config) -> int:
 
 def cmd_loop(cfg: Config) -> int:
     orch = build_orchestrator(cfg)
+    _print_environment(cfg)
     print(
-        f"Starting continuous loop: mode={cfg.trading_mode}, "
-        f"cadence={cfg.cycle_seconds}s. Ctrl-C to stop."
+        f"Starting continuous loop: cadence={cfg.cycle_seconds}s. Ctrl-C to stop."
     )
     try:
         while True:
@@ -159,7 +177,7 @@ def cmd_loop(cfg: Config) -> int:
 
 
 def cmd_journal(cfg: Config, n: int) -> int:
-    entries = Journal().tail(n)
+    entries = Journal(cfg.journal_path).tail(n)
     if not entries:
         print("Journal is empty.")
         return 0
