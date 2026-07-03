@@ -21,6 +21,7 @@ class Blackboard:
     universe: list[str] = field(default_factory=list)
     snapshots: dict[str, SymbolSnapshot] = field(default_factory=dict)
     candidates: list[dict] = field(default_factory=list)
+    per_symbol: list[dict] = field(default_factory=list)
     signals: dict[str, list[Signal]] = field(default_factory=dict)
     options_ideas: dict[str, dict] = field(default_factory=dict)
     option_contracts: dict[str, OptionContract] = field(default_factory=dict)

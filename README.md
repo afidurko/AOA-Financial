@@ -144,8 +144,19 @@ canned-response fake LLM — no network, no API keys, no real orders.
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
 - **Add a news feed**: wire it into `FundamentalAgent` (its prompt is the integration point).
-- **Add an agent**: subclass `aoa.agents.base.Agent` and call it from the `Orchestrator`.
+- **Add an agent**: subclass `aoa.agents.base.Agent` and call it from a custom
+  pipeline stage (see below).
+- **Customize the cycle**: build a `Pipeline` from `default_stages()` and pass
+  it to `Orchestrator(..., pipeline=custom)` to reorder, skip, or replace stages.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
+
+```python
+from aoa.swarm.pipeline import Pipeline
+from aoa.swarm.stages import default_stages, PortfolioStage
+
+custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
+orch = Orchestrator(config, broker, llm, pipeline=custom)
+```
 
 ## Disclaimer
 
