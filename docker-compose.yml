@@ -1,0 +1,34 @@
+services:
+  web:
+    build: .
+    ports:
+      - "${AOA_WEB_PORT:-8080}:8080"
+    env_file:
+      - .env
+    environment:
+      AOA_JOURNAL_PATH: /app/journal/aoa.jsonl
+      AOA_WEB_AUTO_LOOP: "${AOA_WEB_AUTO_LOOP:-false}"
+    volumes:
+      - aoa-journal:/app/journal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  swarm:
+    build: .
+    command: ["aoa", "loop"]
+    env_file:
+      - .env
+    environment:
+      AOA_JOURNAL_PATH: /app/journal/aoa.jsonl
+    volumes:
+      - aoa-journal:/app/journal
+    restart: unless-stopped
+    profiles:
+      - daemon
+
+volumes:
+  aoa-journal:
