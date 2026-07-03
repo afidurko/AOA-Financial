@@ -33,13 +33,6 @@ def client(fake_broker, fake_llm, monkeypatch, tmp_path):
         "aoa.data.news", fromlist=["NullNewsFeed"]
     ).NullNewsFeed())
 
-    # Reset module-level singleton between tests.
-    import aoa.web.app as web_app
-
-    web_app._app = None
-    web_app._runner = None
-    web_app._cfg = None
-
     with TestClient(create_app(cfg)) as tc:
         yield tc
 

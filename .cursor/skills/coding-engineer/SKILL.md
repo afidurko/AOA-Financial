@@ -23,6 +23,10 @@ You are the coding engineer for **AOA Financial** — an autonomous Python tradi
 | Alpaca feed/adjustment constants | `src/aoa/brokerage/constants.py` |
 | Pipeline stages | `src/aoa/swarm/stages.py` |
 | Stage orchestration & journaling | `src/aoa/swarm/pipeline.py` |
+| Inter-stage PM output | `CycleContext.portfolio_output` (not environment hacks) |
+| Parallel analysis | Compute in threads, merge on main thread via `_apply_analysis` |
+| Web state | `app.state` in `web/app.py` — no module singletons |
+| Cycle concurrency | `LoopRunner` cycle mutex — one cycle at a time |
 | LLM failures | Catch `LLMError` (from `aoa.llm.client`), not bare `Exception` |
 | Hard risk rules | `src/aoa/risk/guards.py` (deterministic, binding) |
 

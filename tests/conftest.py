@@ -126,7 +126,17 @@ class FakeBroker(Broker):
 
 
 class FakeLLM:
-    """Routes ``structured()`` calls to canned responses by inspecting the schema."""
+    """Routes ``structured()`` calls by JSON-schema ``required`` keys."""
+
+    _MESHING = frozenset(
+        {"direction", "conviction", "horizon", "rationale", "corroboration"}
+    )
+    _TECHNICAL = frozenset({"direction", "conviction", "horizon", "rationale"})
+    _FUNDAMENTAL = frozenset({"direction", "conviction", "event_risk", "rationale"})
+    _OPTIONS = frozenset({"strategy", "rationale", "conviction"})
+    _PORTFOLIO = frozenset({"proposals", "portfolio_commentary"})
+    _RISK = frozenset({"vetoes", "assessment"})
+    _SCANNER = frozenset({"candidates"})
 
     def __init__(self, *, candidates=None):
         self.candidates = candidates if candidates is not None else [
@@ -138,10 +148,10 @@ class FakeLLM:
         return "ok"
 
     def structured(self, system: str, prompt: str, schema: dict, **kwargs) -> dict:
-        props = set(schema.get("properties", {}).keys())
-        if "candidates" in props:
+        required = frozenset(schema.get("required") or ())
+        if required == self._SCANNER:
             return {"candidates": self.candidates}
-        if "corroboration" in props:  # meshing
+        if required == self._MESHING:
             return {
                 "direction": "bullish",
                 "conviction": 0.72,
@@ -151,14 +161,14 @@ class FakeLLM:
                 "conflicts": [],
                 "key_levels": {"support": 95.0, "resistance": 110.0},
             }
-        if "event_risk" in props:  # fundamental
+        if required == self._FUNDAMENTAL:
             return {
                 "direction": "bullish",
                 "conviction": 0.6,
                 "event_risk": "low",
                 "rationale": "stable large cap",
             }
-        if "support" in props or "horizon" in props:  # technical
+        if required == self._TECHNICAL:
             return {
                 "direction": "bullish",
                 "conviction": 0.75,
@@ -168,7 +178,7 @@ class FakeLLM:
                 "resistance": 110.0,
                 "stop_suggestion": 92.0,
             }
-        if "strategy" in props and "max_premium_per_contract" in props:  # options
+        if required == self._OPTIONS:
             return {
                 "strategy": "long_call",
                 "contract_symbol": "AAPL250117C00100000",
@@ -177,7 +187,7 @@ class FakeLLM:
                 "rationale": "defined-risk bullish expression",
                 "conviction": 0.7,
             }
-        if "proposals" in props:  # portfolio
+        if required == self._PORTFOLIO:
             return {
                 "proposals": [
                     {
@@ -192,9 +202,9 @@ class FakeLLM:
                 ],
                 "portfolio_commentary": "one focused long",
             }
-        if "vetoes" in props:  # risk
+        if required == self._RISK:
             return {"vetoes": [], "assessment": "prudent"}
-        return {}
+        raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
 
 
 @pytest.fixture

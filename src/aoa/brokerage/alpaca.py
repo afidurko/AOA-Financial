@@ -91,6 +91,24 @@ def _f(value, default: float = 0.0) -> float:
         return default
 
 
+def _settled_cash_from_alpaca(acct) -> float:
+    """Conservative settled cash for cash-account risk sizing.
+
+    Alpaca ``cash`` can include unsettled proceeds. Prefer the broker's
+    non-marginable / withdrawable figures when present.
+    """
+    cash = _f(acct.cash)
+    nmbp = getattr(acct, "non_marginable_buying_power", None)
+    if nmbp is not None:
+        settled = _f(nmbp)
+        return min(cash, settled) if cash > 0 else settled
+    withdrawable = getattr(acct, "cash_withdrawable", None)
+    if withdrawable is not None:
+        settled = _f(withdrawable)
+        return min(cash, settled) if cash > 0 else settled
+    return cash
+
+
 def _parse_timeframe(value: str) -> TimeFrame:
     match = _TIMEFRAME_RE.fullmatch(value)
     if not match:
@@ -226,7 +244,7 @@ class AlpacaBroker(Broker):
             equity=_f(acct.equity),
             cash=_f(acct.cash),
             buying_power=_f(acct.buying_power),
-            settled_cash=_f(acct.cash),
+            settled_cash=_settled_cash_from_alpaca(acct),
             options_level=int(_f(acct.options_approved_level, 0)),
             daytrade_count=int(_f(acct.daytrade_count, 0)),
             pattern_day_trader=bool(acct.pattern_day_trader),
@@ -363,7 +381,7 @@ class AlpacaBroker(Broker):
                     bid=_f(quote.bid_price) if quote else 0.0,
                     ask=_f(quote.ask_price) if quote else 0.0,
                     last=_f(trade.price) if trade else 0.0,
-                    open_interest=0.0,
+                    open_interest=_f(getattr(snap, "open_interest", 0) or 0),
                     implied_volatility=(
                         float(snap.implied_volatility)
                         if snap.implied_volatility is not None

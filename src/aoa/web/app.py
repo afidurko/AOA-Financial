@@ -5,36 +5,30 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 
 from aoa.brokerage.base import BrokerError
 from aoa.cli import build_orchestrator
 from aoa.config import Config
 from aoa.llm.client import LLMError
-from aoa.web.loop_runner import LoopRunner
-
-_app: FastAPI | None = None
-_runner: LoopRunner | None = None
-_cfg: Config | None = None
+from aoa.web.loop_runner import CycleBusyError, LoopRunner
 
 
 def create_app(cfg: Config | None = None) -> FastAPI:
-    global _app, _runner, _cfg
-    if _app is not None:
-        return _app
-
     cfg = cfg or Config.from_env()
-    _cfg = cfg
-    orch = build_orchestrator(cfg)
-    _runner = LoopRunner(orch, cfg.cycle_seconds)
-    if cfg.web_auto_loop:
-        _runner.start()
+    orchestrator = build_orchestrator(cfg)
+    runner = LoopRunner(orchestrator, cfg.cycle_seconds)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        app.state.cfg = cfg
+        app.state.orchestrator = orchestrator
+        app.state.runner = runner
+        if cfg.web_auto_loop:
+            runner.start()
         yield
-        _runner.stop()
+        runner.stop()
 
     app = FastAPI(
         title="AOA Financial",
@@ -48,18 +42,23 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return {"status": "ok"}
 
     @app.get("/api/config")
-    def api_config() -> dict[str, Any]:
+    def api_config(request: Request) -> dict[str, Any]:
+        cfg = request.app.state.cfg
+        runner = request.app.state.runner
         return {
             "trading_mode": cfg.trading_mode,
             "dry_run": cfg.dry_run,
             "cycle_seconds": cfg.cycle_seconds,
             "universe": list(cfg.universe),
             "news_enabled": cfg.news_enabled,
-            "loop_running": _runner.state.running,
+            "loop_running": runner.state.running,
         }
 
     @app.get("/api/status")
-    def api_status() -> dict[str, Any]:
+    def api_status(request: Request) -> dict[str, Any]:
+        cfg = request.app.state.cfg
+        orch = request.app.state.orchestrator
+        runner = request.app.state.runner
         try:
             acct = orch.broker.get_account()
             positions = orch.broker.get_positions()
@@ -69,63 +68,53 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "mode": cfg.trading_mode,
             "broker": orch.broker.name,
             "market_open": orch.broker.is_market_open(),
-            "account": {
-                "equity": acct.equity,
-                "cash": acct.cash,
-                "settled_cash": acct.settled_cash,
-                "options_level": acct.options_level,
-            },
-            "positions": [
-                {
-                    "symbol": p.symbol,
-                    "asset_class": p.asset_class.value,
-                    "qty": p.qty,
-                    "market_value": p.market_value,
-                    "unrealized_pl": p.unrealized_pl,
-                }
-                for p in positions
-            ],
+            "account": acct.to_context(),
+            "positions": [p.to_context() for p in positions],
             "loop": {
-                "running": _runner.state.running,
-                "cycles_completed": _runner.state.cycles_completed,
-                "last_cycle_at": _runner.state.last_cycle_at,
-                "last_error": _runner.state.last_error,
+                "running": runner.state.running,
+                "cycles_completed": runner.state.cycles_completed,
+                "last_cycle_at": runner.state.last_cycle_at,
+                "last_error": runner.state.last_error,
             },
         }
 
     @app.get("/api/journal")
-    def api_journal(n: int = 30) -> dict[str, Any]:
+    def api_journal(request: Request, n: int = 30) -> dict[str, Any]:
+        orch = request.app.state.orchestrator
         return {"entries": orch.journal.tail(n)}
 
     @app.post("/api/run")
-    def api_run() -> dict[str, Any]:
+    def api_run(request: Request) -> dict[str, Any]:
+        runner = request.app.state.runner
         try:
-            result = _runner.run_once()
+            result = runner.run_once()
+        except CycleBusyError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except (BrokerError, LLMError) as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return _cycle_to_dict(result)
 
     @app.post("/api/loop/start")
-    def loop_start() -> dict[str, str]:
-        _runner.start()
+    def loop_start(request: Request) -> dict[str, str]:
+        request.app.state.runner.start()
         return {"status": "started"}
 
     @app.post("/api/loop/stop")
-    def loop_stop() -> dict[str, str]:
-        _runner.stop()
+    def loop_stop(request: Request) -> dict[str, str]:
+        request.app.state.runner.stop()
         return {"status": "stopped"}
 
     @app.get("/api/last-cycle")
-    def last_cycle() -> dict[str, Any]:
-        if _runner.state.last_result is None:
+    def last_cycle(request: Request) -> dict[str, Any]:
+        runner = request.app.state.runner
+        if runner.state.last_result is None:
             return {"result": None}
-        return {"result": _cycle_to_dict(_runner.state.last_result)}
+        return {"result": _cycle_to_dict(runner.state.last_result)}
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
         return _DASHBOARD_HTML
 
-    _app = app
     return app
 
 

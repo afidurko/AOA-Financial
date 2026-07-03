@@ -21,6 +21,17 @@ class SymbolSnapshot:
     technicals: dict = field(default_factory=dict)
     error: str | None = None
 
+    def reference_price(self) -> float | None:
+        """Best available mark: quote mid, else last bar close."""
+        if self.quote:
+            mid = self.quote.mid
+            if mid and mid > 0:
+                return mid
+        last = self.technicals.get("last_close")
+        if last and last > 0:
+            return float(last)
+        return None
+
     def to_context(self) -> dict:
         """Compact JSON-serializable view for prompting the agents."""
         q = self.quote
