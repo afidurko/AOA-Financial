@@ -12,6 +12,7 @@ from aoa.data.news import NewsFeed, NullNewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
+from aoa.state import StateStore
 from aoa.swarm.blackboard import Blackboard
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import Pipeline
@@ -44,13 +45,16 @@ class Orchestrator:
         self.llm = llm
         self.journal = journal or Journal(config.journal_path)
         self.news = news if news is not None else NullNewsFeed()
+        self.state = StateStore(config.state_path)
         self.market = MarketDataService(
             broker,
             timeframes=config.bar_timeframes,
             bar_feed=config.bar_feed,
         )
         self.agents = AgentTeam.from_llm(llm, broker, risk=config.risk)
-        self.executor = Executor(broker, self.journal, dry_run=config.dry_run)
+        self.executor = Executor(
+            broker, self.journal, dry_run=config.dry_run, state=self.state
+        )
         self.pipeline = pipeline or Pipeline(stages=default_stages())
 
         # Preserve attributes referenced by tests and CLI.
@@ -96,6 +100,7 @@ class Orchestrator:
             agents=self.agents,
             executor=self.executor,
             news=self.news,
+            state=self.state,
             max_candidates=max_candidates,
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,

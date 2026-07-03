@@ -133,9 +133,18 @@ class OrderRequest:
     order_type: OrderType = OrderType.MARKET
     time_in_force: TimeInForce = TimeInForce.DAY
     limit_price: float | None = None
+    # Protective legs for an entry (equities). When either is set the Alpaca
+    # broker submits a bracket/OTO order so the stop persists between cycles.
+    stop_loss_price: float | None = None
+    take_profit_price: float | None = None
     client_order_id: str | None = None
     # Free-form rationale recorded in the journal (never sent to the broker).
     rationale: str = ""
+
+    @property
+    def is_protected(self) -> bool:
+        return self.stop_loss_price is not None or self.take_profit_price is not None
+
 
     def notional_estimate(self, price: float) -> float:
         """Estimated dollar cost. Options are priced per-share (×100 multiplier)."""

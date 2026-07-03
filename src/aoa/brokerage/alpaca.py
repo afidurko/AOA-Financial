@@ -23,9 +23,16 @@ from alpaca.data.requests import (
 )
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 from alpaca.trading.client import TradingClient
-from alpaca.trading.enums import ContractType, OrderSide, QueryOrderStatus
+from alpaca.trading.enums import ContractType, OrderClass, OrderSide, QueryOrderStatus
 from alpaca.trading.enums import TimeInForce as AlpacaTimeInForce
-from alpaca.trading.requests import GetOptionContractsRequest, GetOrdersRequest, LimitOrderRequest, MarketOrderRequest
+from alpaca.trading.requests import (
+    GetOptionContractsRequest,
+    GetOrdersRequest,
+    LimitOrderRequest,
+    MarketOrderRequest,
+    StopLossRequest,
+    TakeProfitRequest,
+)
 
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import (
@@ -439,18 +446,36 @@ class AlpacaBroker(Broker):
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:
         side = OrderSide.BUY if request.side is Side.BUY else OrderSide.SELL
+        is_protected = request.is_protected and request.asset_class is AssetClass.EQUITY
         tif = (
-            AlpacaTimeInForce.DAY
-            if request.time_in_force is TimeInForce.DAY
-            else AlpacaTimeInForce.GTC
+            AlpacaTimeInForce.GTC
+            if is_protected
+            else (
+                AlpacaTimeInForce.DAY
+                if request.time_in_force is TimeInForce.DAY
+                else AlpacaTimeInForce.GTC
+            )
         )
-        common = {
+        common: dict = {
             "symbol": request.symbol,
             "qty": request.qty,
             "side": side,
             "time_in_force": tif,
             "client_order_id": request.client_order_id,
         }
+        if is_protected:
+            has_tp = request.take_profit_price is not None
+            has_sl = request.stop_loss_price is not None
+            common["order_class"] = (
+                OrderClass.BRACKET if (has_tp and has_sl) else OrderClass.OTO
+            )
+            if has_tp:
+                common["take_profit"] = TakeProfitRequest(
+                    limit_price=request.take_profit_price
+                )
+            if has_sl:
+                common["stop_loss"] = StopLossRequest(stop_price=request.stop_loss_price)
+
         if request.order_type is OrderType.LIMIT:
             sdk_request = LimitOrderRequest(
                 **common,

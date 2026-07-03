@@ -12,6 +12,7 @@ from aoa.data.news import NewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
+from aoa.state import StateStore
 from aoa.swarm.blackboard import Blackboard
 from aoa.swarm.team import AgentTeam
 
@@ -28,6 +29,7 @@ class CycleContext:
     agents: AgentTeam
     executor: Executor
     news: NewsFeed
+    state: StateStore
     blackboard: Blackboard = field(default_factory=Blackboard)
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None
@@ -39,15 +41,6 @@ class CycleContext:
     starting_equity: float = 0.0
 
     def update_starting_equity(self, equity: float) -> None:
-        today = date.today()
-        if self.equity_day != today:
-            stored_day_raw, stored_equity = self.journal.load_daily_equity_baseline()
-            if stored_day_raw == today.isoformat() and stored_equity > 0:
-                self.equity_day = today
-                self.starting_equity = stored_equity
-            else:
-                self.equity_day = today
-                self.starting_equity = equity
-                self.journal.save_daily_equity_baseline(today, equity)
-        elif self.starting_equity <= 0:
-            self.starting_equity = equity
+        """Persist and return the day's equity baseline for the kill switch."""
+        self.starting_equity = self.state.starting_equity_for_today(equity)
+        self.equity_day = date.today()

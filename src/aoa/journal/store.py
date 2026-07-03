@@ -40,20 +40,14 @@ class Journal:
                 continue
         return out
 
-    def load_daily_equity_baseline(self) -> tuple[str | None, float]:
-        """Return persisted (ISO date, starting equity) for the daily-loss kill switch."""
-        state_path = self.path.parent / "daily_equity.json"
-        if not state_path.exists():
-            return None, 0.0
-        try:
-            data = json.loads(state_path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            return None, 0.0
-        return data.get("date"), float(data.get("starting_equity", 0.0) or 0.0)
+    def read_all(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        out = []
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            try:
+                out.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+        return out
 
-    def save_daily_equity_baseline(self, day, starting_equity: float) -> None:
-        state_path = self.path.parent / "daily_equity.json"
-        state_path.write_text(
-            json.dumps({"date": day.isoformat(), "starting_equity": starting_equity}),
-            encoding="utf-8",
-        )

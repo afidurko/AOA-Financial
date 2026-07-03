@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from aoa.agents.base import Direction, TradeProposal
 from aoa.brokerage.base import BrokerError
@@ -25,15 +25,25 @@ class IntakeStage(PipelineStage):
         ctx.market.clear_cache()
         ctx.news.clear_cache()
 
-        bb.account = ctx.broker.get_account()
+        raw_account = ctx.broker.get_account()
         bb.positions = ctx.broker.get_positions()
-        ctx.update_starting_equity(bb.account.equity)
+        try:
+            bb.open_orders = ctx.broker.list_orders("open")
+        except Exception:  # noqa: BLE001 — never let an order-list hiccup halt a cycle
+            bb.open_orders = []
+
+        ctx.update_starting_equity(raw_account.equity)
+        unsettled = ctx.state.unsettled_cash()
+        effective_settled = max(0.0, raw_account.settled_cash - unsettled)
+        bb.account = replace(raw_account, settled_cash=effective_settled)
         ctx.journal.record(
             "cycle.start",
             {
                 "mode": ctx.config.trading_mode,
                 "equity": bb.account.equity,
-                "settled_cash": bb.account.settled_cash,
+                "settled_cash_raw": raw_account.settled_cash,
+                "unsettled_cash": unsettled,
+                "settled_cash_effective": effective_settled,
                 "starting_equity": ctx.starting_equity,
                 "n_positions": len(bb.positions),
             },
@@ -201,7 +211,7 @@ class MaterializeStage(PipelineStage):
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
         raw = bb.environment.global_context.get("_pm_raw", {}).get("proposals", [])
-        bb.proposals = _materialize_proposals(raw, bb)
+        bb.proposals = _materialize_proposals(raw, bb, journal=ctx.journal)
         return True
 
 
@@ -329,15 +339,29 @@ def _maybe_options(
             bb.environment.set_domain(f"options:{symbol}", idea)
 
 
-def _materialize_proposals(raw: list[dict], bb) -> list[TradeProposal]:
+def _materialize_proposals(
+    raw: list[dict], bb, *, journal=None
+) -> list[TradeProposal]:
     proposals: list[TradeProposal] = []
     pos_by_symbol = {p.symbol: p for p in bb.positions}
+    # Re-entry guard: names we already hold or have a working order on.
+    held_or_pending = {p.symbol for p in bb.positions if p.qty != 0}
+    held_or_pending |= {o.symbol for o in bb.open_orders}
+
     for item in raw:
         symbol = item.get("symbol", "").upper()
         instrument = item.get("instrument", "equity")
         side = Side(item.get("side", "buy"))
         target = float(item.get("target_notional", 0) or 0)
         if target <= 0 and side is Side.BUY:
+            continue
+
+        if side is Side.BUY and symbol in held_or_pending:
+            if journal is not None:
+                journal.record(
+                    "proposal.skipped",
+                    {"symbol": symbol, "reason": "existing position or pending order"},
+                )
             continue
 
         if instrument == "option":
@@ -383,6 +407,9 @@ def _materialize_proposals(raw: list[dict], bb) -> list[TradeProposal]:
                 qty = math.floor(target / price)
                 if qty <= 0:
                     continue
+            stop_price, take_profit = (None, None)
+            if side is Side.BUY:
+                stop_price, take_profit = _protective_levels(symbol, price, bb)
             proposals.append(
                 TradeProposal(
                     symbol=symbol,
@@ -394,9 +421,37 @@ def _materialize_proposals(raw: list[dict], bb) -> list[TradeProposal]:
                     rationale=item.get("rationale", ""),
                     est_price=price,
                     limit_price=_marketable_limit(price, side),
+                    stop_price=stop_price,
+                    take_profit_price=take_profit,
                 )
             )
     return proposals
+
+
+def _protective_levels(
+    symbol: str, price: float, bb
+) -> tuple[float, float]:
+    """Derive a protective stop and take-profit for a new long."""
+    tech = next(
+        (s for s in bb.signals_for(symbol) if s.source == "technical"), None
+    )
+    levels = tech.key_levels if tech else {}
+    snap = bb.snapshots.get(symbol)
+    atr = (snap.technicals.get("atr_14") if snap and snap.technicals else None) or 0.0
+
+    stop = levels.get("stop")
+    if not (isinstance(stop, (int, float)) and 0 < stop < price):
+        stop = (price - 1.5 * atr) if atr > 0 else price * 0.92
+    if stop >= price:
+        stop = price * 0.92
+
+    resistance = levels.get("resistance")
+    if isinstance(resistance, (int, float)) and resistance > price:
+        take_profit = float(resistance)
+    else:
+        take_profit = price + 2 * (price - stop)
+
+    return round(float(stop), 2), round(float(take_profit), 2)
 
 
 def _marketable_limit(price: float, side: Side) -> float:

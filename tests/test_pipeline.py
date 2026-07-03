@@ -7,6 +7,7 @@ from aoa.data.market_data import MarketDataService
 from aoa.data.news import NullNewsFeed
 from aoa.execution.executor import Executor
 from aoa.journal.store import Journal
+from aoa.state import StateStore
 from aoa.swarm.context import CycleContext
 from aoa.swarm.pipeline import Pipeline
 from aoa.swarm.stages import AnalyzeStage, IntakeStage, ScanStage, default_stages
@@ -23,6 +24,7 @@ def _ctx(fake_broker, fake_llm, tmp_path, *, parallel_workers=1):
         risk=RiskLimits(max_orders_per_cycle=5),
     )
     journal = Journal(tmp_path / "j.jsonl")
+    state = StateStore(tmp_path / "state.json")
     agents = AgentTeam.from_llm(fake_llm, fake_broker, risk=cfg.risk)
     return CycleContext(
         config=cfg,
@@ -31,8 +33,9 @@ def _ctx(fake_broker, fake_llm, tmp_path, *, parallel_workers=1):
         journal=journal,
         market=MarketDataService(fake_broker),
         agents=agents,
-        executor=Executor(fake_broker, journal, dry_run=True),
+        executor=Executor(fake_broker, journal, dry_run=True, state=state),
         news=NullNewsFeed(),
+        state=state,
     )
 
 

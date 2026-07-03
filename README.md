@@ -97,14 +97,43 @@ portfolio sizing, risk, and execution:
 
 - **No equity shorting** — a sell is only allowed to close an existing long.
 - **No naked short options** — only covered calls / cash-secured puts.
-- **Per-position cap** (`AOA_MAX_POSITION_PCT`).
+- **Per-position cap** (`AOA_MAX_POSITION_PCT`) — counts your **existing** holding
+  in that name (equity + options on the same underlying) plus anything already
+  approved this cycle, so a name can't be accumulated past the cap across cycles.
 - **Options-book cap** (`AOA_MAX_OPTIONS_PCT`).
-- **Minimum settled-cash buffer** (`AOA_MIN_CASH_BUFFER_PCT`).
+- **Minimum settled-cash buffer** (`AOA_MIN_CASH_BUFFER_PCT`), measured against
+  **effective settled cash** (broker cash minus locally-tracked unsettled sale
+  proceeds — see below).
 - **Daily-loss kill switch** (`AOA_MAX_DAILY_LOSS_PCT`) — halts new risk, still allows exits.
 - **Per-cycle order cap** (`AOA_MAX_ORDERS_PER_CYCLE`).
 
 These are pure functions of the proposal/account/limits — no LLM in the loop — so
 they cannot be "talked around" by a model.
+
+### Settlement & persistent state
+
+State that must survive process restarts lives in a small JSON file
+(`AOA_STATE_PATH`, default `journal/state.json`):
+
+- **Daily-loss baseline.** The equity the day started at is persisted, so an
+  intraday restart can't silently disarm the kill switch by resetting the
+  baseline.
+- **Settlement ledger (good-faith-violation avoidance).** Cash accounts settle
+  T+1. When the swarm sells, the proceeds are recorded as *unsettled* until the
+  next business day and subtracted from the cash the swarm treats as available —
+  so it won't redeploy unsettled proceeds and trip a good-faith violation.
+
+### Protective exits & re-entry guard
+
+- **Every equity entry ships with a protective stop.** New long entries are
+  submitted as a broker **bracket/OTO** order carrying a stop-loss (and a
+  take-profit) so the stop persists between cycles. The stop is the technical
+  agent's suggested level, falling back to a 1.5×ATR stop, then a fixed 8% stop —
+  there is always one. (Long options are inherently defined-risk, so they don't
+  carry a separate stop.)
+- **Re-entry guard.** The swarm never opens a new position in a name it already
+  holds or already has a working (unfilled) order on — preventing duplicate and
+  stacked orders. Exits are always still allowed.
 
 ---
 
@@ -168,7 +197,14 @@ aoa team health   # Bob-only systems health check
 aoa team brief    # Tom→Julie→Alan analysis without trading
 aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
+aoa report     # activity summary (from journal) + live P&L snapshot
 ```
+
+`aoa report` combines journal-derived **activity** (cycles, candidates, orders,
+re-entry skips, and the top reasons proposals were risk-blocked) with a live
+**P&L snapshot** — open-position unrealized P&L and the day's P&L versus the
+persisted baseline. The live half is best-effort and is skipped with a note if
+the broker isn't reachable, so the activity summary still works offline.
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.

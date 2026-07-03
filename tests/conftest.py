@@ -119,13 +119,13 @@ class FakeBroker(Broker):
             asset_class=request.asset_class,
         )
 
+    def set_open_orders(self, orders: list[Order]) -> None:
+        self._open_orders = orders
+
     def list_orders(self, status: str = "open") -> list[Order]:
         if status == "open":
             return list(self._open_orders)
         return []
-
-    def set_open_orders(self, orders: list[Order]) -> None:
-        self._open_orders = orders
 
     def cancel_order(self, order_id: str) -> None:
         pass

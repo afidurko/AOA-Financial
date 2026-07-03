@@ -179,6 +179,9 @@ class Config:
     ntfy_topic: str = ""
     ntfy_server: str = "https://ntfy.sh"
 
+    # Persistent state (daily-loss baseline + settlement ledger).
+    state_path: str = "journal/state.json"
+
     # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
 
@@ -245,6 +248,9 @@ class Config:
             pushover_app_token=os.environ.get("AOA_PUSHOVER_APP_TOKEN", ""),
             ntfy_topic=os.environ.get("AOA_NTFY_TOPIC", ""),
             ntfy_server=os.environ.get("AOA_NTFY_SERVER", "https://ntfy.sh"),
+            state_path=os.environ.get(
+                "AOA_STATE_PATH", str(data_dir_for(env) / "state.json")
+            ),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),
