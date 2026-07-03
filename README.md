@@ -109,6 +109,20 @@ portfolio sizing, risk, and execution:
 | **Portfolio manager** | Synthesizes all signals + team brief + positions + account into target trades. |
 | **Risk manager** | Enforces hard guardrails, then an LLM second-opinion veto. |
 
+When `AOA_TRADING_AGENTS_ENABLED=true` (default), the analyze stage adds a
+**TradingAgents** layer (arXiv:2412.20138) before portfolio sizing:
+
+| Agent | Role |
+|-------|------|
+| **News analyst** | Headline-driven catalyst read (Alpaca news feed). |
+| **Sentiment analyst** | Market/social sentiment view from headlines + context. |
+| **Research team** | Bull/bear debate with facilitator prevailing view. |
+| **Risk debate team** | Risk-seeking / neutral / conservative perspectives on proposals. |
+| **Fund manager** | Final approval gate before execution. |
+
+The portfolio manager receives `analyst_reports` and `research_debate` per symbol
+and sizes trades accordingly. Disable with `AOA_TRADING_AGENTS_ENABLED=false`.
+
 ### Cash-account safety invariants (always enforced, deterministically)
 
 - **No equity shorting** — a sell is only allowed to close an existing long.
@@ -550,8 +564,9 @@ aoa doctor            # validate config + check broker/LLM connectivity
 aoa doctor --offline  # validate config only (no network)
 aoa status            # show account, positions, market clock
 aoa run               # run ONE team-coordinated analysis → decision → execution cycle
-aoa loop       # run continuously on AOA_CYCLE_SECONDS cadence
-aoa team health   # Bob-only systems health check
+aoa loop              # run continuously on AOA_CYCLE_SECONDS cadence
+aoa burnin -n 10      # paper validation: 10 cycles + burn-in summary
+aoa team health       # Bob-only systems health check
 aoa team brief    # Tom→Julie→Alan analysis without trading
 aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
