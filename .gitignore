@@ -240,3 +240,6 @@ journal/*.jsonl
 
 # OS / editor
 .DS_Store
+
+# loop-init Grok scaffold (Cursor uses .cursor/skills/ instead)
+.grok/
