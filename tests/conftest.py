@@ -251,12 +251,7 @@ class FakeLLM:
                 "summary": "Team completed health, code audit, and decision brief.",
                 "user_notifications": [],
                 "team_status": [
-                    {
-                        "name": "Bob",
-                        "role": "Systems Health & Code Integrity",
-                        "completed": True,
-                        "notes": "Code quality checks passed.",
-                    },
+                    {"name": "Tom", "role": "Trend Analyst", "completed": True, "notes": "ok"},
                     {
                         "name": "Julie",
                         "role": "Algorithm Specialist & Code Clarity",
@@ -264,11 +259,13 @@ class FakeLLM:
                         "notes": "Validated Tom's read.",
                     },
                     {
-                        "name": "Alan",
-                        "role": "Decision Aggregator & Code Oversight",
+                        "name": "Bob",
+                        "role": "Systems Health & Code Integrity",
                         "completed": True,
-                        "notes": "Decision brief ready.",
+                        "notes": "Code quality checks passed.",
                     },
+                    {"name": "Alan", "role": "Decision Aggregator & Code Oversight", "completed": True, "notes": "Decision brief ready."},
+                    {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
                 ],
             }
         raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")

@@ -78,3 +78,14 @@ def test_api_journal(client):
     r = client.get("/api/journal?n=5")
     assert r.status_code == 200
     assert len(r.json()["entries"]) > 0
+
+
+def test_api_run_returns_409_when_cycle_busy(client):
+    runner = client.app.state.runner
+    assert runner._cycle_lock.acquire(blocking=False)
+    try:
+        r = client.post("/api/run")
+        assert r.status_code == 409
+        assert "already running" in r.json()["detail"].lower()
+    finally:
+        runner._cycle_lock.release()

@@ -316,11 +316,12 @@ class SymbolAnalysisResult:
     tech: Signal
     fund: Signal
     meshed: MeshedView
-    options_idea: dict | None = None
-    option_contract: OptionContract | None = None
     n_learned: int = 0
     n_adapted: int = 0
     pending: dict[str, dict] = field(default_factory=dict)
+    options_idea: dict | None = None
+    option_contract: OptionContract | None = None
+    options_error: tuple[str, str] | None = None
 
 
 def _compute_analysis(
@@ -383,27 +384,27 @@ def _compute_analysis(
         try:
             idea = ctx.agents.options.propose(symbol, combined_dir, combined_conv, price)
         except BrokerError as exc:
-            msg = f"Option chain unavailable for {symbol}: {exc}"
-            ctx.notes.append(msg)
-            ctx.journal.record(
-                "broker.error",
-                {"op": "get_option_chain", "symbol": symbol, "error": str(exc)},
-            )
             idea = None
+            options_error = (symbol, str(exc))
+        else:
+            options_error = None
         if idea:
             option_contract = idea.pop("_contract", None)
             options_idea = idea
+    else:
+        options_error = None
 
     return SymbolAnalysisResult(
         symbol=symbol,
         tech=tech,
         fund=fund,
         meshed=meshed,
-        options_idea=options_idea,
-        option_contract=option_contract,
         n_learned=n_learned,
         n_adapted=n_adapted,
         pending=pending,
+        options_idea=options_idea,
+        option_contract=option_contract,
+        options_error=options_error,
     )
 
 
@@ -412,6 +413,15 @@ def _apply_analysis(ctx: CycleContext, result: SymbolAnalysisResult) -> None:
     bb = ctx.blackboard
     env = bb.environment
     symbol = result.symbol
+    options_error = result.options_error
+    if options_error is not None:
+        sym, err = options_error
+        msg = f"Option chain unavailable for {sym}: {err}"
+        ctx.notes.append(msg)
+        ctx.journal.record(
+            "broker.error",
+            {"op": "get_option_chain", "symbol": sym, "error": err},
+        )
 
     bb.add_signal(result.tech)
     bb.add_signal(result.fund)

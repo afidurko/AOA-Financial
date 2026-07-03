@@ -416,7 +416,7 @@ class AlpacaBroker(Broker):
                     bid=_f(quote.bid_price) if quote else 0.0,
                     ask=_f(quote.ask_price) if quote else 0.0,
                     last=_f(trade.price) if trade else 0.0,
-                    open_interest=oi,
+                    open_interest=oi or _f(getattr(snap, "open_interest", 0) or 0),
                     implied_volatility=(
                         float(snap.implied_volatility)
                         if snap.implied_volatility is not None

@@ -59,17 +59,16 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     @app.get("/api/status")
     def api_status(request: Request) -> dict[str, Any]:
         cfg = request.app.state.cfg
-        team = request.app.state.team
         runner = request.app.state.runner
         try:
-            acct = team.broker.get_account()
-            positions = team.broker.get_positions()
+            acct = runner.broker.get_account()
+            positions = runner.broker.get_positions()
         except BrokerError as exc:
             raise HTTPException(status_code=502, detail=str(exc)) from exc
         return {
             "mode": cfg.trading_mode,
-            "broker": team.broker.name,
-            "market_open": team.broker.is_market_open(),
+            "broker": runner.broker.name,
+            "market_open": runner.broker.is_market_open(),
             "account": acct.to_context(),
             "positions": [p.to_context() for p in positions],
             "loop": {
@@ -82,8 +81,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     @app.get("/api/journal")
     def api_journal(request: Request, n: int = 30) -> dict[str, Any]:
-        team = request.app.state.team
-        return {"entries": team.journal.tail(n)}
+        runner = request.app.state.runner
+        return {"entries": runner.journal.tail(n)}
 
     @app.post("/api/run")
     def api_run(request: Request) -> dict[str, Any]:
