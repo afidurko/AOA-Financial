@@ -60,12 +60,32 @@ class MarketDataService:
         return snap
 
     def snapshots(self, symbols: list[str]) -> dict[str, SymbolSnapshot]:
-        return {s.upper(): self.snapshot(s) for s in symbols}
+        normalized = [s.upper() for s in symbols if s]
+        if not normalized:
+            return {}
 
-    def _build(self, symbol: str) -> SymbolSnapshot:
+        missing = [s for s in normalized if s not in self._cache]
+        bars_by_symbol: dict[str, list[Bar]] = {}
+        if missing:
+            bars_by_symbol = self.broker.get_bars_many(
+                missing, self.bar_timeframe, self.bar_limit
+            )
+
+        out: dict[str, SymbolSnapshot] = {}
+        for sym in normalized:
+            if sym in self._cache:
+                out[sym] = self._cache[sym]
+                continue
+            snap = self._build(sym, bars=bars_by_symbol.get(sym))
+            self._cache[sym] = snap
+            out[sym] = snap
+        return out
+
+    def _build(self, symbol: str, *, bars: list[Bar] | None = None) -> SymbolSnapshot:
         try:
             quote = self.broker.get_quote(symbol)
-            bars = self.broker.get_bars(symbol, self.bar_timeframe, self.bar_limit)
+            if bars is None:
+                bars = self.broker.get_bars(symbol, self.bar_timeframe, self.bar_limit)
             technicals = technical_snapshot(bars) if bars else {}
             return SymbolSnapshot(symbol=symbol, quote=quote, bars=bars, technicals=technicals)
         except BrokerError as exc:

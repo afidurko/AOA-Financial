@@ -1,9 +1,12 @@
 """Alpaca brokerage implementation.
 
 Uses the Alpaca Trading API (account, positions, orders, clock) and the Alpaca
-Market Data API (quotes, bars, most-actives, option chains) over plain HTTPS via
+Market Data API (quotes, bars, most-actives, option chains, news) over plain HTTPS via
 ``httpx``. No third-party Alpaca SDK is required, which keeps the dependency
 surface small and the behavior transparent.
+
+Historical bars use the multi-symbol ``GET /v2/stocks/bars`` endpoint with
+pagination (``next_page_token``).
 
 Endpoint references:
 - Trading:    https://{paper-,}api.alpaca.markets/v2/...
@@ -50,6 +53,21 @@ def _f(value, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def bar_from_row(row: dict) -> Bar | None:
+    """Parse one Alpaca stock bar object into a :class:`Bar`."""
+    ts = _parse_ts(row.get("t"))
+    if ts is None:
+        return None
+    return Bar(
+        timestamp=ts,
+        open=_f(row.get("o")),
+        high=_f(row.get("h")),
+        low=_f(row.get("l")),
+        close=_f(row.get("c")),
+        volume=_f(row.get("v")),
+    )
 
 
 class AlpacaBroker(Broker):
@@ -155,25 +173,56 @@ class AlpacaBroker(Broker):
         )
 
     def get_bars(self, symbol: str, timeframe: str = "1Day", limit: int = 120) -> list[Bar]:
-        params = {"timeframe": timeframe, "limit": limit, "adjustment": "split"}
-        d = self._data("GET", f"/v2/stocks/{symbol}/bars", params=params)
-        rows = d.get("bars", []) if isinstance(d, dict) else []
-        bars: list[Bar] = []
-        for r in rows:
-            ts = _parse_ts(r.get("t"))
-            if ts is None:
-                continue
-            bars.append(
-                Bar(
-                    timestamp=ts,
-                    open=_f(r.get("o")),
-                    high=_f(r.get("h")),
-                    low=_f(r.get("l")),
-                    close=_f(r.get("c")),
-                    volume=_f(r.get("v")),
-                )
-            )
-        return bars
+        return self.get_bars_many([symbol], timeframe, limit).get(symbol.upper(), [])
+
+    def get_bars_many(
+        self,
+        symbols: list[str],
+        timeframe: str = "1Day",
+        limit: int = 120,
+    ) -> dict[str, list[Bar]]:
+        """Fetch historical bars via ``GET /v2/stocks/bars`` (multi-symbol + pagination)."""
+        normalized = [s.upper() for s in symbols if s]
+        if not normalized:
+            return {}
+
+        collected: dict[str, list[Bar]] = {sym: [] for sym in normalized}
+        page_token: str | None = None
+        request_limit = max(limit, min(10_000, limit * len(normalized)))
+
+        for _ in range(20):
+            if all(len(collected[s]) >= limit for s in normalized):
+                break
+            params: dict = {
+                "symbols": ",".join(normalized),
+                "timeframe": timeframe,
+                "limit": request_limit,
+                "adjustment": "split",
+                "sort": "asc",
+            }
+            if page_token:
+                params["page_token"] = page_token
+            d = self._data("GET", "/v2/stocks/bars", params=params)
+            bar_map = d.get("bars", {}) if isinstance(d, dict) else {}
+            if isinstance(bar_map, dict):
+                for sym, rows in bar_map.items():
+                    key = sym.upper()
+                    if key not in collected or not isinstance(rows, list):
+                        continue
+                    for row in rows:
+                        bar = bar_from_row(row)
+                        if bar is not None:
+                            collected[key].append(bar)
+            page_token = d.get("next_page_token") if isinstance(d, dict) else None
+            if not page_token:
+                break
+
+        trimmed: dict[str, list[Bar]] = {}
+        for sym in normalized:
+            by_ts = {b.timestamp: b for b in collected[sym]}
+            ordered = sorted(by_ts.values(), key=lambda b: b.timestamp)
+            trimmed[sym] = ordered[-limit:]
+        return trimmed
 
     def get_most_active(self, limit: int = 25) -> list[str]:
         params = {"by": "volume", "top": limit}

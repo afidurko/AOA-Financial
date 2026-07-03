@@ -56,8 +56,6 @@ def test_technical_snapshot_includes_volume():
 
 
 def test_news_service_groups_by_symbol():
-    broker = FakeBroker()
-
     class MultiNewsBroker(FakeBroker):
         def get_news(self, symbols, *, limit=50, lookback_hours=72):
             return [
