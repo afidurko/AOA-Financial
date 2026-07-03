@@ -1,10 +1,11 @@
-"""Alan — aggregates Tom and Julie's work into decision-ready briefs."""
+"""Alan — aggregates Tom, Julie, Bob, and code-quality into decision briefs."""
 
 from __future__ import annotations
 
 import json
 
-from aoa.agents.base import Agent
+from aoa.agents.base import Agent, clamp_conviction
+from aoa.team.code_engineering import CodeQualityReport
 from aoa.team.models import AlgorithmReport, DecisionBrief, TrendReport
 
 _SCHEMA = {
@@ -16,7 +17,10 @@ _SCHEMA = {
                 "type": "object",
                 "properties": {
                     "symbol": {"type": "string"},
-                    "action": {"type": "string", "enum": ["watch", "consider_long", "consider_short_exit", "avoid"]},
+                    "action": {
+                        "type": "string",
+                        "enum": ["watch", "consider_long", "consider_short_exit", "avoid"],
+                    },
                     "conviction": {"type": "number"},
                     "rationale": {"type": "string"},
                 },
@@ -35,16 +39,18 @@ _SCHEMA = {
 class AlanAgent(Agent):
     name = "alan"
     display_name = "Alan"
-    role = "Decision Aggregator"
+    role = "Decision Aggregator & Code Oversight"
 
     system_prompt = (
         "You are Alan, the decision aggregator on an autonomous trading team. You "
-        "receive Tom's trend reports and Julie's algorithmic validations. Synthesize "
-        "them into a focused decision brief: per-symbol recommendations "
-        "(watch, consider_long, consider_short_exit, avoid), conviction in [0,1], "
-        "and a team-level summary with overall confidence. This is a CASH account — "
-        "no shorting. Prioritize names where Tom and Julie agree with high strength. "
-        "When they conflict or data is weak, recommend watch or avoid."
+        "receive Tom's trend reports, Julie's algorithmic validations, and Bob's "
+        "code-quality audits. Synthesize them into a focused decision brief: "
+        "per-symbol recommendations (watch, consider_long, consider_short_exit, "
+        "avoid), conviction in [0,1], and a team-level summary with overall "
+        "confidence. This is a CASH account — no shorting. Prioritize names where "
+        "Tom and Julie agree with high strength. When code quality is degraded or "
+        "critical, lower confidence and prefer watch/avoid until Bob's issues are "
+        "resolved. When they conflict or data is weak, recommend watch or avoid."
     )
 
     def aggregate(
@@ -53,6 +59,7 @@ class AlanAgent(Agent):
         algorithms: list[AlgorithmReport],
         *,
         scanner_context: list[dict] | None = None,
+        code_quality: CodeQualityReport | None = None,
     ) -> DecisionBrief:
         by_symbol = {a.symbol: a for a in algorithms}
         pairs = [
@@ -65,22 +72,24 @@ class AlanAgent(Agent):
             }
             for t in trends
         ]
-        prompt = (
-            f"Trend + algorithm pairs:\n{json.dumps(pairs, default=str)}\n"
-        )
+        prompt = f"Trend + algorithm pairs:\n{json.dumps(pairs, default=str)}\n"
         if scanner_context:
             prompt += f"\nScanner shortlist context:\n{json.dumps(scanner_context, default=str)}\n"
+        if code_quality is not None:
+            prompt += (
+                f"\nBob/Julie code-quality audit:\n"
+                f"{json.dumps(code_quality.to_context(), default=str)}\n"
+            )
         prompt += "\nProduce the aggregated decision brief as JSON."
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
+        confidence = clamp_conviction(r.get("confidence", 0.5), default=0.5)
+        if code_quality and not code_quality.can_proceed:
+            confidence = min(confidence, 0.25)
+        elif code_quality and code_quality.worst_status.value == "degraded":
+            confidence = min(confidence, 0.55)
         return DecisionBrief(
             recommendations=list(r.get("recommendations") or []),
             summary=r.get("summary", ""),
-            confidence=_clamp(r.get("confidence", 0.5)),
+            confidence=confidence,
+            code_quality=code_quality.to_context() if code_quality else None,
         )
-
-
-def _clamp(v: float) -> float:
-    try:
-        return max(0.0, min(1.0, float(v)))
-    except (TypeError, ValueError):
-        return 0.0

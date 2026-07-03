@@ -3,17 +3,28 @@ name: coding-engineer
 description: Maintain and simplify the AOA Financial codebase. Use when refactoring, fixing lint errors, deduplicating logic, or preventing regressions in the trading swarm.
 ---
 
-# Coding Engineer
+# Coding Engineer — Julie, Alan, and Bob
 
-You are the coding engineer for **AOA Financial** — an autonomous Python trading swarm (Claude + Alpaca). Your job is to keep the code simple, correct, and easy to change without breaking safety invariants.
+Code health is a **team responsibility**, not a separate role. The five-member team
+coordinates coding-engineer work like this:
 
-## Principles
+| Member | Coding-engineer job |
+|--------|---------------------|
+| **Bob** | Deterministic systems health + code integrity (`BobAgent.audit_codebase`, `team.bob.code_quality` journal events) |
+| **Julie** | Algorithm validation **and** code-clarity review — she reads Bob's audit and notes issues in her method notes (`team.julie.code_audit`) |
+| **Alan** | Decision aggregation **and** code oversight — lowers confidence when code quality is degraded or critical |
 
-1. **Minimal diffs** — Fix the root cause; do not refactor unrelated modules.
-2. **One source of truth** — Shared helpers and constants live in one module; import elsewhere.
-3. **Safety first** — Never weaken deterministic risk guardrails in `src/aoa/risk/guards.py`.
-4. **Match conventions** — Dataclasses, typed hints, journal events, and agent patterns already in the repo.
-5. **Tests must pass** — Run `python3 -m ruff check src tests` and `python3 -m pytest` before finishing.
+Tom handles trend reads; Aaron (CEO) remediates recoverable issues and escalates.
+
+## Deterministic checks (`src/aoa/team/code_engineering.py`)
+
+Bob and Julie share `run_code_quality_audit()`:
+
+- Shared helpers live in one module (`execution/pricing`, `brokerage/constants`)
+- Web app uses `app.state`, not module singletons
+- Pipeline uses `CycleContext.portfolio_output` and exposes `run_from()`
+- Optional `ruff check src tests` when ruff is installed
+- Import sweep for core modules
 
 ## Where things belong
 
@@ -21,29 +32,21 @@ You are the coding engineer for **AOA Financial** — an autonomous Python tradi
 |---------|--------|
 | Order limit pricing | `src/aoa/execution/pricing.py` |
 | Alpaca feed/adjustment constants | `src/aoa/brokerage/constants.py` |
+| Code audit implementation | `src/aoa/team/code_engineering.py` |
+| Bob's health gate | `src/aoa/team/bob.py` |
+| Julie's clarity review | `src/aoa/team/julie.py` |
+| Alan's brief + code confidence | `src/aoa/team/alan.py` |
 | Pipeline stages | `src/aoa/swarm/stages.py` |
-| Stage orchestration & journaling | `src/aoa/swarm/pipeline.py` |
-| Inter-stage PM output | `CycleContext.portfolio_output` (not environment hacks) |
-| Parallel analysis | Compute in threads, merge on main thread via `_apply_analysis` |
-| Web state | `app.state` in `web/app.py` — no module singletons |
-| Cycle concurrency | `LoopRunner` cycle mutex — one cycle at a time |
-| LLM failures | Catch `LLMError` (from `aoa.llm.client`), not bare `Exception` |
+| LLM failures | Catch `LLMError`, not bare `Exception` |
 | Hard risk rules | `src/aoa/risk/guards.py` (deterministic, binding) |
 
-## Common cleanup targets
+## CLI
 
-- **Duplicated helpers** — e.g. `_marketable_limit` was duplicated; use `execution.pricing.marketable_limit`.
-- **Duplicated constants** — Alpaca validation sets belong in `brokerage.constants`.
-- **Pipeline drift** — `Pipeline.run` and `run_until` must share one loop so journaling stays consistent.
-- **Broad except blocks** — Agents should catch `LLMError` plus parse errors (`KeyError`, `ValueError`), then fall back deterministically.
-- **Import hygiene** — Keep ruff clean; use `collections.abc.Callable` instead of `typing.Callable`.
-
-## Do not
-
-- Add new agents or change trading logic unless explicitly requested.
-- Move the web dashboard out of `app.py` unless asked (large, separate change).
-- Introduce heavy abstractions for one-off use.
-- Skip tests or leave ruff violations.
+```bash
+python3 -m aoa.cli team health   # Bob's health + code audit
+python3 -m aoa.cli team brief    # Tom→Julie→Alan with code context
+python3 -m aoa.cli run           # Full team-coordinated cycle
+```
 
 ## Verification checklist
 

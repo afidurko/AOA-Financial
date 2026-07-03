@@ -40,6 +40,7 @@ class HealthReport:
     checks: list[HealthCheck] = field(default_factory=list)
     can_proceed: bool = True
     summary: str = ""
+    code_quality: dict | None = None
 
     @property
     def worst_status(self) -> HealthStatus:
@@ -56,6 +57,7 @@ class HealthReport:
             "summary": self.summary,
             "worst_status": self.worst_status.value,
             "checks": [c.to_context() for c in self.checks],
+            "code_quality": self.code_quality,
         }
 
 
@@ -102,13 +104,17 @@ class DecisionBrief:
     recommendations: list[dict]
     summary: str
     confidence: float
+    code_quality: dict | None = None
 
     def to_context(self) -> dict:
-        return {
+        ctx = {
             "recommendations": self.recommendations,
             "summary": self.summary,
             "confidence": round(self.confidence, 2),
         }
+        if self.code_quality:
+            ctx["code_quality"] = self.code_quality
+        return ctx
 
 
 @dataclass

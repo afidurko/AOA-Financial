@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import importlib
-import sys
-
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.indicators import technical_snapshot
+from aoa.team.code_engineering import CodeQualityReport, import_sweep, run_code_quality_audit
 from aoa.team.models import HealthCheck, HealthReport, HealthStatus
 
 
@@ -16,29 +14,67 @@ class BobAgent:
 
     name = "bob"
     display_name = "Bob"
-    role = "Systems Health"
+    role = "Systems Health & Code Integrity"
 
     def __init__(self, config: Config, broker: Broker) -> None:
         self.config = config
         self.broker = broker
 
     def check_health(self) -> HealthReport:
+        code_quality = self.audit_codebase()
         checks: list[HealthCheck] = [
             self._check_config(),
             self._check_broker(),
             self._check_core_imports(),
             self._check_indicator_pipeline(),
+            self._code_quality_check(code_quality),
         ]
         critical = any(c.status is HealthStatus.CRITICAL for c in checks)
         degraded = any(c.status is HealthStatus.DEGRADED for c in checks)
-        can_proceed = not critical
-        if critical:
+        can_proceed = not critical and code_quality.can_proceed
+        if critical or not code_quality.can_proceed:
             summary = "Critical issues detected — trading cycle should not proceed."
-        elif degraded:
+        elif degraded or code_quality.worst_status is HealthStatus.DEGRADED:
             summary = "System is degraded but can proceed with caution."
         else:
             summary = "All systems healthy."
-        return HealthReport(checks=checks, can_proceed=can_proceed, summary=summary)
+        return HealthReport(
+            checks=checks,
+            can_proceed=can_proceed,
+            summary=summary,
+            code_quality=code_quality.to_context(),
+        )
+
+    def audit_codebase(self) -> CodeQualityReport:
+        """Coding-engineer sweep — shared helpers, imports, lint."""
+        report = run_code_quality_audit()
+        import_check = import_sweep(
+            (
+                "aoa.agents.base",
+                "aoa.execution.pricing",
+                "aoa.brokerage.constants",
+                "aoa.swarm.pipeline",
+                "aoa.swarm.orchestrator",
+                "aoa.execution.executor",
+                "aoa.risk.guards",
+                "aoa.team.orchestrator",
+                "aoa.web.app",
+            )
+        )
+        report.findings.append(import_check)
+        if import_check.status is HealthStatus.CRITICAL:
+            report.can_proceed = False
+            report.summary = "Import failures block trading."
+        elif import_check.status is HealthStatus.DEGRADED and report.can_proceed:
+            report.summary = "Code quality degraded — proceed with caution."
+        return report
+
+    def _code_quality_check(self, report: CodeQualityReport) -> HealthCheck:
+        return HealthCheck(
+            name="code_quality",
+            status=report.worst_status,
+            detail=report.summary,
+        )
 
     def _check_config(self) -> HealthCheck:
         problems = self.config.validate()
@@ -74,29 +110,19 @@ class BobAgent:
             )
 
     def _check_core_imports(self) -> HealthCheck:
-        modules = (
-            "aoa.agents.base",
-            "aoa.swarm.orchestrator",
-            "aoa.execution.executor",
-            "aoa.risk.guards",
-            "aoa.team.orchestrator",
-        )
-        failed: list[str] = []
-        for mod in modules:
-            try:
-                importlib.import_module(mod)
-            except Exception as exc:  # noqa: BLE001 — integrity sweep
-                failed.append(f"{mod}: {exc}")
-        if failed:
-            return HealthCheck(
-                name="code_integrity",
-                status=HealthStatus.CRITICAL,
-                detail="Import failures: " + "; ".join(failed),
+        finding = import_sweep(
+            (
+                "aoa.agents.base",
+                "aoa.swarm.orchestrator",
+                "aoa.execution.executor",
+                "aoa.risk.guards",
+                "aoa.team.orchestrator",
             )
+        )
         return HealthCheck(
             name="code_integrity",
-            status=HealthStatus.OK,
-            detail=f"Core modules import cleanly (Python {sys.version_info.major}.{sys.version_info.minor}).",
+            status=finding.status,
+            detail=finding.detail,
         )
 
     def _check_indicator_pipeline(self) -> HealthCheck:

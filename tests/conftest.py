@@ -186,8 +186,8 @@ class FakeLLM:
                 "direction": "up",
                 "strength": 0.72,
                 "timeframe": "swing",
-                "rationale": "rising MA stack with higher lows",
-                "key_observations": ["above 50DMA", "RSI constructive"],
+                "rationale": "Higher highs with rising 50DMA support",
+                "key_observations": ["volume confirmation", "pullback held"],
             }
         if required == self._TECHNICAL:
             return {
@@ -229,8 +229,8 @@ class FakeLLM:
             return {
                 "validated": True,
                 "adjusted_strength": 0.68,
-                "method_notes": "MACD histogram positive; RSI not overbought",
-                "signals": ["sma_cross_bullish", "rsi_midrange"],
+                "method_notes": "RSI regime supports Tom's uptrend read",
+                "signals": ["sma_cross_bullish", "rsi_constructive"],
             }
         if required == self._ALAN:
             return {
@@ -239,22 +239,37 @@ class FakeLLM:
                         "symbol": "AAPL",
                         "action": "consider_long",
                         "conviction": 0.7,
-                        "rationale": "validated uptrend",
+                        "rationale": "Tom and Julie aligned on bullish swing setup",
                     }
                 ],
-                "summary": "One high-quality long setup",
-                "confidence": 0.65,
+                "summary": "One high-quality corroborated long candidate",
+                "confidence": 0.72,
             }
         if required == self._AARON:
             return {
                 "overall_ok": True,
-                "summary": "Team completed all deliverables.",
+                "summary": "Team completed health, code audit, and decision brief.",
                 "user_notifications": [],
                 "team_status": [
                     {"name": "Tom", "role": "Trend Analyst", "completed": True, "notes": "ok"},
-                    {"name": "Julie", "role": "Algorithm Specialist", "completed": True, "notes": "ok"},
-                    {"name": "Bob", "role": "Systems Health", "completed": True, "notes": "ok"},
-                    {"name": "Alan", "role": "Decision Aggregator", "completed": True, "notes": "ok"},
+                    {
+                        "name": "Julie",
+                        "role": "Algorithm Specialist & Code Clarity",
+                        "completed": True,
+                        "notes": "Validated Tom's read.",
+                    },
+                    {
+                        "name": "Bob",
+                        "role": "Systems Health & Code Integrity",
+                        "completed": True,
+                        "notes": "Code quality checks passed.",
+                    },
+                    {
+                        "name": "Alan",
+                        "role": "Decision Aggregator & Code Oversight",
+                        "completed": True,
+                        "notes": "Decision brief ready.",
+                    },
                     {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
                 ],
             }

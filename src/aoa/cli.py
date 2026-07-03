@@ -129,7 +129,7 @@ def _print_team(result: TeamCycleResult) -> None:
                 f"  {t.symbol:<6} {t.direction.value:<8} strength={t.strength:.2f}  {t.rationale[:60]}"
             )
     if result.algorithms:
-        print("\n=== Julie — algorithm validation ===")
+        print("\n=== Julie — algorithm & code clarity ===")
         for a in result.algorithms:
             flag = "validated" if a.validated else "unvalidated"
             print(f"  {a.symbol:<6} [{flag}] strength={a.adjusted_strength:.2f}  {a.method_notes[:50]}")
