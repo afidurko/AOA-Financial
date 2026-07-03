@@ -104,6 +104,7 @@ class ScanStage(PipelineStage):
 
         if not bb.candidates:
             ctx.notes.append("Scanner returned no candidates.")
+            bb.candidates = _exit_review_candidates(bb)
         return True
 
 
@@ -375,15 +376,51 @@ def _maybe_options(
         and combined_conv >= 0.55
         and price
         and bb.account
-        and bb.account.options_level >= 1
+        and bb.account.options_level >= 2
     ):
-        idea = ctx.agents.options.propose(symbol, combined_dir, combined_conv, price)
+        try:
+            idea = ctx.agents.options.propose(symbol, combined_dir, combined_conv, price)
+        except BrokerError as exc:
+            msg = f"Option chain unavailable for {symbol}: {exc}"
+            ctx.notes.append(msg)
+            ctx.journal.record(
+                "broker.error",
+                {"op": "get_option_chain", "symbol": symbol, "error": str(exc)},
+            )
+            idea = None
         if idea:
             contract = idea.pop("_contract", None)
             if contract is not None:
                 bb.option_contracts[contract.symbol] = contract
             bb.options_ideas[symbol] = idea
             bb.environment.set_domain(f"options:{symbol}", idea)
+
+
+
+def _exit_review_candidates(bb) -> list[dict]:
+    """When the scanner finds nothing, still give agents context on open positions."""
+    candidates: list[dict] = []
+    for pos in bb.positions:
+        if pos.qty <= 0:
+            continue
+        symbol = pos.symbol.upper()
+        if pos.asset_class is AssetClass.OPTION:
+            candidates.append(
+                {
+                    "symbol": symbol,
+                    "priority": 0.0,
+                    "reason": "existing position — reviewing for exit",
+                }
+            )
+            continue
+        candidates.append(
+            {
+                "symbol": symbol,
+                "priority": 0.0,
+                "reason": "existing position — reviewing for exit",
+            }
+        )
+    return candidates
 
 
 def _materialize_proposals(

@@ -5,10 +5,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
+from conftest import FakeBroker
+
 from aoa.brokerage.alpaca import AlpacaBroker, _bar_from_sdk
 from aoa.data.market_data import MarketDataService
 from aoa.data.timeframes import TimeframeSpec, parse_timeframes
-from tests.conftest import FakeBroker
 
 
 def test_bar_from_sdk_parses_row():

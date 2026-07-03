@@ -205,7 +205,14 @@ def _print_team(result: TeamCycleResult) -> None:
 
 
 # --------------------------------------------------------------------- commands
+def _cycle_exit_code(result: CycleResult) -> int:
+    if result.execution and result.execution.errors:
+        return 1
+    return 0
+
+
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
+    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
     _print_environment(cfg)
     problems = cfg.validate()
     if problems:
@@ -217,11 +224,9 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
-    if cfg.is_test:
-        print("  ✓ Test environment — skipping broker/LLM connectivity checks.")
-        return 0
-    if offline:
-        print("  ✓ Offline mode — skipped broker and LLM connectivity checks.")
+    if offline or cfg.is_test:
+        label = "Offline mode" if offline else "Test environment"
+        print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
         return 0
     try:
         broker = build_broker(cfg)
@@ -287,12 +292,6 @@ def cmd_status(cfg: Config) -> int:
             f"  {p.symbol:<22} {p.asset_class.value:<7} qty {p.qty:>8.2f} "
             f"mv ${p.market_value:>12,.2f}  uPL ${p.unrealized_pl:>+10,.2f}"
         )
-    return 0
-
-
-def _cycle_exit_code(result: CycleResult) -> int:
-    if result.execution and result.execution.errors:
-        return 1
     return 0
 
 
@@ -395,6 +394,7 @@ def cmd_team_brief(cfg: Config) -> int:
         )
     )
     return 0
+
 
 
 def cmd_analyze(cfg: Config, symbol: str, timeframe: str, limit: int) -> int:

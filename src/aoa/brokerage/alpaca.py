@@ -351,13 +351,10 @@ class AlpacaBroker(Broker):
         return bars[-1]
 
     def get_most_active(self, limit: int = 25) -> list[str]:
-        try:
-            result = self._sdk_call(
-                self._screener.get_most_actives,
-                MostActivesRequest(by=MostActivesBy.VOLUME, top=limit),
-            )
-        except BrokerError:
-            return []
+        result = self._sdk_call(
+            self._screener.get_most_actives,
+            MostActivesRequest(by=MostActivesBy.VOLUME, top=limit),
+        )
         return [row.symbol for row in result.most_actives if row.symbol]
 
     # --- options -------------------------------------------------------------
@@ -374,15 +371,12 @@ class AlpacaBroker(Broker):
             params["type"] = (
                 ContractType.CALL if option_type == "call" else ContractType.PUT
             )
-        try:
-            snapshots = self._sdk_call(
-                self._options_data.get_option_chain,
-                OptionChainRequest(**params),
-            )
-        except BrokerError:
-            return []
-
+        snapshots = self._sdk_call(
+            self._options_data.get_option_chain,
+            OptionChainRequest(**params),
+        )
         oi_by_symbol = self._fetch_open_interest(underlying, expiration=expiration)
+
         contracts: list[OptionContract] = []
         for occ_symbol, snap in snapshots.items():
             parsed = _parse_occ(occ_symbol)
@@ -420,28 +414,27 @@ class AlpacaBroker(Broker):
     def _fetch_open_interest(
         self, underlying: str, *, expiration: str | None = None
     ) -> dict[str, float]:
-        """Open interest lives on the trading API, not the data snapshot."""
-        kwargs: dict = {
-            "underlying_symbols": underlying,
+        """Open interest is on the trading API contracts endpoint, not snapshots."""
+        req_kwargs: dict = {
+            "underlying_symbols": [underlying],
             "status": "active",
             "limit": 1000,
         }
         if expiration:
-            kwargs["expiration_date"] = expiration
+            req_kwargs["expiration_date"] = expiration
         try:
             result = self._sdk_call(
                 self._trading.get_option_contracts,
-                GetOptionContractsRequest(**kwargs),
+                GetOptionContractsRequest(**req_kwargs),
             )
         except BrokerError:
             return {}
-        out: dict[str, float] = {}
-        rows = getattr(result, "option_contracts", None) or []
-        for row in rows:
-            sym = getattr(row, "symbol", None)
-            if sym:
-                out[sym] = _f(getattr(row, "open_interest", 0))
-        return out
+        rows = getattr(result, "option_contracts", result) or []
+        return {
+            row.symbol: _f(row.open_interest)
+            for row in rows
+            if getattr(row, "symbol", None)
+        }
 
     # --- orders --------------------------------------------------------------
     def submit_order(self, request: OrderRequest) -> Order:

@@ -40,6 +40,8 @@ class Journal:
                 continue
         return out
 
+        return out
+
     def read_all(self) -> list[dict]:
         if not self.path.exists():
             return []

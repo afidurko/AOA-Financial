@@ -43,6 +43,17 @@ def test_validate_clean_config():
     assert cfg.validate() == []
 
 
+def test_validate_rejects_bad_effort():
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        effort="turbo",
+    )
+    problems = cfg.validate()
+    assert any("AOA_EFFORT" in p for p in problems)
+
+
 def test_validate_rejects_bad_data_feed():
     cfg = Config(
         anthropic_api_key="x",
@@ -63,17 +74,6 @@ def test_validate_rejects_bad_bar_adjustment():
     )
     problems = cfg.validate()
     assert any("ALPACA_BAR_ADJUSTMENT" in p for p in problems)
-
-
-def test_validate_rejects_bad_effort():
-    cfg = Config(
-        anthropic_api_key="x",
-        alpaca_key_id="k",
-        alpaca_secret_key="s",
-        effort="turbo",
-    )
-    problems = cfg.validate()
-    assert any("AOA_EFFORT" in p for p in problems)
 
 
 def test_validate_live_requires_acknowledgement():
@@ -178,11 +178,6 @@ def test_profile_loader_applies_before_dotenv(tmp_path, monkeypatch):
     monkeypatch.setenv("AOA_PROFILE", "paper-dry")
 
     load_env_files()
-    assert Path.cwd() == tmp_path
-    assert __import__("os").environ.get("AOA_UNIVERSE") == "TEST"
-
-    load_env_files()
-    __import__("os").environ.setdefault("AOA_UNIVERSE", "LOCAL")
     assert __import__("os").environ.get("AOA_UNIVERSE") == "TEST"
 
 

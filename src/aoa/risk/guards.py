@@ -61,6 +61,12 @@ class RiskGuards:
         options_notional = sum(
             abs(p.market_value) for p in positions if p.asset_class is AssetClass.OPTION
         )
+        # Existing + in-cycle equity exposure per symbol (for per-position cap).
+        equity_exposure: dict[str, float] = {
+            p.symbol: abs(p.market_value)
+            for p in positions
+            if p.asset_class is AssetClass.EQUITY and p.qty > 0
+        }
         approved_count = 0
         min_cash = self.limits.min_cash_buffer_pct * account.equity
         # Exposure already on the book per "name" (equity symbol or option
@@ -138,6 +144,10 @@ class RiskGuards:
                     name_exposure[name] = existing + notional
                     if prop.asset_class is AssetClass.OPTION:
                         options_notional += notional
+                    elif prop.asset_class is AssetClass.EQUITY:
+                        equity_exposure[prop.symbol] = (
+                            equity_exposure.get(prop.symbol, 0.0) + notional
+                        )
 
             prop.approved = ok
             prop.risk_notes = notes or (["OK"] if ok else ["Rejected."])

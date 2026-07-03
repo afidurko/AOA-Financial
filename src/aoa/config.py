@@ -26,6 +26,8 @@ _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
     "paper": {"dry_run": False, "alpaca_live": False},
     "live": {"dry_run": False, "alpaca_live": True},
 }
+_VALID_DATA_FEEDS = frozenset({"", "sip", "iex", "boats", "otc"})
+_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
 
 
 def _load_dotenv(path: str | os.PathLike[str]) -> None:
@@ -38,9 +40,7 @@ def _load_dotenv(path: str | os.PathLike[str]) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        os.environ.setdefault(key, value)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
 def _profiles_dir() -> Path:
@@ -98,10 +98,6 @@ def _int(name: str, default: int) -> int:
         return default
 
 
-_VALID_DATA_FEEDS = frozenset({"", "sip", "iex", "boats", "otc"})
-_VALID_BAR_ADJUSTMENTS = frozenset({"raw", "split", "dividend", "all", "spin-off"})
-
-
 def data_dir_for(env: str) -> Path:
     base = Path(os.environ.get("AOA_DATA_DIR", "data"))
     return base / env
@@ -116,8 +112,6 @@ def journal_path_for(env: str) -> Path:
 
 @dataclass(frozen=True)
 class RiskLimits:
-    """Hard guardrails. Orders violating any of these are rejected outright."""
-
     max_position_pct: float = 0.10
     max_options_pct: float = 0.15
     max_daily_loss_pct: float = 0.03
@@ -138,14 +132,12 @@ class Config:
     model: str = "claude-sonnet-4-20250514"
     effort: str = "high"
 
-    # Brokerage
     alpaca_key_id: str = ""
     alpaca_secret_key: str = ""
     alpaca_live: bool = False
-    alpaca_data_feed: str = ""  # sip | iex | boats | otc; blank = Alpaca default
-    alpaca_bar_adjustment: str = "split"  # raw | split | dividend | all
+    alpaca_data_feed: str = ""
+    alpaca_bar_adjustment: str = "split"
 
-    # Universe & cadence
     universe: tuple[str, ...] = ()
     cycle_seconds: int = 900
 
@@ -157,15 +149,11 @@ class Config:
     bar_timeframes: tuple[TimeframeSpec, ...] = DEFAULT_TIMEFRAMES
     bar_feed: str = "iex"
 
-    # Execution
     dry_run: bool = False
-    parallel_workers: int = 4
     live_acknowledged: bool = False
+    parallel_workers: int = 4
 
-    # News feed
     news_enabled: bool = True
-
-    # Web server
     web_host: str = "0.0.0.0"
     web_port: int = 8080
     web_auto_loop: bool = False
@@ -242,8 +230,8 @@ class Config:
             bar_timeframes=parse_timeframes(os.environ.get("AOA_BAR_TIMEFRAMES", "")),
             bar_feed=os.environ.get("AOA_BAR_FEED", "iex").strip().lower() or "iex",
             dry_run=_bool("AOA_DRY_RUN", False),
-            parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
             live_acknowledged=live_ack,
+            parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
             news_enabled=_bool("AOA_NEWS_ENABLED", True),
             web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
             web_port=_int("AOA_WEB_PORT", 8080),
@@ -273,7 +261,6 @@ class Config:
         )
 
     def validate(self) -> list[str]:
-        """Return a list of human-readable configuration problems (empty == OK)."""
         problems: list[str] = []
         if self.env not in VALID_ENVS:
             problems.append(

@@ -724,7 +724,7 @@ falls back to qualitative reasoning without fabricating headlines.
                              │ Config.from_env()
                              ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  Orchestrator — composable pipeline (intake → … → execute)      │
+│  TeamOrchestrator — Bob gate → Tom/Julie/Alan → trading pipeline │
 │  intake → scan → analyze(+news) → mesh → portfolio → risk       │
 └──────┬──────────────────┬──────────────────┬────────────────────┘
        │                  │                  │
@@ -829,8 +829,8 @@ model.merge()                        # fold the delta in for fast inference
 ## Extending
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
-- **Add a news feed**: implement or extend `aoa.data.news.NewsFeed` (Alpaca is built-in)
-  and pass it to `Orchestrator`; tune via `AOA_NEWS_*` or `AOA_NEWS_ENABLED` in `.env`.
+- **Add a news feed**: implement `aoa.data.news.NewsFeed` and pass it to `Orchestrator`
+  (or enable the built-in Alpaca feed via `AOA_NEWS_ENABLED`).
 - **Add an agent**: subclass `aoa.agents.base.Agent`, register it in `AgentTeam`
   (`aoa.swarm.team`), and add or extend a pipeline stage in `aoa.swarm.stages`.
 - **Customize the pipeline**: pass a custom `Pipeline(stages=[...])` to

@@ -127,6 +127,9 @@ class FakeBroker(Broker):
             return list(self._open_orders)
         return []
 
+    def set_open_orders(self, orders: list[Order]) -> None:
+        self._open_orders = orders
+
     def cancel_order(self, order_id: str) -> None:
         pass
 

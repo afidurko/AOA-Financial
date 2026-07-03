@@ -1,4 +1,4 @@
-"""Tests for CLI helpers and exit-code behavior."""
+"""Tests for CLI helpers, exit codes, and offline doctor mode."""
 
 from __future__ import annotations
 
