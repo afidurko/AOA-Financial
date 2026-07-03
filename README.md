@@ -16,8 +16,22 @@ and the **order executor**. Every agent reasons with **Claude** (`claude-opus-4-
 
 ## How it works
 
-Each **cycle** runs a pipeline of specialized agents coordinated over a shared
-blackboard:
+Each **cycle** runs a **composable pipeline** of stages over a shared blackboard
+and editable swarm environment:
+
+```
+ intake → scan → analyze → portfolio → materialize → risk → execute
+   │        │        │          │                         │
+   └────────┴────────┴──────────┴── SwarmEnvironment ────┘
+              (global / domain / meshed edits + checkpoints)
+```
+
+Stages emit events on the blackboard event bus and snapshot the environment at
+**checkpoints** (after scan, analyze, portfolio, risk) so you can edit mid-cycle
+via `orchestrator.run_until("portfolio")` before downstream stages run.
+
+Per-symbol analysis runs **in parallel** when `AOA_PARALLEL_WORKERS > 1`
+(technical + fundamental concurrently per symbol, symbols analyzed concurrently).
 
 ```
  broker (Alpaca)
@@ -126,8 +140,8 @@ src/aoa/
   brokerage/           # broker abstraction (base) + Alpaca impl + neutral models
   data/                # market-data assembly + pure-Python indicators
   llm/                 # Anthropic Claude wrapper (adaptive thinking, structured output)
-  agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk
-  swarm/               # blackboard, environment, orchestrator (the cycle)
+  agents/              # scanner, technical, fundamental, meshing, options, portfolio, risk, team
+  swarm/               # blackboard, environment, events, pipeline, stages, orchestrator
   risk/                # deterministic cash-account guardrails
   execution/           # proposal → broker order
   journal/             # append-only JSONL audit log
@@ -152,7 +166,10 @@ canned-response fake LLM — no network, no API keys, no real orders.
 
 - **Add a broker**: implement `aoa.brokerage.base.Broker` and swap it in `cli.build_broker`.
 - **Add a news feed**: wire it into `FundamentalAgent` (its prompt is the integration point).
-- **Add an agent**: subclass `aoa.agents.base.Agent` and call it from the `Orchestrator`.
+- **Add an agent**: subclass `aoa.agents.base.Agent`, register it in `AgentTeam`
+  (`aoa.swarm.team`), and add or extend a pipeline stage in `aoa.swarm.stages`.
+- **Customize the pipeline**: pass a custom `Pipeline(stages=[...])` to
+  `Orchestrator`, or use `run_until("portfolio")` to pause for environment edits.
 - **Edit the cycle environment**: use `blackboard.environment.edit_meshed()` for unified
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).

@@ -78,6 +78,7 @@ class Config:
 
     # Execution
     dry_run: bool = False
+    parallel_workers: int = 4
 
     # Risk
     risk: RiskLimits = field(default_factory=RiskLimits)
@@ -110,6 +111,7 @@ class Config:
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
             dry_run=_bool("AOA_DRY_RUN", False),
+            parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),

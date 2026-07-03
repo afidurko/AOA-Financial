@@ -13,6 +13,7 @@ from aoa.agents.base import Signal, TradeProposal
 from aoa.brokerage.models import Account, OptionContract, Position
 from aoa.data.market_data import SymbolSnapshot
 from aoa.swarm.environment import SwarmEnvironment
+from aoa.swarm.events import EventBus
 
 
 @dataclass
@@ -24,6 +25,7 @@ class Blackboard:
     candidates: list[dict] = field(default_factory=list)
     signals: dict[str, list[Signal]] = field(default_factory=dict)
     environment: SwarmEnvironment = field(default_factory=SwarmEnvironment)
+    events: EventBus = field(default_factory=EventBus)
     options_ideas: dict[str, dict] = field(default_factory=dict)
     option_contracts: dict[str, OptionContract] = field(default_factory=dict)
     proposals: list[TradeProposal] = field(default_factory=list)

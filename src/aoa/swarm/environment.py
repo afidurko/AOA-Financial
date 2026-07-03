@@ -128,6 +128,7 @@ class SwarmEnvironment:
     global_overrides: dict[str, Any] = field(default_factory=dict)
     domains: dict[str, DomainSlice] = field(default_factory=dict)
     meshed_views: dict[str, MeshedView] = field(default_factory=dict)
+    checkpoints: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def ensure_domain(self, domain: str) -> DomainSlice:
         if domain not in self.domains:
@@ -156,6 +157,32 @@ class SwarmEnvironment:
 
     def set_meshed(self, view: MeshedView) -> None:
         self.meshed_views[view.symbol.upper()] = view
+
+    def checkpoint(self, stage: str) -> None:
+        """Snapshot editable state after a pipeline stage completes."""
+        self.checkpoints[stage] = {
+            "global_context": dict(self.global_context),
+            "global_overrides": dict(self.global_overrides),
+            "domains": {
+                name: {"data": dict(s.data), "overrides": dict(s.overrides)}
+                for name, s in self.domains.items()
+            },
+            "meshed_views": {
+                sym: {
+                    "direction": v.direction.value,
+                    "conviction": v.conviction,
+                    "rationale": v.rationale,
+                    "horizon": v.horizon,
+                    "conflicts": list(v.conflicts),
+                    "corroboration": v.corroboration,
+                    "overrides": dict(v.overrides),
+                }
+                for sym, v in self.meshed_views.items()
+            },
+        }
+
+    def list_checkpoints(self) -> list[str]:
+        return list(self.checkpoints.keys())
 
     def effective_global(self) -> dict[str, Any]:
         merged = dict(self.global_context)
@@ -198,4 +225,5 @@ class SwarmEnvironment:
             "global_overrides": self.global_overrides,
             "domains": {name: s.to_context() for name, s in self.domains.items()},
             "meshed_views": {sym: v.to_context() for sym, v in self.meshed_views.items()},
+            "checkpoints": list(self.checkpoints.keys()),
         }
