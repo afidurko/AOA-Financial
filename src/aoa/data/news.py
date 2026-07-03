@@ -11,7 +11,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 
-import httpx
+from alpaca.common.exceptions import APIError
+from alpaca.data.historical.news import NewsClient
+from alpaca.data.requests import NewsRequest
 
 from aoa.brokerage.base import BrokerError
 
@@ -48,45 +50,36 @@ class NullNewsFeed(NewsFeed):
 
 
 class AlpacaNewsFeed(NewsFeed):
-    """Fetch headlines from Alpaca Market Data ``/v1beta1/news``."""
-
-    _BASE = "https://data.alpaca.markets"
+    """Fetch headlines from Alpaca Market Data via ``alpaca-py``."""
 
     def __init__(self, key_id: str, secret_key: str, *, timeout: float = 20.0) -> None:
+        del timeout  # alpaca-py manages HTTP timeouts internally
         if not key_id or not secret_key:
             raise BrokerError("Alpaca credentials are required for the news feed.")
-        self._client = httpx.Client(
-            headers={
-                "APCA-API-KEY-ID": key_id,
-                "APCA-API-SECRET-KEY": secret_key,
-            },
-            timeout=timeout,
-        )
+        self._client = NewsClient(api_key=key_id, secret_key=secret_key)
 
     def close(self) -> None:
-        self._client.close()
+        session = getattr(self._client, "_session", None)
+        if session is not None:
+            session.close()
 
     def headlines(self, symbols: list[str], *, limit: int = 5) -> dict[str, list[NewsItem]]:
         if not symbols:
             return {}
-        params = {
-            "symbols": ",".join(s.upper() for s in symbols),
-            "limit": max(limit * len(symbols), limit),
-            "sort": "desc",
-        }
-        try:
-            resp = self._client.get(f"{self._BASE}/v1beta1/news", params=params)
-        except httpx.HTTPError:
-            return {sym.upper(): [] for sym in symbols}
-        if resp.status_code >= 400:
-            return {sym.upper(): [] for sym in symbols}
-
-        payload = resp.json()
-        rows = payload.get("news", []) if isinstance(payload, dict) else []
         by_symbol: dict[str, list[NewsItem]] = {sym.upper(): [] for sym in symbols}
+        try:
+            news_set = self._client.get_news(
+                NewsRequest(
+                    symbols=",".join(sym.upper() for sym in symbols),
+                    limit=max(limit * len(symbols), limit),
+                    sort="desc",
+                )
+            )
+        except APIError:
+            return by_symbol
 
-        for row in rows:
-            item = _parse_news_row(row)
+        for article in news_set.data.get("news", []):
+            item = _parse_news_row(article.model_dump(mode="json"))
             if item is None:
                 continue
             for sym in item.symbols:
