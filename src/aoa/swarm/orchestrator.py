@@ -64,11 +64,13 @@ class Orchestrator:
 
         # Daily-loss tracking lives on the context each cycle.
         self._ctx: CycleContext | None = None
+        self._starting_equity: float = 0.0
 
     def run_cycle(self, *, max_candidates: int = 6) -> CycleResult:
         ctx = self._build_context(max_candidates=max_candidates)
         self.pipeline.run(ctx)
         self._ctx = ctx
+        self._starting_equity = ctx.starting_equity
         return CycleResult(
             blackboard=ctx.blackboard,
             execution=ctx.execution,

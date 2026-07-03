@@ -116,3 +116,53 @@ def test_per_cycle_order_cap():
     props = [_buy(symbol=f"S{i}", qty=1, price=100) for i in range(4)]
     guards.evaluate_cycle(props, _account(), [], starting_equity=100_000)
     assert sum(p.approved for p in props) == 2
+
+
+def test_existing_position_plus_buy_over_cap():
+    guards = RiskGuards(RiskLimits(max_position_pct=0.10))
+    pos = make_position("AAPL", qty=100, price=100.0)  # $10k = 10% of equity
+    props = [_buy(qty=1, price=100)]  # would push total to 10.1%
+    guards.evaluate_cycle(props, _account(), [pos], starting_equity=100_000)
+    assert props[0].approved is False
+    assert any("projected position notional" in n for n in props[0].risk_notes)
+
+
+def test_cash_secured_put_allowed():
+    guards = RiskGuards(RiskLimits())
+    sell = TradeProposal(
+        symbol="AAPL250117P00100000",
+        asset_class=AssetClass.OPTION,
+        side=Side.SELL,
+        qty=1,
+        rationale="csp",
+        est_price=2.0,
+        underlying="AAPL",
+    )
+    guards.evaluate_cycle([sell], _account(settled=100_000), [], starting_equity=100_000)
+    assert sell.approved is True
+
+
+def test_kill_switch_allows_exit_with_note():
+    guards = RiskGuards(RiskLimits(max_daily_loss_pct=0.03))
+    acct = _account(equity=96_000, settled=96_000)
+    pos = make_position("AAPL", qty=50, price=100.0)
+    sell = TradeProposal(
+        symbol="AAPL", asset_class=AssetClass.EQUITY, side=Side.SELL, qty=50,
+        rationale="exit", est_price=100.0,
+    )
+    guards.evaluate_cycle([sell], acct, [pos], starting_equity=100_000)
+    assert sell.approved is True
+    assert any("kill-switch" in n.lower() for n in sell.risk_notes)
+
+
+def test_exits_do_not_count_toward_order_cap():
+    guards = RiskGuards(RiskLimits(max_orders_per_cycle=1, max_position_pct=1.0))
+    pos = make_position("AAPL", qty=50, price=100.0)
+    sell = TradeProposal(
+        symbol="AAPL", asset_class=AssetClass.EQUITY, side=Side.SELL, qty=50,
+        rationale="exit", est_price=100.0,
+    )
+    buy = _buy(qty=1, price=100)
+    guards.evaluate_cycle([sell, buy], _account(), [pos], starting_equity=100_000)
+    assert sell.approved is True
+    assert buy.approved is True

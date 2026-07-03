@@ -108,14 +108,35 @@ Requires Python 3.10+.
 
 ## Configure
 
+Configuration loads in this order (lowest → highest priority):
+
+1. `profiles/{AOA_PROFILE or AOA_ENV}.env` — named environment profile
+2. `.env` — your local secrets
+3. Shell environment variables — always win
+
 ```bash
 cp .env.example .env
-# Edit .env: set ANTHROPIC_API_KEY and your Alpaca keys.
-# Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
+export AOA_PROFILE=paper-dry    # recommended starting point
+# Edit .env: set ANTHROPIC_API_KEY and Alpaca paper keys.
 # Optional market-data tuning:
 #   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
 #   ALPACA_BAR_ADJUSTMENT=split   # raw | split | dividend | all | spin-off
+aoa doctor && aoa run
 ```
+
+### Named environments
+
+| `AOA_ENV` | Broker | Orders | Use case |
+|-----------|--------|--------|----------|
+| `test` | n/a | dry-run | Unit tests / CI (no API keys required) |
+| `paper-dry` | Alpaca paper | dry-run | Watch decisions without submitting |
+| `paper` | Alpaca paper | enabled | Paper trading with real sandbox fills |
+| `live` | Alpaca live | enabled | Real money — requires `AOA_LIVE_ACK=I_UNDERSTAND` |
+
+Runtime state (journal, daily-loss baseline) is isolated under `data/{AOA_ENV}/`.
+
+Profiles live in `profiles/`. Override the data root with `AOA_DATA_DIR` or the
+journal file with `AOA_JOURNAL_PATH`.
 
 Get free Alpaca **Trading API** paper keys (`PK...`) at <https://alpaca.markets>.
 These are **not** the same as Broker API OAuth credentials (`authx.alpaca.markets`).
@@ -184,9 +205,14 @@ background while the web server is up.
 ## Docker deployment
 
 ```bash
-cp .env.example .env   # fill in API keys
+cp .env.example .env   # fill in API keys; AOA_ENV selects the journal subdir
 docker compose up web  # dashboard at http://localhost:8080
 ```
+
+Both `web` and `swarm` services share the same journal via the `aoa-data` volume
+at `/app/data/{AOA_ENV}/journal/aoa.jsonl`. Set `AOA_ENV=paper-dry` in `.env`
+(or use a profile) so CLI runs on the host and containerized services write to
+the same logical environment.
 
 Run the headless trading loop as a separate daemon:
 
@@ -194,7 +220,8 @@ Run the headless trading loop as a separate daemon:
 docker compose --profile daemon up -d   # starts web + swarm services
 ```
 
-The journal is persisted in a Docker volume (`aoa-journal`).
+Runtime state is persisted in the Docker volume `aoa-data` (mapped to
+`/app/data` in containers).
 
 ---
 
@@ -210,6 +237,15 @@ sudo systemctl enable --now aoa-swarm.service  # headless loop
 ```
 
 Adjust `User`, `WorkingDirectory`, and paths in the unit files for your host.
+Create the data directory and ensure the service user can write to it:
+
+```bash
+sudo mkdir -p /var/lib/aoa/data
+sudo chown aoa:aoa /var/lib/aoa/data
+```
+
+Set `AOA_ENV` (or `AOA_PROFILE`) in `.env` so web and swarm share the same
+journal at `/var/lib/aoa/data/{AOA_ENV}/journal/aoa.jsonl`.
 
 ---
 
@@ -255,9 +291,11 @@ src/aoa/
   swarm/               # blackboard, environment, events, pipeline, stages, orchestrator
   risk/                # deterministic cash-account guardrails
   execution/           # proposal → broker order
-  journal/             # append-only JSONL audit log
+  journal/             # append-only JSONL audit log (legacy default path)
   cli.py               # `aoa` command-line entry point
   web/                 # FastAPI dashboard + REST API + loop runner
+profiles/              # environment profiles (paper-dry, paper, live, …)
+data/                  # per-environment runtime state (gitignored)
 tests/                 # unit + end-to-end tests (fake broker + fake LLM)
 deploy/                # systemd unit files for production
 Dockerfile             # container image

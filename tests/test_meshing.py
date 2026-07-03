@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from conftest import FakeLLM
+
 from aoa.agents.base import Direction, Signal
 from aoa.agents.meshing import MeshingAgent, _combine
 from aoa.swarm.environment import MeshedView, SwarmEnvironment
-from tests.conftest import FakeLLM
 
 
 def test_combine_corroborated_signals():

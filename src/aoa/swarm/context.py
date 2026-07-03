@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
-from aoa.swarm.team import AgentTeam
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
@@ -14,6 +13,7 @@ from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
 from aoa.swarm.blackboard import Blackboard
+from aoa.swarm.team import AgentTeam
 
 
 @dataclass
@@ -41,5 +41,13 @@ class CycleContext:
     def update_starting_equity(self, equity: float) -> None:
         today = date.today()
         if self.equity_day != today:
-            self.equity_day = today
+            stored_day_raw, stored_equity = self.journal.load_daily_equity_baseline()
+            if stored_day_raw == today.isoformat() and stored_equity > 0:
+                self.equity_day = today
+                self.starting_equity = stored_equity
+            else:
+                self.equity_day = today
+                self.starting_equity = equity
+                self.journal.save_daily_equity_baseline(today, equity)
+        elif self.starting_equity <= 0:
             self.starting_equity = equity

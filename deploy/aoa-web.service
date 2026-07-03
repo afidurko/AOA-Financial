@@ -8,7 +8,9 @@ Type=simple
 User=aoa
 WorkingDirectory=/opt/aoa-financial
 EnvironmentFile=/opt/aoa-financial/.env
-Environment=AOA_JOURNAL_PATH=/var/lib/aoa/journal/aoa.jsonl
+Environment=AOA_DATA_DIR=/var/lib/aoa/data
+# Journal path follows AOA_ENV unless AOA_JOURNAL_PATH is set in .env:
+# /var/lib/aoa/data/{AOA_ENV}/journal/aoa.jsonl
 ExecStart=/opt/aoa-financial/.venv/bin/aoa serve
 Restart=on-failure
 RestartSec=10
