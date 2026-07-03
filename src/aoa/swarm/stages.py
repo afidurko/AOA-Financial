@@ -93,6 +93,20 @@ class AnalyzeStage(PipelineStage):
     checkpoint: bool = True
 
     def run(self, ctx: CycleContext) -> bool:
+        bb = ctx.blackboard
+        symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
+        if ctx.config.news_enabled and symbols:
+            ctx.news_by_symbol = ctx.news.headlines(symbols, limit=5)
+            ctx.journal.record(
+                "news.fetched",
+                {
+                    "symbols": symbols,
+                    "counts": {sym: len(items) for sym, items in ctx.news_by_symbol.items()},
+                },
+            )
+        else:
+            ctx.news_by_symbol = {}
+
         workers = max(1, ctx.config.parallel_workers)
         if workers == 1 or len(ctx.blackboard.candidates) <= 1:
             for cand in ctx.blackboard.candidates:
@@ -233,16 +247,19 @@ def _analyze_one(ctx: CycleContext, cand: dict) -> None:
     env = bb.environment
     symbol = cand.get("symbol", "").upper()
     snap = bb.snapshots.get(symbol) or ctx.market.snapshot(symbol)
+    headlines = ctx.news_by_symbol.get(symbol, [])
 
     if ctx.config.parallel_workers > 1:
         with ThreadPoolExecutor(max_workers=2) as pool:
             tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
-            fund_fut = pool.submit(ctx.agents.fundamental.analyze, snap)
+            fund_fut = pool.submit(
+                ctx.agents.fundamental.analyze, snap, headlines=headlines
+            )
             tech = tech_fut.result()
             fund = fund_fut.result()
     else:
         tech = ctx.agents.technical.analyze(snap)
-        fund = ctx.agents.fundamental.analyze(snap)
+        fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
 
     bb.add_signal(tech)
     bb.add_signal(fund)

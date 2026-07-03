@@ -9,6 +9,7 @@ from aoa.swarm.team import AgentTeam
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
+from aoa.data.news import NewsFeed
 from aoa.execution.executor import ExecutionReport, Executor
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
@@ -26,10 +27,12 @@ class CycleContext:
     market: MarketDataService
     agents: AgentTeam
     executor: Executor
+    news: NewsFeed
     blackboard: Blackboard = field(default_factory=Blackboard)
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None
     max_candidates: int = 6
+    news_by_symbol: dict[str, list] = field(default_factory=dict)
 
     # Daily-loss tracking (owned by the orchestrator, read by risk stage).
     equity_day: date | None = None

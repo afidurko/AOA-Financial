@@ -5,6 +5,7 @@ from __future__ import annotations
 from aoa.swarm.team import AgentTeam
 from aoa.config import Config, RiskLimits
 from aoa.data.market_data import MarketDataService
+from aoa.data.news import NullNewsFeed
 from aoa.execution.executor import Executor
 from aoa.journal.store import Journal
 from aoa.swarm.context import CycleContext
@@ -31,6 +32,7 @@ def _ctx(fake_broker, fake_llm, tmp_path, *, parallel_workers=1):
         market=MarketDataService(fake_broker),
         agents=agents,
         executor=Executor(fake_broker, journal, dry_run=True),
+        news=NullNewsFeed(),
     )
 
 
