@@ -126,6 +126,7 @@ def test_orchestrator_adapts_and_learns(fake_broker, fake_llm, tmp_path):
 
     cfg = Config(anthropic_api_key="x", alpaca_key_id="x", alpaca_secret_key="x",
                  universe=("AAPL",), dry_run=True,
+                 trading_agents_enabled=False,
                  risk=RiskLimits(max_orders_per_cycle=5))
     journal = Journal(tmp_path / "j.jsonl")
     adapter = SignalAdapter(lr=0.1)
@@ -156,6 +157,7 @@ def test_orchestrator_without_adapter_unchanged(fake_broker, fake_llm, tmp_path)
 
     cfg = Config(anthropic_api_key="x", alpaca_key_id="x", alpaca_secret_key="x",
                  universe=("AAPL",), dry_run=True,
+                 trading_agents_enabled=False,
                  risk=RiskLimits(max_orders_per_cycle=5))
     orch = Orchestrator(cfg, fake_broker, fake_llm, Journal(tmp_path / "j.jsonl"))
     r = orch.run_cycle()

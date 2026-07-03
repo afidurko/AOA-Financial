@@ -14,6 +14,7 @@ from aoa.execution.pricing import marketable_limit
 from aoa.swarm.context import CycleContext
 from aoa.swarm.environment import MeshedView
 from aoa.swarm.pipeline import PipelineStage
+from aoa.swarm.trading_protocol import report_from_signal
 
 
 @dataclass
@@ -262,6 +263,51 @@ class RiskStage(PipelineStage):
 
 
 @dataclass
+class RiskDebateStage(PipelineStage):
+    """TradingAgents risk-management debate (risk-seeking / neutral / conservative)."""
+
+    name: str = "risk_debate"
+
+    def run(self, ctx: CycleContext) -> bool:
+        if not ctx.config.trading_agents_enabled:
+            return True
+        bb = ctx.blackboard
+        debate = ctx.agents.risk_debate.deliberate(
+            bb.proposals, bb.account, bb.positions
+        )
+        ctx.agents.risk_debate.apply_vetoes(bb.proposals, debate)
+        ctx.journal.record("risk.debate", debate.to_context())
+        bb.environment.set_domain("risk_debate", debate.to_context())
+        return True
+
+
+@dataclass
+class FundManagerStage(PipelineStage):
+    """TradingAgents fund manager final approval before execution."""
+
+    name: str = "fund_manager"
+
+    def run(self, ctx: CycleContext) -> bool:
+        if not ctx.config.trading_agents_enabled:
+            return True
+        bb = ctx.blackboard
+        risk_summary = ""
+        risk_slice = bb.environment.domains.get("risk_debate")
+        if risk_slice:
+            risk_summary = str(risk_slice.effective().get("facilitator_summary", ""))
+        decision = ctx.agents.fund_manager.review(
+            bb.proposals,
+            bb.account,
+            risk_debate_summary=risk_summary,
+            portfolio_commentary=bb.commentary,
+        )
+        ctx.agents.fund_manager.apply_decision(bb.proposals, decision)
+        ctx.journal.record("fund_manager.review", decision)
+        bb.environment.set_domain("fund_manager", decision)
+        return True
+
+
+@dataclass
 class ExecuteStage(PipelineStage):
     """Submit approved trades (or simulate in dry-run)."""
 
@@ -304,6 +350,8 @@ def default_stages() -> list[PipelineStage]:
         PortfolioStage(),
         MaterializeStage(),
         RiskStage(),
+        RiskDebateStage(),
+        FundManagerStage(),
         ExecuteStage(),
         PlasticityStage(),
     ]
@@ -322,6 +370,10 @@ class SymbolAnalysisResult:
     options_idea: dict | None = None
     option_contract: OptionContract | None = None
     options_error: tuple[str, str] | None = None
+    news: Signal | None = None
+    sentiment: Signal | None = None
+    research_debate: dict | None = None
+    analyst_reports: list[dict] | None = None
 
 
 def _compute_analysis(
@@ -338,36 +390,74 @@ def _compute_analysis(
     n_learned = 0
     n_adapted = 0
 
-    if ctx.config.parallel_workers > 1:
-        with ThreadPoolExecutor(max_workers=2) as pool:
+    if ctx.config.trading_agents_enabled:
+        workers = min(4, max(1, ctx.config.parallel_workers))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
             tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
-            fund_fut = pool.submit(
-                ctx.agents.fundamental.analyze, snap, headlines=headlines
-            )
+            fund_fut = pool.submit(ctx.agents.fundamental.analyze, snap, headlines=None)
+            news_fut = pool.submit(ctx.agents.news.analyze, snap, headlines=headlines)
+            sent_fut = pool.submit(ctx.agents.sentiment.analyze, snap, headlines=headlines)
             tech = tech_fut.result()
             fund = fund_fut.result()
+            news = news_fut.result()
+            sentiment = sent_fut.result()
+
+        reports = [
+            report_from_signal(tech, analyst="technical"),
+            report_from_signal(fund, analyst="fundamental"),
+            report_from_signal(news, analyst="news"),
+            report_from_signal(sentiment, analyst="sentiment"),
+        ]
+        debate = ctx.agents.research.debate(
+            symbol,
+            reports,
+            rounds=ctx.config.trading_agents_debate_rounds,
+        )
+        meshed = ctx.agents.meshing.mesh(
+            symbol,
+            [tech, fund, news, sentiment],
+            scanner_reason=cand.get("reason", ""),
+            snapshot_context=snap.to_context() if snap else None,
+            research_context=debate.to_context(),
+        )
+        analyst_reports = [r.to_context() for r in reports]
+        research_debate = debate.to_context()
     else:
-        tech = ctx.agents.technical.analyze(snap)
-        fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
+        news = None
+        sentiment = None
+        analyst_reports = None
+        research_debate = None
 
-    if ctx.signal_adapter is not None:
-        price = snap.reference_price() if snap else None
-        n_learned = _learn_from_prior(ctx.signal_adapter, prior_pending, symbol, price)
-        if price:
-            pending[symbol] = {
-                "price": price,
-                "signals": [_pending_entry(tech), _pending_entry(fund)],
-            }
-        tech = ctx.signal_adapter.adapt_signal(tech)
-        fund = ctx.signal_adapter.adapt_signal(fund)
-        n_adapted = sum("adapted" in s.tags for s in (tech, fund))
+        if ctx.config.parallel_workers > 1:
+            with ThreadPoolExecutor(max_workers=2) as pool:
+                tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
+                fund_fut = pool.submit(
+                    ctx.agents.fundamental.analyze, snap, headlines=headlines
+                )
+                tech = tech_fut.result()
+                fund = fund_fut.result()
+        else:
+            tech = ctx.agents.technical.analyze(snap)
+            fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
 
-    meshed = ctx.agents.meshing.mesh(
-        symbol,
-        [tech, fund],
-        scanner_reason=cand.get("reason", ""),
-        snapshot_context=snap.to_context() if snap else None,
-    )
+        if ctx.signal_adapter is not None:
+            price = snap.reference_price() if snap else None
+            n_learned = _learn_from_prior(ctx.signal_adapter, prior_pending, symbol, price)
+            if price:
+                pending[symbol] = {
+                    "price": price,
+                    "signals": [_pending_entry(tech), _pending_entry(fund)],
+                }
+            tech = ctx.signal_adapter.adapt_signal(tech)
+            fund = ctx.signal_adapter.adapt_signal(fund)
+            n_adapted = sum("adapted" in s.tags for s in (tech, fund))
+
+        meshed = ctx.agents.meshing.mesh(
+            symbol,
+            [tech, fund],
+            scanner_reason=cand.get("reason", ""),
+            snapshot_context=snap.to_context() if snap else None,
+        )
 
     options_idea = None
     option_contract = None
@@ -405,6 +495,10 @@ def _compute_analysis(
         options_idea=options_idea,
         option_contract=option_contract,
         options_error=options_error,
+        news=news,
+        sentiment=sentiment,
+        research_debate=research_debate,
+        analyst_reports=analyst_reports,
     )
 
 
@@ -423,19 +517,43 @@ def _apply_analysis(ctx: CycleContext, result: SymbolAnalysisResult) -> None:
             {"op": "get_option_chain", "symbol": sym, "error": err},
         )
 
-    bb.add_signal(result.tech)
-    bb.add_signal(result.fund)
-    env.set_domain(
-        f"technical:{symbol}",
-        {"symbol": symbol, "signal": result.tech.to_context()},
-    )
-    env.set_domain(
-        f"fundamental:{symbol}",
-        {"symbol": symbol, "signal": result.fund.to_context()},
-    )
-    bb.events.emit(
-        "domain.write", f"technical:{symbol}", {"direction": result.tech.direction.value}
-    )
+    if result.analyst_reports is not None:
+        signals = [result.tech, result.fund, result.news, result.sentiment]
+        for sig in signals:
+            if sig is not None:
+                bb.add_signal(sig)
+        env.set_domain(
+            f"analyst_reports:{symbol}",
+            {"symbol": symbol, "reports": result.analyst_reports},
+        )
+        for sig in signals:
+            if sig is None:
+                continue
+            env.set_domain(
+                f"{sig.source}:{symbol}",
+                {"symbol": symbol, "signal": sig.to_context()},
+            )
+            ctx.journal.record(
+                "analyst.report",
+                {"symbol": symbol, "analyst": sig.source, "signal": sig.to_context()},
+            )
+        if result.research_debate is not None:
+            env.set_domain(f"research:{symbol}", result.research_debate)
+            ctx.journal.record("research.debate", result.research_debate)
+    else:
+        bb.add_signal(result.tech)
+        bb.add_signal(result.fund)
+        env.set_domain(
+            f"technical:{symbol}",
+            {"symbol": symbol, "signal": result.tech.to_context()},
+        )
+        env.set_domain(
+            f"fundamental:{symbol}",
+            {"symbol": symbol, "signal": result.fund.to_context()},
+        )
+        bb.events.emit(
+            "domain.write", f"technical:{symbol}", {"direction": result.tech.direction.value}
+        )
 
     env.set_meshed(result.meshed)
     bb.add_signal(result.meshed.to_signal())
