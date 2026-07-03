@@ -145,6 +145,15 @@ class Config:
     web_port: int = 8080
     web_auto_loop: bool = False
 
+    # Aaron — iPhone push alerts (never email)
+    custom_app_webhook_url: str = ""
+    custom_app_api_key: str = ""
+    custom_app_device_id: str = ""
+    pushover_user_key: str = ""
+    pushover_app_token: str = ""
+    ntfy_topic: str = ""
+    ntfy_server: str = "https://ntfy.sh"
+
     risk: RiskLimits = field(default_factory=RiskLimits)
 
     @property
@@ -203,6 +212,13 @@ class Config:
             web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
+            custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
+            custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
+            custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),
+            pushover_user_key=os.environ.get("AOA_PUSHOVER_USER_KEY", ""),
+            pushover_app_token=os.environ.get("AOA_PUSHOVER_APP_TOKEN", ""),
+            ntfy_topic=os.environ.get("AOA_NTFY_TOPIC", ""),
+            ntfy_server=os.environ.get("AOA_NTFY_SERVER", "https://ntfy.sh"),
             risk=RiskLimits(
                 max_position_pct=_float("AOA_MAX_POSITION_PCT", 0.10),
                 max_options_pct=_float("AOA_MAX_OPTIONS_PCT", 0.15),
