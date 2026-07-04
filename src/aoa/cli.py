@@ -1,6 +1,7 @@
 """Command-line interface for the AOA Financial swarm.
 
 Commands:
+  aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
   aoa status     Show account, positions, and market clock.
   aoa run        Run a single analysis→decision→execution cycle.
@@ -26,6 +27,11 @@ from pathlib import Path
 
 from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.alpaca import AlpacaBroker
+from aoa.brokerage.alpaca_bars import (
+    AlpacaBarsFetcher,
+    bars_config_from_env,
+    partition_symbols,
+)
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.config import Config
 from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
@@ -263,6 +269,77 @@ def _cycle_exit_code(result: CycleResult) -> int:
     return 0
 
 
+def _ensure_env_template() -> None:
+    """Create ``.env`` from ``.env.example`` when missing (no secrets)."""
+    root = Path.cwd()
+    env_path = root / ".env"
+    example = root / ".env.example"
+    if env_path.exists() or not example.exists():
+        return
+    env_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+    print(
+        "Created .env from .env.example — add your Alpaca paper keys there "
+        "for stock data (crypto works without keys).\n"
+    )
+
+
+def _print_bars_table(symbol: str, bars: list, *, asset: str) -> None:
+    print(f"\n=== {asset}: {symbol} ({len(bars)} bars) ===")
+    if not bars:
+        print("  (no data)")
+        return
+    print(f"  {'date':<12}{'open':>12}{'high':>12}{'low':>12}{'close':>12}{'volume':>14}")
+    for bar in bars:
+        day = bar.timestamp.date()
+        print(
+            f"  {day!s:<12}"
+            f"{bar.open:>12,.2f}"
+            f"{bar.high:>12,.2f}"
+            f"{bar.low:>12,.2f}"
+            f"{bar.close:>12,.2f}"
+            f"{bar.volume:>14,.2f}"
+        )
+
+
+def cmd_bars(
+    cfg: Config,
+    symbols: list[str],
+    *,
+    timeframe: str,
+    limit: int,
+) -> int:
+    _ensure_env_template()
+    crypto, stocks = partition_symbols(symbols)
+    if not crypto and not stocks:
+        print("Provide at least one symbol, e.g. BTC/USD or AAPL.", file=sys.stderr)
+        return 1
+
+    fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
+    try:
+        if crypto:
+            crypto_bars = fetcher.fetch_crypto(crypto, timeframe=timeframe, limit=limit)
+            for sym in crypto:
+                _print_bars_table(sym, crypto_bars.get(sym, []), asset="Crypto")
+
+        if stocks:
+            if not cfg.has_brokerage_creds:
+                print(
+                    "\nStock symbols requested but Alpaca keys are missing.\n"
+                    "1. Open https://app.alpaca.markets/ and copy your paper API keys.\n"
+                    "2. Edit .env and set ALPACA_API_KEY_ID and ALPACA_API_SECRET_KEY.\n"
+                    "3. Re-run: aoa bars " + " ".join(symbols),
+                    file=sys.stderr,
+                )
+                return 1
+            stock_bars = fetcher.fetch_stocks(stocks, timeframe=timeframe, limit=limit)
+            for sym in stocks:
+                _print_bars_table(sym, stock_bars.get(sym, []), asset="Stock")
+    finally:
+        fetcher.close()
+
+    return 0
+
+
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
     _print_environment(cfg)
@@ -279,6 +356,25 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     if offline or cfg.is_test:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
+        return 0
+    fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
+    try:
+        crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
+        print(
+            f"  ✓ Crypto bars API (no keys); BTC/USD last close "
+            f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
+        )
+    except BrokerError as exc:
+        print(f"  ✗ Crypto bars check failed: {exc}")
+        return 1
+    finally:
+        fetcher.close()
+    if not cfg.has_brokerage_creds:
+        print(
+            "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
+            "(crypto already works)."
+        )
+        print("  · Skipping broker account and stock-bar checks until keys are set.")
         return 0
     try:
         broker = build_broker(cfg)
@@ -968,6 +1064,27 @@ def main(argv: list[str] | None = None) -> int:
         help="Seconds between cycles (default: AOA_CYCLE_SECONDS or 60).",
     )
 
+    bars_p = sub.add_parser(
+        "bars",
+        help="Fetch recent stock and/or crypto OHLCV bars (crypto needs no keys).",
+    )
+    bars_p.add_argument(
+        "symbols",
+        nargs="+",
+        help="Tickers or crypto pairs, e.g. BTC/USD AAPL.",
+    )
+    bars_p.add_argument(
+        "--timeframe",
+        default="1Day",
+        help="Bar interval (default 1Day). Examples: 1Hour, 15Min.",
+    )
+    bars_p.add_argument(
+        "--limit",
+        type=int,
+        default=7,
+        help="Number of recent bars per symbol (default 7).",
+    )
+
     ap = sub.add_parser("analyze", help="Analyze the historical trend of a symbol.")
     ap.add_argument("symbol", help="Ticker to analyze, e.g. AAPL.")
     ap.add_argument("--timeframe", default="1Day", help="Bar timeframe (default 1Day).")
@@ -1051,9 +1168,12 @@ def main(argv: list[str] | None = None) -> int:
     rp_wt.add_argument("--item-id", default="", help="Repair item id (optional).")
 
     args = parser.parse_args(argv)
+    _ensure_env_template()
     cfg = Config.from_env()
 
     try:
+        if args.command == "bars":
+            return cmd_bars(cfg, args.symbols, timeframe=args.timeframe, limit=args.limit)
         if args.command == "doctor":
             return cmd_doctor(cfg, offline=getattr(args, "offline", False))
         if args.command == "status":

@@ -8,14 +8,19 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import TypeVar
 
 from alpaca.common.exceptions import APIError
 from alpaca.data.enums import Adjustment, DataFeed, MostActivesBy, OptionsFeed
-from alpaca.data.historical import OptionHistoricalDataClient, StockHistoricalDataClient
+from alpaca.data.historical import (
+    CryptoHistoricalDataClient,
+    OptionHistoricalDataClient,
+    StockHistoricalDataClient,
+)
 from alpaca.data.historical.screener import ScreenerClient
 from alpaca.data.requests import (
+    CryptoBarsRequest,
     MostActivesRequest,
     OptionChainRequest,
     StockBarsRequest,
@@ -139,6 +144,29 @@ def _parse_adjustment(value: str) -> Adjustment:
     return _ADJUSTMENT_MAP.get(value, Adjustment.SPLIT)
 
 
+def _crypto_window(timeframe: str, limit: int) -> tuple[datetime, datetime]:
+    """Calendar lookback for crypto requests (``limit`` alone is unreliable)."""
+    end = datetime.now(timezone.utc)
+    amount = 1
+    match = _TIMEFRAME_RE.fullmatch(timeframe)
+    if match:
+        amount = max(1, int(match.group(1)))
+        unit = match.group(2)
+    else:
+        unit = "Day"
+    if unit == "Min":
+        start = end - timedelta(minutes=amount * limit * 2)
+    elif unit == "Hour":
+        start = end - timedelta(hours=amount * limit * 2)
+    elif unit == "Week":
+        start = end - timedelta(weeks=amount * limit * 2)
+    elif unit == "Month":
+        start = end - timedelta(days=31 * amount * limit * 2)
+    else:
+        start = end - timedelta(days=amount * limit + 5)
+    return start, end
+
+
 def _bars_from_sdk_rows(rows) -> list[Bar]:
     bars: list[Bar] = []
     for row in rows:
@@ -220,6 +248,7 @@ class AlpacaBroker(Broker):
         creds = {"api_key": key_id, "secret_key": secret_key}
         self._trading = TradingClient(paper=paper, **creds)
         self._stock_data = StockHistoricalDataClient(**creds)
+        self._crypto_data = CryptoHistoricalDataClient()
         self._screener = ScreenerClient(**creds)
         self._options_data = OptionHistoricalDataClient(**creds)
 
@@ -245,10 +274,25 @@ class AlpacaBroker(Broker):
             kwargs["feed"] = _FEED_MAP[self._data_feed]
         return StockBarsRequest(**kwargs)
 
+    def _crypto_bars_request(
+        self,
+        symbols: list[str],
+        timeframe: str,
+        limit: int,
+    ) -> CryptoBarsRequest:
+        start, end = _crypto_window(timeframe, limit)
+        return CryptoBarsRequest(
+            symbol_or_symbols=symbols,
+            timeframe=_parse_timeframe(timeframe),
+            start=start,
+            end=end,
+        )
+
     def close(self) -> None:
         for client in (
             self._trading,
             self._stock_data,
+            self._crypto_data,
             self._screener,
             self._options_data,
         ):
@@ -351,6 +395,43 @@ class AlpacaBroker(Broker):
                 bars = bars[-limit:]
             out[sym] = bars
         return out
+
+    def get_crypto_bars(
+        self, symbol: str, timeframe: str = "1Day", limit: int = 120
+    ) -> list[Bar]:
+        batch = self.get_crypto_bars_batch([symbol], timeframe, limit)
+        return batch.get(symbol.upper(), [])
+
+    def get_crypto_bars_batch(
+        self,
+        symbols: list[str],
+        timeframe: str = "1Day",
+        limit: int = 120,
+    ) -> dict[str, list[Bar]]:
+        """Fetch OHLCV bars for crypto pairs (public endpoint; no keys)."""
+        uniq = list(dict.fromkeys(s.upper() for s in symbols if s))
+        if not uniq:
+            return {}
+
+        request = self._crypto_bars_request(uniq, timeframe, limit)
+        bar_set = self._sdk_call(self._crypto_data.get_crypto_bars, request)
+        out: dict[str, list[Bar]] = {}
+        for sym in uniq:
+            rows = bar_set.data.get(sym, []) if hasattr(bar_set, "data") else bar_set[sym]
+            bars = _bars_from_sdk_rows(rows)
+            if len(bars) > limit:
+                bars = bars[-limit:]
+            out[sym] = bars
+        return out
+
+    def verify_crypto_bars(self, symbol: str = "BTC/USD", limit: int = 1) -> Bar:
+        """Probe the public crypto bars API (no authentication)."""
+        bars = self.get_crypto_bars(symbol, timeframe="1Day", limit=limit)
+        if not bars:
+            raise BrokerError(
+                f"Crypto bars API reachable but returned no data for {symbol}."
+            )
+        return bars[-1]
 
     def verify_stock_bars(self, symbol: str = "AAPL", limit: int = 1) -> Bar:
         """Probe the authenticated stocks bars API.
