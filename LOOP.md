@@ -48,24 +48,24 @@ python3 -m ruff check src tests && python3 -m pytest -q
 # maker: minimal-fix → checker: loop-verifier (separate agent pass)
 ```
 
-## Cursor automation (L1 triage)
+## Scheduled automations (Tier 1 + Tier 2)
 
-```text
-Run the loop-triage skill on AOA-Financial.
-Read STATE.md and LOOP.md first.
-Follow loop run order (constraints → budget → triage → state + run-log).
-No code changes in week one (L1).
+Full prompts, cron examples, and gate logic: [docs/how-to/loop-automation-schedule.md](docs/how-to/loop-automation-schedule.md)
+
+Preflight before every automation run:
+
+```bash
+python3 -m aoa.cli repair gate
+python3 -m aoa.cli repair gate --for triage
+python3 -m aoa.cli repair gate --for repair --json
 ```
 
-## Cursor automation (Fable 5 repair — L2)
+| Automation | Cadence | Runs when |
+|------------|---------|-----------|
+| **A — Daily sense** | Daily 14:00 UTC | Always (unless `loop-pause-all`) |
+| **B — L2 fix** | Daily 15:00 UTC | Gate action = `l2-allowed` only |
 
-```text
-Run the fable-repair skill on AOA-Financial.
-Read LOOP.md, loop-constraints.md, docs/safety.md.
-Run aoa repair triage. Fix at most ONE queued item in a worktree.
-Use minimal-fix (maker) then loop-verifier (checker) in separate contexts.
-Draft PR only; never auto-merge.
-```
+Enable L2 automation after checklist sign-off — add `L2: enabled` under `## Loop automation` in `STATE.md`.
 
 ## Human gates
 
@@ -114,5 +114,6 @@ Scheduled task routing: [docs/how-to/fable-max-operating-schedule.md](docs/how-t
 - Fork: [github.com/afidurko/loop-engineering](https://github.com/afidurko/loop-engineering)
 - Fable 5: [docs/fable5-repair-loop.md](docs/fable5-repair-loop.md)
 - Operating schedule: [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
+- Automation schedule: [docs/how-to/loop-automation-schedule.md](docs/how-to/loop-automation-schedule.md)
 - L2 promotion: [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md)
 - Patterns: `patterns/registry.yaml`

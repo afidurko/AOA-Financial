@@ -21,6 +21,7 @@ Commands:
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 import time
 from pathlib import Path
@@ -901,6 +902,33 @@ def cmd_repair_queue(cfg: Config) -> int:
     return 0
 
 
+def cmd_repair_gate(cfg: Config, *, as_json: bool, mode: str) -> int:
+    from aoa.repair.schedule_gate import GateAction, evaluate_gate
+
+    repo_root = Path.cwd()
+    for parent in [repo_root, *repo_root.parents]:
+        if (parent / "pyproject.toml").is_file() and (parent / "src" / "aoa").is_dir():
+            repo_root = parent
+            break
+    result = evaluate_gate(repo_root=repo_root, mode=mode)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print(f"Gate action: {result.action.value}")
+        print(f"Reason: {result.reason}")
+        print(f"Mode: {mode}")
+        print(f"L2 automation enabled: {result.l2_automation_enabled}")
+        if result.fixable_items:
+            print(f"Fixable items: {', '.join(result.fixable_items)}")
+        print(f"Runs (24h): {result.runs_24h}")
+        print(f"Tokens (24h): {result.tokens_24h}")
+    if result.action is GateAction.PAUSE:
+        return 2
+    if result.action in {GateAction.TRIAGE_OK, GateAction.L2_ALLOWED}:
+        return 0
+    return 1
+
+
 def cmd_repair_worktree(cfg: Config, *, item_id: str) -> int:
     orch = RepairOrchestrator(cfg)
     info = orch.prepare_worktree(item_id=item_id or None)
@@ -1171,6 +1199,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Do not rewrite STATE.md from discovery results.",
     )
     rp_sub.add_parser("queue", help="Show the current repair queue.")
+    rp_gate = rp_sub.add_parser(
+        "gate",
+        help="Preflight for Tier 1/2 automations (budget, pause flag, fixable queue).",
+    )
+    rp_gate.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
+    rp_gate.add_argument(
+        "--for",
+        dest="gate_mode",
+        choices=("full", "triage", "repair"),
+        default="full",
+        help="Gate mode: triage (Automation A), repair (Automation B), or full.",
+    )
     rp_wt = rp_sub.add_parser("worktree", help="Create an isolated git worktree for a fix.")
     rp_wt.add_argument("--item-id", default="", help="Repair item id (optional).")
 
@@ -1249,6 +1289,12 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_repair_triage(cfg, no_sync=getattr(args, "no_sync", False))
             if args.repair_command == "queue":
                 return cmd_repair_queue(cfg)
+            if args.repair_command == "gate":
+                return cmd_repair_gate(
+                    cfg,
+                    as_json=getattr(args, "json", False),
+                    mode=getattr(args, "gate_mode", "full"),
+                )
             if args.repair_command == "worktree":
                 return cmd_repair_worktree(cfg, item_id=getattr(args, "item_id", ""))
     except (BrokerError, LLMError) as exc:

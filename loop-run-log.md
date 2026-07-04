@@ -12,3 +12,4 @@
 | 2026-07-04 04:30 | fable-repair | L2 | fix-proposed | Item 977dc826: run_verify python -m + quick mode. PR #29. |
 | 2026-07-04 18:47 | fable-repair | L2 | report-only | Triage run 1b17b8227cbc: 3 watch items, 0 fixable. CI local green (306 passed). tokens_estimate=6000 |
 | 2026-07-04 18:50 | daily-triage | L1 | report-only | Credential split schedule added; routed setup to Max 5×, loops to Fable trial. tokens_estimate=4000 |
+| 2026-07-04 19:15 | maintenance | — | scaffold | Loop automation schedule + aoa repair gate preflight. tokens_estimate=5000 |

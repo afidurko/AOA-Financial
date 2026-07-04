@@ -70,8 +70,10 @@ Tune cost in `.env`: `AOA_MODEL`, `AOA_EFFORT`, `AOA_TRADING_AGENTS_ENABLED`, un
 
 ### Every day (automated — Fable trial)
 
+See [loop-automation-schedule.md](loop-automation-schedule.md) for Cursor prompts, cron, and `aoa repair gate`.
+
 ```
-loop-constraints → loop-budget → loop-triage → STATE.md + loop-run-log.md
+loop-constraints → loop-budget → repair gate → loop-triage → repair triage → STATE.md + loop-run-log.md
 ```
 
 - **Duration:** ~5–15 min agent time, &lt;100k tokens (L1).
