@@ -27,6 +27,15 @@ class ResolveBody(BaseModel):
     status: str
 
 
+class TeamExpansionUpdateBody(BaseModel):
+    promotion_title: str | None = None
+    team_name: str | None = None
+    mission: str | None = None
+    expansion_rationale: str | None = None
+    first_quarter_goals: list[str] | None = None
+    members: list[dict[str, Any]] | None = None
+
+
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or Config.from_env()
     team = build_team(cfg)
@@ -203,6 +212,69 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         runner = request.app.state.runner
         brief = team.run_assistant_brief(last_cycle=runner.state.last_result)
         return {"brief": brief.to_context()}
+
+    @app.get("/api/team/expansions")
+    def list_team_expansions(request: Request, status: str | None = None) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            return {"items": []}
+        return {"items": store.list_team_expansions(status=status)}
+
+    @app.post("/api/team/expansions/propose")
+    def propose_team_expansions(request: Request) -> dict[str, Any]:
+        team = request.app.state.team
+        if team.analytics is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        try:
+            proposals = team.propose_team_expansions()
+        except RuntimeError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"proposals": [p.to_context() for p in proposals]}
+
+    @app.get("/api/team/expansions/{expansion_id}")
+    def get_team_expansion(request: Request, expansion_id: str) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        row = store.get_team_expansion(expansion_id)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        return {"proposal": row}
+
+    @app.patch("/api/team/expansions/{expansion_id}")
+    def update_team_expansion(
+        request: Request, expansion_id: str, body: TeamExpansionUpdateBody
+    ) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        ok = store.update_team_expansion(
+            expansion_id,
+            promotion_title=body.promotion_title,
+            team_name=body.team_name,
+            mission=body.mission,
+            expansion_rationale=body.expansion_rationale,
+            first_quarter_goals=body.first_quarter_goals,
+            members=body.members,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="Proposal not found or not pending")
+        row = store.get_team_expansion(expansion_id)
+        return {"proposal": row}
+
+    @app.post("/api/team/expansions/{expansion_id}/resolve")
+    def resolve_team_expansion(
+        request: Request, expansion_id: str, body: ResolveBody
+    ) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        if body.status not in {"approved", "rejected"}:
+            raise HTTPException(status_code=400, detail="Invalid status")
+        ok = store.resolve_team_expansion(expansion_id, body.status)
+        if not ok:
+            raise HTTPException(status_code=404, detail="Proposal not found")
+        return {"id": expansion_id, "status": body.status}
 
     @app.get("/api/events/stream")
     async def events_stream(request: Request) -> StreamingResponse:

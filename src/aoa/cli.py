@@ -444,6 +444,28 @@ def cmd_assistant(cfg: Config) -> int:
     return 0
 
 
+def cmd_team_promote(cfg: Config) -> int:
+    team = build_team(cfg)
+    if team.analytics is None:
+        print("Analytics disabled — set AOA_ANALYTICS_ENABLED=1 to store proposals.")
+        return 1
+    print("\n=== Team promotions — each lead is proposing a sub-team ===\n")
+    proposals = team.propose_team_expansions()
+    for p in proposals:
+        print(f"{p.lead_name} → {p.promotion_title}")
+        print(f"  Team: {p.team_name}")
+        print(f"  Mission: {p.mission}")
+        if p.expansion_rationale:
+            print(f"  Why: {p.expansion_rationale}")
+        for m in p.members:
+            resp = ", ".join(m.responsibilities)
+            print(f"    • {m.name} ({m.role}): {resp}")
+        print()
+    print(f"{len(proposals)} proposals sent for your review.")
+    print("Edit or approve in the dashboard → Promotions tab, or via the API.")
+    return 0
+
+
 def cmd_analyze(cfg: Config, symbol: str, timeframe: str, limit: int) -> int:
     broker = build_broker(cfg)
     bars = broker.get_bars(symbol, timeframe, limit)
@@ -854,6 +876,10 @@ def main(argv: list[str] | None = None) -> int:
     team_sub.add_parser("health", help="Run Bob's health and code-integrity checks.")
     team_sub.add_parser("brief", help="Run Tom→Julie→Morgan→Alan brief without trading.")
     team_sub.add_parser("assistant", help="Alex — prioritized must-do vs should-do brief.")
+    team_sub.add_parser(
+        "promote",
+        help="Each lead proposes a sub-team for your approval.",
+    )
     sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
@@ -960,6 +986,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_team_brief(cfg)
             if args.team_command == "assistant":
                 return cmd_assistant(cfg)
+            if args.team_command == "promote":
+                return cmd_team_promote(cfg)
         if args.command == "serve":
             return cmd_serve(cfg)
         if args.command == "journal":

@@ -113,6 +113,24 @@ def test_api_assistant_brief(client):
     assert "must_do" in r.json()["brief"]
 
 
+def test_api_team_expansions_propose_and_resolve(client):
+    r = client.post("/api/team/expansions/propose")
+    assert r.status_code == 200
+    proposals = r.json()["proposals"]
+    assert len(proposals) >= 7
+    items = client.get("/api/team/expansions").json()["items"]
+    assert items
+    pid = items[0]["id"]
+    r = client.patch(
+        f"/api/team/expansions/{pid}",
+        json={"mission": "Edited mission for review."},
+    )
+    assert r.status_code == 200
+    assert r.json()["proposal"]["mission"] == "Edited mission for review."
+    r = client.post(f"/api/team/expansions/{pid}/resolve", json={"status": "approved"})
+    assert r.status_code == 200
+
+
 def test_api_run_returns_409_when_cycle_busy(client):
     runner = client.app.state.runner
     assert runner._cycle_lock.acquire(blocking=False)

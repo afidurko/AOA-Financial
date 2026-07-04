@@ -54,6 +54,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <button class="secondary" onclick="startLoop()">Start loop</button>
       <button class="secondary danger" onclick="stopLoop()">Stop loop</button>
       <button class="secondary" onclick="discoverResearch()">Scholar scan</button>
+      <button class="secondary" onclick="proposePromotions()">Build sub-teams</button>
       <button class="secondary" onclick="refresh()">Refresh</button>
     </div>
     <div class="grid">
@@ -69,6 +70,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tab" data-tab="trades">Trades</div>
       <div class="tab" data-tab="approvals">Approvals</div>
       <div class="tab" data-tab="research">Research</div>
+      <div class="tab" data-tab="promotions">Promotions</div>
       <div class="tab" data-tab="journal">Journal</div>
     </div>
     <div id="panel-assistant" class="panel card">
@@ -105,6 +107,11 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <h2>Scholar research proposals</h2>
       <div id="research-list"></div>
     </div>
+    <div id="panel-promotions" class="panel card">
+      <h2>Team promotions — review &amp; edit before approving</h2>
+      <p class="stat-sm" style="margin-bottom:.75rem">Each lead proposes a small sub-team. Edit roles or mission, then approve or reject.</p>
+      <div id="promotions-list"></div>
+    </div>
     <div id="panel-journal" class="panel card">
       <h2>Journal tail</h2>
       <div id="journal"></div>
@@ -122,13 +129,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     });
     function toggleMember(el){ el.classList.toggle('open'); }
     async function refresh(){
-      const [status,last,journal,roi,approvals,research] = await Promise.all([
+      const [status,last,journal,roi,approvals,research,promotions] = await Promise.all([
         fetch('/api/status').then(r=>r.json()),
         fetch('/api/last-cycle').then(r=>r.json()),
         fetch('/api/journal?n=20').then(r=>r.json()),
         fetch('/api/analytics/roi').then(r=>r.json()).catch(()=>({})),
         fetch('/api/approvals').then(r=>r.json()).catch(()=>({items:[]})),
         fetch('/api/research/proposals').then(r=>r.json()).catch(()=>({items:[]})),
+        fetch('/api/team/expansions').then(r=>r.json()).catch(()=>({items:[]})),
       ]);
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;
@@ -157,6 +165,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       ).join('')||'Empty';
       renderApprovals(approvals.items||[]);
       renderResearch(research.items||[]);
+      renderPromotions(promotions.items||[]);
     }
     function renderTeam(r){
       const roster=[
@@ -200,6 +209,39 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           ${p.status==='pending'?`<button class="ok" onclick="resolveResearch('${p.id}','approved')">Approve</button> <button class="danger" onclick="resolveResearch('${p.id}','rejected')">Reject</button>`:''}
         </div>`).join(''):'<p class="stat-sm">Run Scholar scan to discover algorithm edges</p>';
     }
+    function renderPromotions(items){
+      document.getElementById('promotions-list').innerHTML=items.length?items.map(p=>{
+        const payload=p.payload||{};
+        const members=(payload.members||[]).map(m=>
+          `<li><strong>${m.name}</strong> — ${m.role}<br><span style="color:var(--muted);font-size:.8rem">${(m.responsibilities||[]).join(' · ')}</span></li>`
+        ).join('');
+        const goals=(payload.first_quarter_goals||[]).map(g=>`<li>${g}</li>`).join('');
+        const edit=p.status==='pending'?`
+          <details style="margin-top:.5rem"><summary style="cursor:pointer;font-size:.85rem">Edit proposal</summary>
+            <label style="display:block;margin-top:.5rem;font-size:.75rem;color:var(--muted)">Promotion title</label>
+            <input id="promo-title-${p.id}" value="${(p.promotion_title||'').replace(/"/g,'&quot;')}" style="width:100%;padding:.35rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px"/>
+            <label style="display:block;margin-top:.5rem;font-size:.75rem;color:var(--muted)">Team name</label>
+            <input id="promo-team-${p.id}" value="${(p.team_name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:.35rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px"/>
+            <label style="display:block;margin-top:.5rem;font-size:.75rem;color:var(--muted)">Mission</label>
+            <textarea id="promo-mission-${p.id}" rows="2" style="width:100%;padding:.35rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px">${p.mission||''}</textarea>
+            <label style="display:block;margin-top:.5rem;font-size:.75rem;color:var(--muted)">Rationale</label>
+            <textarea id="promo-rationale-${p.id}" rows="2" style="width:100%;padding:.35rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px">${payload.expansion_rationale||''}</textarea>
+            <button class="secondary" style="margin-top:.5rem" onclick="savePromotion('${p.id}')">Save edits</button>
+          </details>
+          <div style="margin-top:.5rem">
+            <button class="ok" onclick="resolvePromotion('${p.id}','approved')">Approve team</button>
+            <button class="danger" onclick="resolvePromotion('${p.id}','rejected')">Reject</button>
+          </div>`:'';
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.75rem">
+          <strong>${p.lead_name}</strong> → ${p.promotion_title} <span style="color:var(--muted)">(${p.status})</span>
+          <p style="font-size:.85rem;margin:.35rem 0"><em>${p.team_name}</em> — ${p.mission||''}</p>
+          ${payload.expansion_rationale?`<p style="font-size:.8rem;color:var(--muted)">${payload.expansion_rationale}</p>`:''}
+          <ul style="font-size:.85rem;margin:.35rem 0 .35rem 1.1rem">${members}</ul>
+          ${goals?`<p style="font-size:.75rem;color:var(--muted);margin-top:.35rem">Q1 goals</p><ul style="font-size:.8rem;margin-left:1.1rem">${goals}</ul>`:''}
+          ${edit}
+        </div>`;
+      }).join(''):'<p class="stat-sm">Click “Build sub-teams” so each lead can propose their team for your approval.</p>';
+    }
     function renderAssistantFrom(a){
       if(!a){ document.getElementById('assistant-focus').textContent='Focus: —'; return; }
       document.getElementById('assistant-focus').textContent='Focus: '+(a.focus||'—');
@@ -220,8 +262,20 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     async function startLoop(){ await fetch('/api/loop/start',{method:'POST'}); toast('Loop started'); refresh(); }
     async function stopLoop(){ await fetch('/api/loop/stop',{method:'POST'}); toast('Loop stopped'); refresh(); }
     async function discoverResearch(){ toast('Searching literature…'); const r=await fetch('/api/research/discover',{method:'POST'}); const d=await r.json(); toast(`Found ${(d.created||[]).length} proposals`); refresh(); }
+    async function proposePromotions(){ toast('Leads are building their teams…'); const r=await fetch('/api/team/expansions/propose',{method:'POST'}); if(!r.ok){toast('Failed — enable analytics');return;} const d=await r.json(); toast(`${(d.proposals||[]).length} proposals ready for review`); refresh(); }
+    async function savePromotion(id){
+      const body={
+        promotion_title: document.getElementById('promo-title-'+id)?.value,
+        team_name: document.getElementById('promo-team-'+id)?.value,
+        mission: document.getElementById('promo-mission-'+id)?.value,
+        expansion_rationale: document.getElementById('promo-rationale-'+id)?.value,
+      };
+      await fetch(`/api/team/expansions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      toast('Saved'); refresh();
+    }
     async function resolveApproval(id,status){ await fetch(`/api/approvals/${id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}); refresh(); }
     async function resolveResearch(id,status){ await fetch(`/api/research/${id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}); refresh(); }
+    async function resolvePromotion(id,status){ await fetch(`/api/team/expansions/${id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})}); toast(status==='approved'?'Team approved':'Proposal rejected'); refresh(); }
     refresh(); setInterval(refresh,15000);
   </script>
 </body>

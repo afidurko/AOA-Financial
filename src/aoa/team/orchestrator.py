@@ -28,6 +28,7 @@ from aoa.team.models import (
     DecisionBrief,
     HealthReport,
     MarketContextReport,
+    TeamExpansionProposal,
     TrendReport,
 )
 from aoa.team.morgan import MorganAgent
@@ -227,6 +228,17 @@ class TeamOrchestrator:
         )
         self.journal.record("team.alex.brief", brief.to_context())
         return brief
+
+    def propose_team_expansions(
+        self, *, replace_pending: bool = True
+    ) -> list[TeamExpansionProposal]:
+        """Each lead proposes a sub-team; stored for user approval."""
+        if self.analytics is None:
+            raise RuntimeError("Analytics must be enabled (AOA_ANALYTICS_ENABLED=1)")
+        from aoa.team.expansion import TeamExpansionService
+
+        svc = TeamExpansionService(self.llm, self.analytics.store, self.journal)
+        return svc.propose_all(replace_pending=replace_pending)
 
     def _run_assistant(self, result: TeamCycleResult) -> AssistantBrief:
         brief = self.alex.prioritize(

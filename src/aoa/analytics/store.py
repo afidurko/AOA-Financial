@@ -190,6 +190,37 @@ class AnalyticsStore:
             )
         return pid
 
+    def upsert_approval(
+        self,
+        *,
+        kind: str,
+        title: str,
+        summary: str,
+        payload: dict[str, Any] | None = None,
+        proposal_id: str | None = None,
+    ) -> str:
+        pid = proposal_id or str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        with self.transaction() as c:
+            existing = c.execute(
+                "SELECT status FROM approval_inbox WHERE id=?",
+                (pid,),
+            ).fetchone()
+            if existing is None:
+                c.execute(
+                    """INSERT INTO approval_inbox(id,kind,title,summary,payload,status,created_at)
+                       VALUES(?,?,?,?,?,?,?)""",
+                    (pid, kind, title, summary, json.dumps(payload or {}), "pending", now),
+                )
+                return pid
+            if existing["status"] == "pending":
+                c.execute(
+                    """UPDATE approval_inbox SET kind=?, title=?, summary=?, payload=?
+                       WHERE id=?""",
+                    (kind, title, summary, json.dumps(payload or {}), pid),
+                )
+            return pid
+
     def resolve_approval(self, approval_id: str, status: str) -> bool:
         now = datetime.now(timezone.utc).isoformat()
         with self.transaction() as c:
@@ -314,6 +345,171 @@ class AnalyticsStore:
             q += " ORDER BY created_at DESC LIMIT ?"
             args.append(limit)
             return [_row_to_dict(r) for r in self._conn.execute(q, args).fetchall()]
+
+    def upsert_team_expansion(
+        self,
+        proposal: Any,
+        *,
+        replace_pending: bool = True,
+    ) -> str:
+        """Insert or replace a lead's pending team-expansion proposal."""
+        now = datetime.now(timezone.utc).isoformat()
+        payload = _team_expansion_payload(proposal)
+        with self.transaction() as c:
+            if replace_pending:
+                existing = c.execute(
+                    """SELECT id FROM team_expansion_proposals
+                       WHERE lead_name=? AND status='pending'""",
+                    (proposal.lead_name,),
+                ).fetchone()
+                if existing is not None:
+                    pid = str(existing["id"])
+                    c.execute(
+                        """UPDATE team_expansion_proposals SET
+                           lead_role=?, promotion_title=?, team_name=?, mission=?,
+                           payload=?, updated_at=?
+                           WHERE id=?""",
+                        (
+                            proposal.lead_role,
+                            proposal.promotion_title,
+                            proposal.team_name,
+                            proposal.mission,
+                            json.dumps(payload),
+                            now,
+                            pid,
+                        ),
+                    )
+                    return pid
+
+            pid = proposal.proposal_id or str(uuid.uuid4())
+            c.execute(
+                """INSERT INTO team_expansion_proposals(
+                       id, lead_name, lead_role, promotion_title, team_name, mission,
+                       status, payload, created_at, updated_at)
+                   VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    pid,
+                    proposal.lead_name,
+                    proposal.lead_role,
+                    proposal.promotion_title,
+                    proposal.team_name,
+                    proposal.mission,
+                    proposal.status or "pending",
+                    json.dumps(payload),
+                    now,
+                    now,
+                ),
+            )
+            return pid
+
+    def list_team_expansions(
+        self, *, status: str | None = None, limit: int = 50
+    ) -> list[dict]:
+        with self._lock:
+            q = "SELECT * FROM team_expansion_proposals"
+            args: list[Any] = []
+            if status:
+                q += " WHERE status=?"
+                args.append(status)
+            q += " ORDER BY lead_name ASC, created_at DESC LIMIT ?"
+            args.append(limit)
+            return [_row_to_dict(r) for r in self._conn.execute(q, args).fetchall()]
+
+    def get_team_expansion(self, proposal_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM team_expansion_proposals WHERE id=?",
+                (proposal_id,),
+            ).fetchone()
+            return _row_to_dict(row) if row else None
+
+    def update_team_expansion(
+        self,
+        proposal_id: str,
+        *,
+        promotion_title: str | None = None,
+        team_name: str | None = None,
+        mission: str | None = None,
+        expansion_rationale: str | None = None,
+        first_quarter_goals: list[str] | None = None,
+        members: list[dict[str, Any]] | None = None,
+    ) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        with self.transaction() as c:
+            row = c.execute(
+                "SELECT * FROM team_expansion_proposals WHERE id=? AND status='pending'",
+                (proposal_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            current = _row_to_dict(row)
+            payload = current.get("payload") or {}
+            if not isinstance(payload, dict):
+                payload = {}
+            if promotion_title is not None:
+                current["promotion_title"] = promotion_title
+                payload["promotion_title"] = promotion_title
+            if team_name is not None:
+                current["team_name"] = team_name
+                payload["team_name"] = team_name
+            if mission is not None:
+                current["mission"] = mission
+                payload["mission"] = mission
+            if expansion_rationale is not None:
+                payload["expansion_rationale"] = expansion_rationale
+            if first_quarter_goals is not None:
+                payload["first_quarter_goals"] = first_quarter_goals
+            if members is not None:
+                payload["members"] = members
+            c.execute(
+                """UPDATE team_expansion_proposals SET
+                   promotion_title=?, team_name=?, mission=?, payload=?, updated_at=?
+                   WHERE id=?""",
+                (
+                    current["promotion_title"],
+                    current["team_name"],
+                    current["mission"],
+                    json.dumps(payload),
+                    now,
+                    proposal_id,
+                ),
+            )
+            return True
+
+    def resolve_team_expansion(self, proposal_id: str, status: str) -> bool:
+        if status not in {"approved", "rejected"}:
+            return False
+        now = datetime.now(timezone.utc).isoformat()
+        with self.transaction() as c:
+            cur = c.execute(
+                """UPDATE team_expansion_proposals SET status=?, resolved_at=?, updated_at=?
+                   WHERE id=? AND status='pending'""",
+                (status, now, now, proposal_id),
+            )
+            if cur.rowcount == 0:
+                return False
+            c.execute(
+                """UPDATE approval_inbox SET status=?, resolved_at=?
+                   WHERE id=? AND status='pending'""",
+                (status, now, f"exp-{proposal_id}"),
+            )
+            return True
+
+
+def _team_expansion_payload(proposal: Any) -> dict[str, Any]:
+    members = [
+        m.to_context() if hasattr(m, "to_context") else m for m in (proposal.members or [])
+    ]
+    return {
+        "lead_name": proposal.lead_name,
+        "lead_role": proposal.lead_role,
+        "promotion_title": proposal.promotion_title,
+        "team_name": proposal.team_name,
+        "mission": proposal.mission,
+        "members": members,
+        "expansion_rationale": proposal.expansion_rationale,
+        "first_quarter_goals": list(proposal.first_quarter_goals or []),
+    }
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

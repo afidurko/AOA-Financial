@@ -152,6 +152,16 @@ class FakeLLM:
     _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
     _MORGAN = frozenset({"volume_regime", "volume_ratio", "liquidity_note", "summary"})
     _ALEX = frozenset({"summary", "focus", "must_do", "should_do", "can_wait"})
+    _EXPANSION = frozenset(
+        {
+            "promotion_title",
+            "team_name",
+            "mission",
+            "expansion_rationale",
+            "first_quarter_goals",
+            "members",
+        }
+    )
     _NEWS = frozenset({"direction", "conviction", "summary", "key_events", "macro_risk"})
     _SENTIMENT = frozenset(
         {"direction", "conviction", "sentiment_score", "summary", "drivers"}
@@ -340,6 +350,29 @@ class FakeLLM:
                     }
                 ],
                 "can_wait": [],
+            }
+        if required == self._EXPANSION:
+            lead = "Lead"
+            if "Lead:" in prompt:
+                lead = prompt.split("Lead:")[1].split("(")[0].strip()
+            return {
+                "promotion_title": f"Director — {lead}",
+                "team_name": f"{lead} Desk",
+                "mission": f"Expand {lead}'s domain capacity.",
+                "expansion_rationale": "Parallel specialists reduce cycle bottlenecks.",
+                "first_quarter_goals": ["Onboard roles", "Integrate with journal"],
+                "members": [
+                    {
+                        "name": f"{lead}-A",
+                        "role": "Specialist",
+                        "responsibilities": ["Support lead tasks", "Log findings"],
+                    },
+                    {
+                        "name": f"{lead}-B",
+                        "role": "Analyst",
+                        "responsibilities": ["Cross-check outputs", "Flag regressions"],
+                    },
+                ],
             }
         raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
 

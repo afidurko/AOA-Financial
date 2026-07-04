@@ -131,6 +131,9 @@ def _gather_context(
         ctx["pending_research"] = analytics_store.list_research_proposals(
             status="pending", limit=20
         )
+        ctx["pending_team_expansions"] = analytics_store.list_team_expansions(
+            status="pending", limit=20
+        )
         ctx["roi"] = analytics_store.roi_summary(limit=10)
     return ctx
 
@@ -191,6 +194,22 @@ def _deterministic_brief(ctx: dict[str, Any]) -> AssistantBrief:
                 detail=item.get("summary", ""),
                 source="approval_inbox",
                 action_hint="Dashboard → Approvals tab → approve or reject.",
+            )
+        )
+
+    for exp in ctx.get("pending_team_expansions") or []:
+        payload = exp.get("payload") or {}
+        member_count = len(payload.get("members") or [])
+        must.append(
+            PriorityItem(
+                level=PriorityLevel.MUST,
+                title=f"Team promotion: {exp.get('lead_name', 'Lead')}",
+                detail=(
+                    f"{exp.get('promotion_title', '')} · {exp.get('team_name', '')} "
+                    f"({member_count} members)"
+                ).strip(),
+                source="team_expansion",
+                action_hint="Dashboard → Promotions tab → edit, approve, or reject.",
             )
         )
 

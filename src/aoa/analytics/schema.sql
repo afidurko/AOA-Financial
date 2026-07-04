@@ -83,3 +83,20 @@ CREATE TABLE IF NOT EXISTS research_proposals (
 CREATE INDEX IF NOT EXISTS idx_cycle_runs_started ON cycle_runs(started_at);
 CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_inbox(status);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_proposals(status);
+
+CREATE TABLE IF NOT EXISTS team_expansion_proposals (
+    id              TEXT PRIMARY KEY,
+    lead_name       TEXT NOT NULL,
+    lead_role       TEXT NOT NULL,
+    promotion_title TEXT NOT NULL,
+    team_name       TEXT NOT NULL,
+    mission         TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    payload         TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    resolved_at     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_expansion_lead ON team_expansion_proposals(lead_name);
+CREATE INDEX IF NOT EXISTS idx_team_expansion_status ON team_expansion_proposals(status);

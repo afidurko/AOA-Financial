@@ -118,6 +118,78 @@ class DecisionBrief:
 
 
 @dataclass
+class SubTeamMember:
+    name: str
+    role: str
+    responsibilities: list[str] = field(default_factory=list)
+
+    def to_context(self) -> dict:
+        return {
+            "name": self.name,
+            "role": self.role,
+            "responsibilities": self.responsibilities,
+        }
+
+
+@dataclass
+class TeamExpansionProposal:
+    """A lead's proposed sub-team promotion — requires user approval."""
+
+    lead_name: str
+    lead_role: str
+    promotion_title: str
+    team_name: str
+    mission: str
+    members: list[SubTeamMember] = field(default_factory=list)
+    expansion_rationale: str = ""
+    first_quarter_goals: list[str] = field(default_factory=list)
+    proposal_id: str = ""
+    status: str = "pending"
+
+    def to_context(self) -> dict:
+        return {
+            "id": self.proposal_id,
+            "lead_name": self.lead_name,
+            "lead_role": self.lead_role,
+            "promotion_title": self.promotion_title,
+            "team_name": self.team_name,
+            "mission": self.mission,
+            "members": [m.to_context() for m in self.members],
+            "expansion_rationale": self.expansion_rationale,
+            "first_quarter_goals": self.first_quarter_goals,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_store_row(cls, row: dict) -> TeamExpansionProposal:
+        payload = row.get("payload") or {}
+        if isinstance(payload, str):
+            import json
+
+            payload = json.loads(payload)
+        members = [
+            SubTeamMember(
+                name=m.get("name", ""),
+                role=m.get("role", ""),
+                responsibilities=list(m.get("responsibilities") or []),
+            )
+            for m in payload.get("members") or []
+        ]
+        return cls(
+            lead_name=row.get("lead_name", payload.get("lead_name", "")),
+            lead_role=row.get("lead_role", payload.get("lead_role", "")),
+            promotion_title=row.get("promotion_title", payload.get("promotion_title", "")),
+            team_name=row.get("team_name", payload.get("team_name", "")),
+            mission=row.get("mission", payload.get("mission", "")),
+            members=members,
+            expansion_rationale=payload.get("expansion_rationale", ""),
+            first_quarter_goals=list(payload.get("first_quarter_goals") or []),
+            proposal_id=row.get("id", ""),
+            status=row.get("status", "pending"),
+        )
+
+
+@dataclass
 class MarketContextReport:
     """Morgan — volume, liquidity, and market-microstructure read."""
 
