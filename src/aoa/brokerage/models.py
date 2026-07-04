@@ -127,6 +127,7 @@ class OptionContract:
     bid: float = 0.0
     ask: float = 0.0
     last: float = 0.0
+    volume: float = 0.0  # latest trade size or session volume when available
     open_interest: float = 0.0
     implied_volatility: float | None = None
     delta: float | None = None

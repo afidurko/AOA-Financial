@@ -65,7 +65,7 @@ LEAD_PROFILES: tuple[dict[str, str], ...] = (
     {
         "name": "Morgan",
         "role": "Market & Volume Analyst",
-        "domain": "volume regimes, liquidity, unusual activity, microstructure",
+        "domain": "volume regimes, liquidity, options flow by strike and expiry",
     },
     {
         "name": "Alan",
@@ -184,7 +184,7 @@ def _fallback_proposal(profile: dict[str, str]) -> TeamExpansionProposal:
         ],
         "Morgan": [
             SubTeamMember("Skyler", "Volume Tracker", ["Unusual volume alerts", "20d ratio monitoring"]),
-            SubTeamMember("Reese", "Liquidity Analyst", ["Spread checks", "Cash-account sizing hints"]),
+            SubTeamMember("Reese", "Options Flow Clerk", ["Monitor options volume by strike/expiry", "Flag expiry clusters"]),
         ],
         "Alan": [
             SubTeamMember("Drew", "Bull Advocate", ["Constructive case builder", "Conviction scoring"]),

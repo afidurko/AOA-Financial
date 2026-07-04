@@ -72,7 +72,7 @@ class TeamOrchestrator:
 
         self.tom = TomAgent(llm)
         self.julie = JulieAgent(llm)
-        self.morgan = MorganAgent(llm)
+        self.morgan = MorganAgent(llm, broker)
         self.bob = BobAgent(config, broker)
         self.alan = AlanAgent(llm)
         self.alex = AlexAgent(llm)

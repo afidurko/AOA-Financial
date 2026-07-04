@@ -172,7 +172,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         {name:'Bob',role:'Health',data:r.health,summary:r.health?.summary},
         {name:'Tom',role:'Trends',data:r.trends,count:(r.trends||[]).length},
         {name:'Julie',role:'Algorithms',data:r.algorithms,count:(r.algorithms||[]).length},
-        {name:'Morgan',role:'Volume',data:r.market_contexts,count:(r.market_contexts||[]).length},
+        {name:'Morgan',role:'Volume & Options',data:r.market_contexts,count:(r.market_contexts||[]).length},
         {name:'Alan',role:'Decision',data:r.decision,summary:r.decision?.summary},
         {name:'Aaron',role:'CEO',data:r.ceo,summary:r.ceo?.summary},
         {name:'Alex',role:'Assistant',data:r.assistant,summary:r.assistant?.focus},
@@ -187,7 +187,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const rows=[...(r.analyst_reports||[])];
       (r.trends||[]).forEach(t=>rows.push({symbol:t.symbol,analyst:'Tom',direction:t.direction,conviction:t.strength,summary:t.rationale}));
       (r.algorithms||[]).forEach(a=>rows.push({symbol:a.symbol,analyst:'Julie',direction:a.validated?'validated':'review',conviction:a.adjusted_strength,summary:a.method_notes}));
-      (r.market_contexts||[]).forEach(m=>rows.push({symbol:m.symbol,analyst:'Morgan',direction:m.volume_regime,conviction:m.volume_ratio,summary:m.summary}));
+      (r.market_contexts||[]).forEach(m=>rows.push({symbol:m.symbol,analyst:'Morgan',direction:m.volume_regime,conviction:m.volume_ratio,summary:(m.options_volume_note?m.options_volume_note+' · ':'')+(m.summary||'')}));
       document.getElementById('analysts-body').innerHTML=rows.length
         ? rows.map(x=>`<tr><td>${x.symbol||''}</td><td>${x.analyst||''}</td><td>${x.direction||''}</td><td>${x.conviction??'—'}</td><td>${(x.summary||'').slice(0,80)}</td></tr>`).join('')
         : '<tr><td colspan="5">No reports yet</td></tr>';

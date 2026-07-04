@@ -91,22 +91,56 @@ class FakeBroker(Broker):
         return ["AAPL", "MSFT", "NVDA"][:limit]
 
     def get_option_chain(self, underlying, expiration=None, option_type=None):
-        otype = OptionType.CALL if (option_type or "call") == "call" else OptionType.PUT
-        return [
+        contracts = [
             OptionContract(
                 symbol=f"{underlying}250117C00100000",
                 underlying=underlying,
-                option_type=otype,
+                option_type=OptionType.CALL,
                 strike=100.0,
                 expiration="2025-01-17",
                 bid=2.0,
                 ask=2.2,
                 last=2.1,
+                volume=850,
                 open_interest=500,
                 implied_volatility=0.35,
                 delta=0.5,
-            )
+            ),
+            OptionContract(
+                symbol=f"{underlying}250117P00100000",
+                underlying=underlying,
+                option_type=OptionType.PUT,
+                strike=100.0,
+                expiration="2025-01-17",
+                bid=1.8,
+                ask=2.0,
+                last=1.9,
+                volume=420,
+                open_interest=300,
+                implied_volatility=0.32,
+                delta=-0.45,
+            ),
+            OptionContract(
+                symbol=f"{underlying}250221C00105000",
+                underlying=underlying,
+                option_type=OptionType.CALL,
+                strike=105.0,
+                expiration="2025-02-21",
+                bid=1.5,
+                ask=1.7,
+                last=1.6,
+                volume=1200,
+                open_interest=800,
+                implied_volatility=0.30,
+                delta=0.42,
+            ),
         ]
+        if expiration:
+            contracts = [c for c in contracts if c.expiration == expiration]
+        if option_type:
+            want = OptionType.CALL if option_type == "call" else OptionType.PUT
+            contracts = [c for c in contracts if c.option_type is want]
+        return contracts
 
     def submit_order(self, request: OrderRequest) -> Order:
         self.submitted.append(request)
@@ -150,7 +184,15 @@ class FakeLLM:
     _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
     _ALAN = frozenset({"recommendations", "summary", "confidence"})
     _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
-    _MORGAN = frozenset({"volume_regime", "volume_ratio", "liquidity_note", "summary"})
+    _MORGAN = frozenset(
+        {
+            "volume_regime",
+            "volume_ratio",
+            "liquidity_note",
+            "options_volume_note",
+            "summary",
+        }
+    )
     _ALEX = frozenset({"summary", "focus", "must_do", "should_do", "can_wait"})
     _EXPANSION = frozenset(
         {
@@ -335,7 +377,8 @@ class FakeLLM:
                 "volume_regime": "normal",
                 "volume_ratio": 1.1,
                 "liquidity_note": "Adequate liquidity for cash-account sizing.",
-                "summary": "Volume in line with 20-day average.",
+                "options_volume_note": "Feb expiry leads; 105C active.",
+                "summary": "Volume in line with 20-day average; options confirm interest.",
             }
         if required == self._ALEX:
             return {

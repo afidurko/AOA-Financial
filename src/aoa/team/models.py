@@ -190,6 +190,28 @@ class TeamExpansionProposal:
 
 
 @dataclass
+class OptionsVolumeHighlight:
+    """Notable options activity at a strike/expiry."""
+
+    expiration: str
+    strike: float
+    option_type: str  # call | put
+    volume: float
+    price: float
+    open_interest: float = 0.0
+
+    def to_context(self) -> dict:
+        return {
+            "expiration": self.expiration,
+            "strike": self.strike,
+            "option_type": self.option_type,
+            "volume": self.volume,
+            "price": self.price,
+            "open_interest": self.open_interest,
+        }
+
+
+@dataclass
 class MarketContextReport:
     """Morgan — volume, liquidity, and market-microstructure read."""
 
@@ -198,6 +220,9 @@ class MarketContextReport:
     volume_ratio: float | None
     liquidity_note: str
     summary: str
+    options_volume_note: str = ""
+    options_highlights: list[OptionsVolumeHighlight] = field(default_factory=list)
+    options_by_expiration: dict[str, float] = field(default_factory=dict)
 
     def to_context(self) -> dict:
         return {
@@ -206,6 +231,9 @@ class MarketContextReport:
             "volume_ratio": self.volume_ratio,
             "liquidity_note": self.liquidity_note,
             "summary": self.summary,
+            "options_volume_note": self.options_volume_note,
+            "options_highlights": [h.to_context() for h in self.options_highlights],
+            "options_by_expiration": self.options_by_expiration,
         }
 
 

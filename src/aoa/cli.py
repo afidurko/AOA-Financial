@@ -177,12 +177,14 @@ def _print_team(result: TeamCycleResult) -> None:
                 f"{a.method_notes[:50]}"
             )
     if result.market_contexts:
-        print("\n=== Morgan — market & volume ===")
+        print("\n=== Morgan — market, equity & options volume ===")
         for m in result.market_contexts:
             print(
                 f"  {m.symbol:<6} {m.volume_regime:<8} ratio={m.volume_ratio}  "
                 f"{m.summary[:50]}"
             )
+            if m.options_volume_note:
+                print(f"         options: {m.options_volume_note[:70]}")
     if result.assistant:
         print("\n=== Alex — your priorities ===")
         print(f"  Focus: {result.assistant.focus}")
