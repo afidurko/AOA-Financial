@@ -35,6 +35,7 @@ from aoa.brokerage.alpaca_bars import (
     partition_symbols,
 )
 from aoa.brokerage.base import Broker, BrokerError
+from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
 from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
@@ -54,6 +55,8 @@ from aoa.workloop.scheduler import build_scheduler
 
 
 def build_broker(cfg: Config) -> Broker:
+    if cfg.broker == "moomoo":
+        return MoomooBroker.from_config(cfg)
     return AlpacaBroker(
         cfg.alpaca_key_id,
         cfg.alpaca_secret_key,
@@ -70,7 +73,12 @@ def build_llm(cfg: Config) -> LLMClient:
 
 
 def build_news(cfg: Config) -> NewsFeed:
-    if not cfg.news_enabled or not cfg.has_brokerage_creds:
+    if not cfg.news_enabled:
+        return NullNewsFeed()
+    if cfg.broker == "moomoo":
+        # Headlines via Moomoo OpenAPI can be wired later; keep agents running without news.
+        return NullNewsFeed()
+    if not cfg.has_brokerage_creds:
         return NullNewsFeed()
     return AlpacaNewsFeed(
         cfg.alpaca_key_id,
@@ -356,8 +364,13 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     tf_keys = ", ".join(t.key for t in cfg.bar_timeframes)
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
-    print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
-    if cfg.alpaca_auth_source:
+    print(f"  ✓ Broker: {cfg.broker} | bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
+    if cfg.broker == "moomoo":
+        print(
+            f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
+            f"({cfg.moomoo_market}, {'live' if cfg.moomoo_live else 'simulate'})"
+        )
+    elif cfg.alpaca_auth_source:
         label = cfg.alpaca_auth_source
         if cfg.alpaca_cli_profile:
             label = f"{label} (profile {cfg.alpaca_cli_profile})"
@@ -390,12 +403,18 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         acct = broker.get_account()
         print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
         latest = broker.verify_stock_bars("SPY", limit=1)
-        feed = cfg.alpaca_data_feed or cfg.bar_feed
-        print(
-            f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
-            f"({latest.timestamp.date()}, feed={feed}, "
-            f"adjustment={cfg.alpaca_bar_adjustment})."
-        )
+        if cfg.broker == "moomoo":
+            print(
+                f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
+                f"({latest.timestamp.date()})."
+            )
+        else:
+            feed = cfg.alpaca_data_feed or cfg.bar_feed
+            print(
+                f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
+                f"({latest.timestamp.date()}, feed={feed}, "
+                f"adjustment={cfg.alpaca_bar_adjustment})."
+            )
     except BrokerError as exc:
         print(f"  ✗ Broker check failed: {exc}")
         return 1
@@ -1049,7 +1068,7 @@ def cmd_report(cfg: Config) -> int:
 
 def cmd_burnin(cfg: Config, *, cycles: int, pause: int) -> int:
     """Run multiple team cycles for paper-trading validation."""
-    if cfg.alpaca_live and not cfg.dry_run:
+    if cfg.is_live_broker and not cfg.dry_run:
         print(
             "Warning: burn-in on a live account — set AOA_PROFILE=paper-dry or "
             "AOA_DRY_RUN=true for validation.",

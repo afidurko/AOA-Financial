@@ -11,11 +11,11 @@ cp .env.example .env
 Edit `.env` and set at minimum:
 
 - `ANTHROPIC_API_KEY` — Claude API access for agent reasoning
-- **Alpaca (pick one):**
-  - `alpaca profile login` — OAuth paper login; AOA reads the CLI profile automatically
-  - `ALPACA_API_KEY_ID` + `ALPACA_API_SECRET_KEY` — paper Trading API keys (`PK...`)
+- **Moomoo OpenD** — install from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/), log in, keep running on `127.0.0.1:11111`
 
-See `SETUP-AWAITING-YOU.md` and run `bash scripts/setup_alpaca_auth.sh` for a guided checklist.
+See `SETUP-AWAITING-YOU.md` and run `bash scripts/setup_moomoo_auth.sh`.
+
+**Optional Alpaca:** set `AOA_BROKER=alpaca`, `pip install -e ".[alpaca]"`, and run `bash scripts/setup_alpaca_auth.sh`.
 
 See `.env.example` for workloop, cycle timing, and optional extras.
 

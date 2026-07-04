@@ -12,9 +12,8 @@ from aoa.team.tom import KNOWLEDGE, TomAgent
 
 def _config(dry_run=True):
     return Config(
+        broker="moomoo",
         anthropic_api_key="x",
-        alpaca_key_id="x",
-        alpaca_secret_key="x",
         universe=("AAPL",),
         dry_run=dry_run,
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),

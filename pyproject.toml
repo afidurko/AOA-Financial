@@ -11,14 +11,15 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "AOA Financial" }]
 dependencies = [
-    "alpaca-py>=0.40.0",
     "anthropic>=0.40.0",
+    "moomoo-api>=10.8.0",
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "pytest-mock>=3.12.0", "ruff>=0.6.0"]
+dev = ["pytest>=8.0.0", "pytest-mock>=3.12.0", "ruff>=0.6.0", "alpaca-py>=0.40.0"]
 web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
+alpaca = ["alpaca-py>=0.40.0"]
 tradingagents = [
     "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@v0.3.0",
 ]
@@ -30,7 +31,7 @@ tradingagents-bedrock = [
 torch = ["torch>=2.0.0"]
 # FinancePy quant context for Andrea's options/hedge analysis (GPL-3.0 optional).
 financepy = ["financepy>=1.0.0"]
-all = ["aoa-financial[dev,web,tradingagents,torch,financepy]"]
+all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca]"]
 
 [project.scripts]
 aoa = "aoa.cli:main"

@@ -1,12 +1,14 @@
 # Setup — waiting on you
 
-AOA is configured for **paper-dry** mode (safe: no real orders). Complete the items below in order. Each step needs you — nothing here can be done automatically.
+AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Complete the steps below in order.
 
 Run the helper anytime:
 
 ```bash
-bash scripts/setup_alpaca_auth.sh
+bash scripts/setup_moomoo_auth.sh
 ```
+
+For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
 
 ---
 
@@ -21,77 +23,73 @@ ANTHROPIC_API_KEY=sk-ant-api03-...
 
 ---
 
-## Step 2 — Alpaca paper login (market data + paper trading)
+## Step 2 — Moomoo OpenD (default broker)
 
-Pick **one** method.
+OpenD must run on the **same machine** as AOA.
 
-### Option A — Browser OAuth (recommended; matches Alpaca CLI)
-
-- [ ] Install Alpaca CLI (if needed):
-
-```bash
-go install github.com/alpacahq/cli/cmd/alpaca@latest
-export PATH="$HOME/go/bin:$PATH"
-```
-
-- [ ] Log in (opens browser — **you sign in and approve**):
-
-```bash
-alpaca profile login
-```
-
-- [ ] Confirm it worked:
-
-```bash
-alpaca doctor
-alpaca account get
-```
-
-AOA reads `~/.config/alpaca/profiles/paper.yaml` automatically. **Do not paste OAuth tokens into chat.**
-
-### Option B — API keys from Alpaca dashboard
-
-- [ ] Go to [app.alpaca.markets](https://app.alpaca.markets) → toggle **Paper** (yellow) → **API Keys** → **Generate New Key**
-- [ ] Copy **Key ID** (`PK...`) and **Secret** (shown once)
-- [ ] Either run:
-
-```bash
-alpaca profile login --api-key --key PK... --secret YOUR_SECRET
-```
-
-- [ ] Or put them in `.env`:
-
-```bash
-ALPACA_API_KEY_ID=PK...
-ALPACA_API_SECRET_KEY=your-secret-here
-```
-
-Keep `ALPACA_LIVE=false`.
+- [ ] Download **Moomoo OpenD** from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/)
+- [ ] Install, launch, and log in with your **Moomoo account**
+- [ ] Confirm it listens on `127.0.0.1:11111` (default)
 
 ---
 
-## Step 3 — Verify everything
-
-- [ ] Run:
+## Step 3 — Install Python deps
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev,web]"
+```
+
+(`moomoo-api` is included by default; add `[alpaca]` only if using Alpaca.)
+
+---
+
+## Step 4 — Verify
+
+With OpenD running:
+
+```bash
 python3 -m aoa.cli doctor
 ```
 
 You should see:
 
-- `✓ Alpaca auth: cli-oauth (profile paper)` **or** `✓ Alpaca auth: env`
-- `✓ Broker reachable (alpaca-paper); equity $...`
+- `✓ Broker: moomoo`
+- `✓ Moomoo OpenD target: 127.0.0.1:11111 (US, simulate)`
+- `✓ Broker reachable (moomoo-paper); equity $...`
+- `✓ LLM reachable (model=...)`
 
 ---
 
-## Step 4 — First dry run (optional)
-
-- [ ] Single safe cycle (paper-dry = no orders submitted):
+## Step 5 — First dry run
 
 ```bash
 python3 -m aoa.cli run
+```
+
+`AOA_ENV=paper-dry` keeps orders from being submitted even when the broker connects.
+
+---
+
+## Optional — Alpaca paper instead of Moomoo
+
+1. Set in `.env`: `AOA_BROKER=alpaca`
+2. Run: `pip install -e ".[alpaca]"`
+3. Either `alpaca profile login` **or** set `ALPACA_API_KEY_ID` + `ALPACA_API_SECRET_KEY` (`PK...` keys)
+4. Keep `ALPACA_LIVE=false`
+
+See `bash scripts/setup_alpaca_auth.sh` for the full Alpaca checklist.
+
+---
+
+## Live trading (later)
+
+Only when you intentionally move to real money:
+
+```bash
+AOA_ENV=live
+AOA_LIVE_ACK=I_UNDERSTAND
+MOOMOO_LIVE=true
+MOOMOO_UNLOCK_PASSWORD=your-trading-password
 ```
 
 ---
@@ -100,15 +98,18 @@ python3 -m aoa.cli run
 
 | Symptom | Fix |
 |---------|-----|
-| `401 unauthorized` | Re-run `alpaca profile login` or regenerate API keys in Alpaca dashboard |
+| `Connect fail` / OpenD unreachable | Start OpenD; check `MOOMOO_OPEND_HOST` / `MOOMOO_OPEND_PORT` |
+| `unlock_trade` error | Set `MOOMOO_UNLOCK_PASSWORD` for live accounts |
+| Empty bars / no data | Log into OpenD; confirm US market data subscription |
+| `401 unauthorized` (Alpaca) | Re-run `alpaca profile login` or regenerate API keys |
 | `ANTHROPIC_API_KEY is not set` | Complete Step 1 |
-| `Alpaca credentials missing` | Complete Step 2 |
-| Keys you pasted earlier failed | Those were invalid — use OAuth or fresh `PK...` keys from the dashboard |
+| `Alpaca credentials missing` | Complete optional Alpaca section or switch back to Moomoo |
 
 ---
 
 ## Security
 
 - Never commit `.env` (already gitignored)
-- Regenerate Alpaca keys if you pasted secrets in chat or Slack
+- Regenerate keys if you pasted secrets in chat or Slack
+- `MOOMOO_UNLOCK_PASSWORD` is sensitive — treat like a trading PIN
 - Stay on `AOA_ENV=paper-dry` until you deliberately move to live trading

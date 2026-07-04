@@ -17,9 +17,8 @@ from aoa.web.opportunity_sweep import OpportunitySweepLoop, SweepActivityTracker
 
 def _config(**kwargs):
     base = dict(
+        broker="moomoo",
         anthropic_api_key="x",
-        alpaca_key_id="x",
-        alpaca_secret_key="x",
         universe=("AAPL",),
         dry_run=True,
         opportunity_sweep_enabled=True,

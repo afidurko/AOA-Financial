@@ -13,18 +13,36 @@ from aoa.config import (
 
 
 def test_trading_mode_paper_vs_live():
-    paper = Config(alpaca_key_id="k", alpaca_secret_key="s", alpaca_live=False)
+    paper = Config(
+        broker="alpaca",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        alpaca_live=False,
+    )
     assert paper.trading_mode == "paper"
-    live = Config(alpaca_key_id="k", alpaca_secret_key="s", alpaca_live=True)
+    live = Config(
+        broker="alpaca",
+        alpaca_key_id="k",
+        alpaca_secret_key="s",
+        alpaca_live=True,
+    )
     assert live.trading_mode == "live"
-    dry = Config(alpaca_live=True, dry_run=True)
+    dry = Config(broker="moomoo", moomoo_live=True, dry_run=True)
     assert dry.trading_mode == "dry-run"
+    moomoo_paper = Config(broker="moomoo", moomoo_live=False)
+    assert moomoo_paper.trading_mode == "paper"
 
 
 def test_validate_flags_missing_credentials():
-    cfg = Config(env="paper-dry")
+    cfg = Config(env="paper-dry", broker="moomoo")
     problems = cfg.validate()
     assert any("ANTHROPIC_API_KEY" in p for p in problems)
+    assert not any("ALPACA" in p for p in problems)
+
+
+def test_validate_alpaca_broker_requires_keys():
+    cfg = Config(env="paper-dry", broker="alpaca")
+    problems = cfg.validate()
     assert any("ALPACA" in p for p in problems)
 
 
@@ -36,6 +54,16 @@ def test_validate_test_env_skips_external_credentials():
 def test_validate_clean_config():
     cfg = Config(
         env="paper-dry",
+        broker="moomoo",
+        anthropic_api_key="x",
+    )
+    assert cfg.validate() == []
+
+
+def test_validate_clean_config_alpaca():
+    cfg = Config(
+        env="paper-dry",
+        broker="alpaca",
         anthropic_api_key="x",
         alpaca_key_id="k",
         alpaca_secret_key="s",
@@ -81,6 +109,7 @@ def test_validate_rejects_bad_effort():
 
 def test_validate_rejects_bad_data_feed():
     cfg = Config(
+        broker="alpaca",
         anthropic_api_key="x",
         alpaca_key_id="k",
         alpaca_secret_key="s",
@@ -92,6 +121,7 @@ def test_validate_rejects_bad_data_feed():
 
 def test_validate_rejects_bad_bar_adjustment():
     cfg = Config(
+        broker="alpaca",
         anthropic_api_key="x",
         alpaca_key_id="k",
         alpaca_secret_key="s",

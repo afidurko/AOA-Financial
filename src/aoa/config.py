@@ -23,6 +23,7 @@ from aoa.brokerage.constants import (
 )
 from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
 
+VALID_BROKERS = frozenset({"moomoo", "alpaca"})
 VALID_ENVS = frozenset({"test", "paper-dry", "paper", "live"})
 _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
     "test": {"dry_run": True, "alpaca_live": False},
@@ -203,6 +204,17 @@ class Config:
     model: str = "claude-sonnet-4-6"
     effort: str = "high"
 
+    # Broker selection (default: Moomoo via OpenD)
+    broker: str = "moomoo"
+    moomoo_opend_host: str = "127.0.0.1"
+    moomoo_opend_port: int = 11111
+    moomoo_unlock_password: str = ""
+    moomoo_acc_id: int = 0
+    moomoo_acc_index: int = 0
+    moomoo_security_firm: str = "FUTUINC"
+    moomoo_market: str = "US"
+    moomoo_live: bool = False
+
     alpaca_key_id: str = ""
     alpaca_secret_key: str = ""
     alpaca_oauth_token: str = ""
@@ -303,15 +315,21 @@ class Config:
 
     @property
     def has_brokerage_creds(self) -> bool:
+        if self.broker == "moomoo":
+            return True
         return bool(self.alpaca_oauth_token) or bool(
             self.alpaca_key_id and self.alpaca_secret_key
         )
 
     @property
+    def is_live_broker(self) -> bool:
+        return self.moomoo_live if self.broker == "moomoo" else self.alpaca_live
+
+    @property
     def trading_mode(self) -> str:
         if self.dry_run:
             return "dry-run"
-        return "live" if self.alpaca_live else "paper"
+        return "live" if self.is_live_broker else "paper"
 
     @property
     def is_test(self) -> bool:
@@ -340,6 +358,11 @@ class Config:
             alpaca_live = _bool("ALPACA_LIVE_TRADE", False)
         elif cli_live is True and not os.environ.get("ALPACA_LIVE"):
             alpaca_live = True
+        moomoo_live = (
+            _bool("MOOMOO_LIVE", env == "live")
+            if "MOOMOO_LIVE" not in os.environ
+            else _bool("MOOMOO_LIVE", False)
+        )
 
         return cls(
             env=env,
@@ -353,6 +376,15 @@ class Config:
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
             effort=os.environ.get("AOA_EFFORT", "high"),
+            broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
+            moomoo_opend_host=os.environ.get("MOOMOO_OPEND_HOST", "127.0.0.1").strip() or "127.0.0.1",
+            moomoo_opend_port=_int("MOOMOO_OPEND_PORT", 11111),
+            moomoo_unlock_password=os.environ.get("MOOMOO_UNLOCK_PASSWORD", ""),
+            moomoo_acc_id=_int("MOOMOO_ACC_ID", 0),
+            moomoo_acc_index=_int("MOOMOO_ACC_INDEX", 0),
+            moomoo_security_firm=os.environ.get("MOOMOO_SECURITY_FIRM", "FUTUINC").strip() or "FUTUINC",
+            moomoo_market=os.environ.get("MOOMOO_MARKET", "US").strip().upper() or "US",
+            moomoo_live=moomoo_live,
             alpaca_key_id=alpaca_key_id,
             alpaca_secret_key=alpaca_secret,
             alpaca_oauth_token=alpaca_oauth,
@@ -449,21 +481,29 @@ class Config:
             problems.append(
                 "AOA_LIVE_ACK=I_UNDERSTAND is required when AOA_ENV=live."
             )
+        if self.broker not in VALID_BROKERS:
+            problems.append(
+                f"AOA_BROKER must be one of {sorted(VALID_BROKERS)} (got {self.broker!r})."
+            )
         if self.env != "test":
             if not self.anthropic_api_key:
                 problems.append("ANTHROPIC_API_KEY is not set — the agents cannot reason.")
-            if not self.has_brokerage_creds:
+            if self.broker == "alpaca" and not self.has_brokerage_creds:
                 problems.append(
                     "Alpaca credentials missing — set ALPACA_API_KEY_ID and "
                     "ALPACA_API_SECRET_KEY in .env, or run "
                     "`alpaca profile login` (paper OAuth) / "
                     "`alpaca profile login --api-key`. See SETUP-AWAITING-YOU.md."
                 )
-        if self.alpaca_data_feed and self.alpaca_data_feed not in VALID_ALPACA_DATA_FEEDS:
+            if self.broker == "moomoo" and self.env == "live" and not self.moomoo_unlock_password:
+                problems.append(
+                    "MOOMOO_UNLOCK_PASSWORD is required when AOA_ENV=live with Moomoo."
+                )
+        if self.broker == "alpaca" and self.alpaca_data_feed and self.alpaca_data_feed not in VALID_ALPACA_DATA_FEEDS:
             problems.append(
                 "ALPACA_DATA_FEED must be one of: sip, iex, boats, otc (or leave blank)."
             )
-        if self.alpaca_bar_adjustment not in VALID_ALPACA_BAR_ADJUSTMENTS:
+        if self.broker == "alpaca" and self.alpaca_bar_adjustment not in VALID_ALPACA_BAR_ADJUSTMENTS:
             problems.append(
                 "ALPACA_BAR_ADJUSTMENT must be one of: raw, split, dividend, all, spin-off."
             )
