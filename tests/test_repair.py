@@ -26,7 +26,7 @@ def _config(tmp_path: Path, **kwargs) -> Config:
     return Config(**defaults)
 
 
-def test_discover_repairs_from_state(tmp_path):
+def test_discover_repairs_from_state(tmp_path, monkeypatch):
     state = tmp_path / "STATE.md"
     state.write_text(
         "# Loop State\n\n## High Priority\n\n"
@@ -36,6 +36,10 @@ def test_discover_repairs_from_state(tmp_path):
         encoding="utf-8",
     )
     repo = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(
+        "aoa.repair.discovery.run_verify",
+        lambda _root, **kwargs: {"passed": True, "ruff": {"ok": True}, "pytest": {"ok": True}},
+    )
     items = discover_repairs(repo_root=repo, state_path=state)
     titles = {i.title for i in items}
     assert "Flaky test in auth" in titles

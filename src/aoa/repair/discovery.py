@@ -37,7 +37,7 @@ def discover_repairs(
             )
         )
 
-    verify = run_verify(root)
+    verify = run_verify(root, mode="quick")
     if not verify.get("passed"):
         for key in ("ruff", "pytest"):
             block = verify.get(key, {})
