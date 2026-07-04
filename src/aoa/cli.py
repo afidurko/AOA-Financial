@@ -55,6 +55,7 @@ def build_broker(cfg: Config) -> Broker:
     return AlpacaBroker(
         cfg.alpaca_key_id,
         cfg.alpaca_secret_key,
+        oauth_token=cfg.alpaca_oauth_token,
         live=cfg.alpaca_live,
         bar_feed=cfg.bar_feed,
         data_feed=cfg.alpaca_data_feed,
@@ -72,6 +73,7 @@ def build_news(cfg: Config) -> NewsFeed:
     return AlpacaNewsFeed(
         cfg.alpaca_key_id,
         cfg.alpaca_secret_key,
+        oauth_token=cfg.alpaca_oauth_token,
         lookback_hours=cfg.news_lookback_hours,
     )
 
@@ -353,6 +355,11 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
+    if cfg.alpaca_auth_source:
+        label = cfg.alpaca_auth_source
+        if cfg.alpaca_cli_profile:
+            label = f"{label} (profile {cfg.alpaca_cli_profile})"
+        print(f"  ✓ Alpaca auth: {label}")
     if offline or cfg.is_test:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
