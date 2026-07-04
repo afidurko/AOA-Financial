@@ -10,6 +10,9 @@
 | 2026-07-04 04:15 | daily-triage | L1 | report-only | Loop engineering improvements implemented. tokens_estimate=8000 |
 | 2026-07-04 04:00 | fable-repair | L2 | scaffold | Fable 5 repair loop: aoa repair triage, fable-repair skill, docs/fable5-repair-loop.md. |
 | 2026-07-04 04:30 | fable-repair | L2 | fix-proposed | Item 977dc826: run_verify python -m + quick mode. PR #29. |
+| 2026-07-04 18:47 | fable-repair | L2 | report-only | Triage run 1b17b8227cbc: 3 watch items, 0 fixable. CI local green (306 passed). tokens_estimate=6000 |
+| 2026-07-04 18:50 | daily-triage | L1 | report-only | Credential split schedule added; routed setup to Max 5×, loops to Fable trial. tokens_estimate=4000 |
 | 2026-07-04 20:02 | setup | — | verified | Anthropic + Alpaca paper creds configured; first `aoa run` OK (market closed, 0 candidates). |
 | 2026-07-04 20:06 | fable-repair | L2 | triage | Repair triage c8d1ca69d058; STATE refreshed. |
-| 2026-07-04 20:10 | loose-ends | — | fix-proposed | Default model → claude-sonnet-4-6; stock bars use AOA_BAR_FEED + date window; `aoa doctor` green. |
+| 2026-07-04 20:10 | loose-ends | — | merged | PR #37: model default + Alpaca bar feed; `aoa doctor` green. |
+| 2026-07-04 23:11 | pr-review | — | in-progress | Merging #36 (schedule); #35 held; option 3 setup (ntfy, OpenStock, serve). |

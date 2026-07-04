@@ -101,9 +101,18 @@ Draft PR only; never auto-merge.
 | `loop-verifier` | Checker — reject by default |
 | `coding-engineer` | Bob/Julie audit patterns |
 
+## Credential split (Fable trial vs Max 5× vs API)
+
+Scheduled task routing: [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
+
+- **Fable 5 trial (Cloud Agent)** — daily triage, repair triage, one L2 fix/run, draft PRs; capped in `loop-budget.md`.
+- **Claude Max 5×** — setup, PR review, interactive Claude Code / gstack; does not power `aoa run`.
+- **Anthropic API** — swarm runtime only (`ANTHROPIC_API_KEY` in `.env`).
+
 ## Links
 
 - Fork: [github.com/afidurko/loop-engineering](https://github.com/afidurko/loop-engineering)
 - Fable 5: [docs/fable5-repair-loop.md](docs/fable5-repair-loop.md)
+- Operating schedule: [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
 - L2 promotion: [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md)
 - Patterns: `patterns/registry.yaml`
