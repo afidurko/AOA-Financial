@@ -81,6 +81,10 @@ def test_discover_sources_finds_core_materials(tmp_path):
     assert "readme" in kinds
     assert "tests" in kinds
     assert "ci" in kinds
+    assert "loop_state" in kinds
+    assert "loop_config" in kinds
+    assert "loop_constraints" in kinds
+    assert "loop_run_log" in kinds
 
 
 def test_extract_insights_reads_journal_events(tmp_path):

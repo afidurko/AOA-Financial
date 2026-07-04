@@ -63,6 +63,7 @@ def run_code_quality_audit(*, repo_root: Path | None = None) -> CodeQualityRepor
         _check_shared_brokerage_constants(root),
         _check_web_app_state_pattern(root),
         _check_pipeline_helpers(root),
+        _check_loop_scaffold(root),
         _check_ruff_if_available(root),
     ]
     critical = any(f.status is HealthStatus.CRITICAL for f in findings)
@@ -188,6 +189,47 @@ def _check_pipeline_helpers(root: Path) -> CodeFinding:
         "pipeline",
         HealthStatus.OK,
         "Pipeline handoffs use explicit context fields.",
+    )
+
+
+_LOOP_FILES = (
+    "LOOP.md",
+    "STATE.md",
+    "loop-constraints.md",
+    "loop-run-log.md",
+    "loop-budget.md",
+)
+
+_LOOP_SKILLS = (
+    "loop-constraints",
+    "loop-budget",
+    "loop-triage",
+    "minimal-fix",
+    "loop-verifier",
+)
+
+
+def _check_loop_scaffold(root: Path) -> CodeFinding:
+    missing_files = [name for name in _LOOP_FILES if not (root / name).exists()]
+    skills_root = root / ".cursor" / "skills"
+    missing_skills = [
+        name for name in _LOOP_SKILLS if not (skills_root / name / "SKILL.md").exists()
+    ]
+    if missing_files or missing_skills:
+        parts: list[str] = []
+        if missing_files:
+            parts.append("missing files: " + ", ".join(missing_files))
+        if missing_skills:
+            parts.append("missing skills: " + ", ".join(missing_skills))
+        return CodeFinding(
+            "loop_scaffold",
+            HealthStatus.DEGRADED,
+            "Loop engineering scaffold incomplete — " + "; ".join(parts) + ".",
+        )
+    return CodeFinding(
+        "loop_scaffold",
+        HealthStatus.OK,
+        "Loop engineering scaffold files and skills present.",
     )
 
 

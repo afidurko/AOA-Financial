@@ -23,16 +23,30 @@ pip install -e ".[dev]"
 
 - Report-only week one (L1) before enabling auto-fix (L2)
 - See `LOOP.md` for cadence and human gates
+- L2 promotion: `docs/loop-l2-checklist.md`
 - Binding constraints: `loop-constraints.md` and `docs/safety.md`
 - State file: `STATE.md` (commit after each triage run)
 - Run log: `loop-run-log.md` (markdown table rows)
+
+## Loop run order
+
+```
+loop-constraints → loop-budget (start) → loop-triage → STATE.md + loop-run-log.md → loop-budget (end)
+```
+
+L2 (one item per run):
+
+```
+… → minimal-fix → loop-verifier → draft PR (human merge)
+```
 
 ## Project skills
 
 | Skill | Purpose |
 |-------|---------|
-| `coding-engineer` | Code health, Bob/Julie audit patterns |
-| `loop-triage` | Daily engineering triage |
-| `loop-budget` | Token caps and run-log enforcement |
 | `loop-constraints` | Binding guardrails (runs first) |
+| `loop-budget` | Token caps and run-log enforcement |
+| `loop-triage` | Daily engineering triage → `STATE.md` |
+| `minimal-fix` | Smallest L2+ fix for one triage item |
 | `loop-verifier` | Maker/checker for L2+ code changes |
+| `coding-engineer` | Code health, Bob/Julie audit patterns |
