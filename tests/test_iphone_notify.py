@@ -68,3 +68,26 @@ def test_ntfy_send(monkeypatch):
     )
     assert channels == ["ntfy"]
     assert calls[0][0].endswith("/my-alerts")
+
+
+def test_ntfy_sanitizes_non_ascii_title(monkeypatch):
+    calls = []
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+    def fake_post(url, **kwargs):
+        calls.append(kwargs.get("headers", {}))
+        return FakeResp()
+
+    monkeypatch.setattr("aoa.notify.iphone.httpx.post", fake_post)
+    notifier = IPhoneNotifier(ntfy_topic="my-alerts")
+    notifier.send(
+        IPhoneNotification(
+            title="AOA — Aaron (CEO)",
+            message="Test",
+            reason=NotificationReason.INFORM,
+        )
+    )
+    assert calls[0]["Title"] == "AOA ? Aaron (CEO)"

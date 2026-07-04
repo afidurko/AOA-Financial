@@ -15,6 +15,11 @@ from aoa.notify.custom_app import send_custom_app_webhook, send_structured_webho
 from aoa.notify.types import StructuredNotification
 
 
+def _ascii_header(value: str) -> str:
+    """ntfy HTTP headers must be ASCII."""
+    return value.encode("ascii", "replace").decode("ascii")
+
+
 class NotificationError(RuntimeError):
     """Raised when an iPhone push could not be delivered."""
 
@@ -153,7 +158,7 @@ class IPhoneNotifier:
 
     def _send_ntfy(self, notification: IPhoneNotification) -> None:
         headers = {
-            "Title": notification.title,
+            "Title": _ascii_header(notification.title),
             "Tags": notification.reason.value,
         }
         if notification.reason is NotificationReason.UNFIXABLE:
