@@ -246,3 +246,6 @@ journal/*.jsonl
 
 # loop-init Grok scaffold (Cursor uses .cursor/skills/ instead)
 .grok/
+
+# OpenStock sibling clone (AGPL upstream — not vendored)
+OpenStock/

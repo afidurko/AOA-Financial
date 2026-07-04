@@ -1,0 +1,40 @@
+# Optional OpenStock stack — merge with root docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.openstock.yml --profile openstock up -d
+
+services:
+  openstock-mongodb:
+    image: mongo:7
+    container_name: aoa-openstock-mongodb
+    profiles: [openstock]
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    ports:
+      - "${OPENSTOCK_MONGO_PORT:-27017}:27017"
+    volumes:
+      - openstock-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  openstock:
+    build:
+      context: ./OpenStock
+    profiles: [openstock]
+    ports:
+      - "${OPENSTOCK_PORT:-3000}:3000"
+    env_file:
+      - OpenStock/.env
+    environment:
+      MONGODB_URI: mongodb://root:example@openstock-mongodb:27017/openstock?authSource=admin
+      BETTER_AUTH_URL: http://localhost:${OPENSTOCK_PORT:-3000}
+    restart: unless-stopped
+    depends_on:
+      openstock-mongodb:
+        condition: service_healthy
+
+volumes:
+  openstock-mongo-data:

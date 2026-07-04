@@ -68,3 +68,16 @@ aoa workloop run --dry-run
 Merge and execute require Aaron approval: `aoa workloop approve`.
 
 See [README.md](../README.md#work-loop) for operator commands.
+
+## 6. OpenStock (optional)
+
+Run the open-source [OpenStock](https://github.com/Open-Dev-Society/OpenStock) market
+UI beside the swarm for charts and watchlists:
+
+```bash
+./scripts/openstock-setup.sh
+./scripts/sync-openstock-env.sh
+export AOA_OPENSTOCK_URL=http://localhost:3000
+```
+
+See [openstock-integration.md](openstock-integration.md) for Docker and env details.

@@ -72,7 +72,33 @@ def test_api_run_cycle(client):
 def test_api_config_team_mode(client):
     r = client.get("/api/config")
     assert r.status_code == 200
-    assert r.json()["team_mode"] is True
+    data = r.json()
+    assert data["team_mode"] is True
+    assert "openstock_url" in data
+
+
+def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        openstock_url="http://localhost:3000",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    assert r.json()["openstock_url"] == "http://localhost:3000"
 
 
 def test_api_journal(client):
