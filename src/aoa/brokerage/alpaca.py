@@ -278,8 +278,12 @@ class AlpacaBroker(Broker):
             "limit": limit,
             "adjustment": _parse_adjustment(self._bar_adjustment),
         }
-        if self._data_feed:
-            kwargs["feed"] = _FEED_MAP[self._data_feed]
+        start, end = _crypto_window(timeframe, limit)
+        kwargs["start"] = start
+        kwargs["end"] = end
+        feed = self._data_feed or self.bar_feed
+        if feed:
+            kwargs["feed"] = _FEED_MAP[feed]
         return StockBarsRequest(**kwargs)
 
     def _crypto_bars_request(

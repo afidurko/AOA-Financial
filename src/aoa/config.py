@@ -200,7 +200,7 @@ class Config:
 
     # LLM
     anthropic_api_key: str = ""
-    model: str = "claude-sonnet-4-20250514"
+    model: str = "claude-sonnet-4-6"
     effort: str = "high"
 
     alpaca_key_id: str = ""
@@ -351,7 +351,7 @@ class Config:
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
+            model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
             effort=os.environ.get("AOA_EFFORT", "high"),
             alpaca_key_id=alpaca_key_id,
             alpaca_secret_key=alpaca_secret,
