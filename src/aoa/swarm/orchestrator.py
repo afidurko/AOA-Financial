@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from aoa.adapt.signal_adapter import SignalAdapter
+from aoa.analytics.bridge import CycleAnalyticsBridge
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.market_data import MarketDataService
@@ -65,6 +66,7 @@ class Orchestrator:
             broker, self.journal, dry_run=config.dry_run, state=self.state
         )
         self.pipeline = pipeline or Pipeline(stages=default_stages())
+        self.analytics_bridge: CycleAnalyticsBridge | None = None
 
         # Optional low-rank online adaptation of agent signals.
         self.signal_adapter = signal_adapter
@@ -104,7 +106,7 @@ class Orchestrator:
         return CycleResult(blackboard=ctx.blackboard, notes=ctx.notes)
 
     def _build_context(self, *, max_candidates: int) -> CycleContext:
-        return CycleContext(
+        ctx = CycleContext(
             config=self.config,
             broker=self.broker,
             llm=self.llm,
@@ -121,3 +123,5 @@ class Orchestrator:
             equity_day=self._ctx.equity_day if self._ctx else None,
             starting_equity=self._ctx.starting_equity if self._ctx else 0.0,
         )
+        ctx.analytics_bridge = self.analytics_bridge
+        return ctx

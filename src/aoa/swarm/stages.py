@@ -269,6 +269,9 @@ class RiskDebateStage(PipelineStage):
 
     name: str = "risk_debate"
 
+    def should_run(self, ctx: CycleContext) -> bool:
+        return ctx.config.trading_agents_enabled and bool(ctx.blackboard.proposals)
+
     def run(self, ctx: CycleContext) -> bool:
         if not ctx.config.trading_agents_enabled:
             return True
@@ -287,6 +290,9 @@ class FundManagerStage(PipelineStage):
     """TradingAgents fund manager final approval before execution."""
 
     name: str = "fund_manager"
+
+    def should_run(self, ctx: CycleContext) -> bool:
+        return ctx.config.trading_agents_enabled and bool(ctx.blackboard.proposals)
 
     def run(self, ctx: CycleContext) -> bool:
         if not ctx.config.trading_agents_enabled:
@@ -314,6 +320,9 @@ class ExecuteStage(PipelineStage):
 
     name: str = "execute"
 
+    def should_run(self, ctx: CycleContext) -> bool:
+        return any(p.approved for p in ctx.blackboard.proposals)
+
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
         ctx.execution = ctx.executor.execute(bb.proposals)
@@ -334,6 +343,9 @@ class PlasticityStage(PipelineStage):
     """Consolidate journal events into durable cross-cycle memory."""
 
     name: str = "plasticity"
+
+    def should_run(self, ctx: CycleContext) -> bool:
+        return ctx.plasticity is not None and ctx.plasticity.enabled
 
     def run(self, ctx: CycleContext) -> bool:
         if ctx.plasticity is None or not ctx.plasticity.enabled:

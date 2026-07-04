@@ -131,6 +131,13 @@ def workloop_path_for(env: str) -> Path:
     return data_dir_for(env) / "workloop"
 
 
+def analytics_db_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_ANALYTICS_DB_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "analytics" / "aoa.sqlite"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -149,6 +156,7 @@ class Config:
     journal_path: Path = field(default_factory=lambda: journal_path_for("paper-dry"))
     plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
     workloop_path: Path = field(default_factory=lambda: workloop_path_for("paper-dry"))
+    analytics_db_path: Path = field(default_factory=lambda: analytics_db_path_for("paper-dry"))
 
     # LLM
     anthropic_api_key: str = ""
@@ -163,6 +171,20 @@ class Config:
 
     universe: tuple[str, ...] = ()
     cycle_seconds: int = 900
+    cycle_seconds_market_open: int = 0
+    cycle_seconds_market_closed: int = 0
+
+    # Analytics + notifications
+    analytics_enabled: bool = True
+    team_parallel: bool = True
+    notify_push_opportunities: bool = True
+    notify_push_halts: bool = True
+    notify_min_conviction: float = 0.65
+
+    # Literature research (Semantic Scholar — user approval required)
+    scholar_enabled: bool = True
+    scholar_query: str = "algorithmic trading momentum portfolio optimization"
+    scholar_max_results: int = 5
 
     # News (Alpaca market-data feed)
     news_limit: int = 5
@@ -261,6 +283,7 @@ class Config:
             journal_path=journal_path_for(env),
             plasticity_path=plasticity_path_for(env),
             workloop_path=workloop_path_for(env),
+            analytics_db_path=analytics_db_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -271,6 +294,19 @@ class Config:
             alpaca_bar_adjustment=os.environ.get("ALPACA_BAR_ADJUSTMENT", "split").strip().lower(),
             universe=universe,
             cycle_seconds=_int("AOA_CYCLE_SECONDS", 900),
+            cycle_seconds_market_open=_int("AOA_CYCLE_SECONDS_MARKET_OPEN", 0),
+            cycle_seconds_market_closed=_int("AOA_CYCLE_SECONDS_MARKET_CLOSED", 0),
+            analytics_enabled=_bool("AOA_ANALYTICS_ENABLED", True),
+            team_parallel=_bool("AOA_TEAM_PARALLEL", True),
+            notify_push_opportunities=_bool("AOA_NOTIFY_PUSH_OPPORTUNITIES", True),
+            notify_push_halts=_bool("AOA_NOTIFY_PUSH_HALTS", True),
+            notify_min_conviction=_float("AOA_NOTIFY_MIN_CONVICTION", 0.65),
+            scholar_enabled=_bool("AOA_SCHOLAR_ENABLED", True),
+            scholar_query=os.environ.get(
+                "AOA_SCHOLAR_QUERY",
+                "algorithmic trading momentum portfolio optimization",
+            ).strip(),
+            scholar_max_results=max(1, _int("AOA_SCHOLAR_MAX_RESULTS", 5)),
             news_limit=_int("AOA_NEWS_LIMIT", 5),
             news_lookback_hours=_int("AOA_NEWS_LOOKBACK_HOURS", 72),
             bar_timeframes=parse_timeframes(os.environ.get("AOA_BAR_TIMEFRAMES", "")),

@@ -23,6 +23,8 @@ def client(fake_broker, fake_llm, monkeypatch, tmp_path):
         dry_run=True,
         news_enabled=False,
         web_auto_loop=False,
+        analytics_enabled=True,
+        analytics_db_path=tmp_path / "analytics.sqlite",
         journal_path=tmp_path / "j.jsonl",
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
     )
@@ -78,6 +80,30 @@ def test_api_journal(client):
     r = client.get("/api/journal?n=5")
     assert r.status_code == 200
     assert len(r.json()["entries"]) > 0
+
+
+def test_api_analytics_roi(client):
+    client.post("/api/run")
+    r = client.get("/api/analytics/roi")
+    assert r.status_code == 200
+    assert "cycles_recorded" in r.json()
+
+
+def test_api_approvals_and_research(client, monkeypatch):
+    from aoa.research.scholar import PaperHit
+
+    fake = [
+        PaperHit("1", "Momentum", "Abstract text", "https://x", 2022, 10),
+    ]
+    monkeypatch.setattr("aoa.research.loop.search_papers", lambda *a, **k: fake)
+    r = client.post("/api/research/discover")
+    assert r.status_code == 200
+    assert len(r.json()["created"]) == 1
+    props = client.get("/api/research/proposals").json()["items"]
+    assert props
+    pid = props[0]["id"]
+    r = client.post(f"/api/research/{pid}/resolve", json={"status": "approved"})
+    assert r.status_code == 200
 
 
 def test_api_run_returns_409_when_cycle_busy(client):

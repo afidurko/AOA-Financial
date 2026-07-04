@@ -28,6 +28,8 @@ class LoopRunner:
     def __init__(self, team: TeamOrchestrator, cycle_seconds: int) -> None:
         self.team = team
         self.cycle_seconds = cycle_seconds
+        self.cycle_seconds_open = team.config.cycle_seconds_market_open
+        self.cycle_seconds_closed = team.config.cycle_seconds_market_closed
         self.state = LoopState()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -87,4 +89,12 @@ class LoopRunner:
             except Exception as exc:  # noqa: BLE001 — background loop must survive
                 with self._lock:
                     self.state.last_error = str(exc)
-            self._stop.wait(self.cycle_seconds)
+            self._stop.wait(self._effective_cycle_seconds())
+
+    def _effective_cycle_seconds(self) -> int:
+        base = self.cycle_seconds
+        if self.team.broker.is_market_open() and self.cycle_seconds_open > 0:
+            return self.cycle_seconds_open
+        if not self.team.broker.is_market_open() and self.cycle_seconds_closed > 0:
+            return self.cycle_seconds_closed
+        return base

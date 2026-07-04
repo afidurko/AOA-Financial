@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from aoa.adapt.signal_adapter import SignalAdapter
+from aoa.analytics.bridge import CycleAnalyticsBridge
 from aoa.brokerage.base import Broker
 from aoa.config import Config
 from aoa.data.news import NewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient
 from aoa.notify.iphone import IPhoneNotifier
+from aoa.notify.policy import NotificationPolicy
+from aoa.notify.types import StructuredNotification
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.aaron import AaronAgent
 from aoa.team.alan import AlanAgent
@@ -83,6 +87,15 @@ class TeamOrchestrator:
         self.trading = Orchestrator(
             config, broker, llm, self.journal, news, signal_adapter=signal_adapter
         )
+        self.analytics = (
+            CycleAnalyticsBridge.from_config(config) if config.analytics_enabled else None
+        )
+        self.trading.analytics_bridge = self.analytics
+        self.notify_policy = NotificationPolicy(
+            push_opportunities=config.notify_push_opportunities,
+            push_halts=config.notify_push_halts,
+            min_conviction=config.notify_min_conviction,
+        )
 
     def run_health_check(self) -> HealthReport:
         report = self.bob.check_health()
@@ -110,12 +123,10 @@ class TeamOrchestrator:
         )
 
         algorithms: list[AlgorithmReport] = []
-        for trend in trends:
-            snap = snapshots.get(trend.symbol)
-            if snap:
-                algorithms.append(
-                    self.julie.refine(trend, snap, code_quality=code_quality)
-                )
+        if trends:
+            algorithms = self._julie_for_trends(
+                trends, snapshots, code_quality, parallel=self.config.team_parallel
+            )
         self.journal.record(
             "team.julie.algorithms",
             {"reports": [a.to_context() for a in algorithms]},
@@ -132,6 +143,9 @@ class TeamOrchestrator:
 
     def run_cycle(self, *, max_candidates: int = 6) -> TeamCycleResult:
         result = TeamCycleResult()
+        run_id = ""
+        if self.analytics:
+            run_id = self.analytics.begin_cycle()
 
         health = self.run_health_check()
         remediation = self.aaron.attempt_health_recovery(
@@ -157,6 +171,9 @@ class TeamOrchestrator:
                 remediation=remediation,
             )
             self.journal.record("team.aaron.review", result.ceo.to_context())
+            if self.analytics:
+                self.analytics.persist_cycle(result)
+            self._dispatch_cycle_notifications(result, run_id=run_id)
             return result
 
         cycle, team_remediation = self._run_team_trading_cycle(max_candidates=max_candidates)
@@ -177,6 +194,9 @@ class TeamOrchestrator:
             team_remediation=team_remediation,
         )
         self.journal.record("team.aaron.review", result.ceo.to_context())
+        if self.analytics:
+            self.analytics.persist_cycle(result)
+        self._dispatch_cycle_notifications(result, run_id=run_id)
         return result
 
     def _run_team_trading_cycle(
@@ -219,12 +239,13 @@ class TeamOrchestrator:
         )
 
         algorithms: list[AlgorithmReport] = []
-        for trend in trends:
-            snap = candidate_snaps.get(trend.symbol)
-            if snap:
-                algorithms.append(
-                    self.julie.refine(trend, snap, code_quality=code_quality)
-                )
+        if trends:
+            algorithms = self._julie_for_trends(
+                trends,
+                candidate_snaps,
+                code_quality,
+                parallel=self.config.team_parallel,
+            )
         if trends and len(algorithms) < len(trends):
             team_remediation.append(
                 self.remediator.retry_team_member(
@@ -290,6 +311,71 @@ class TeamOrchestrator:
         cr._team_algorithms = algorithms  # type: ignore[attr-defined]
         cr._team_decision = decision  # type: ignore[attr-defined]
         return cr, team_remediation
+
+    def _julie_for_trends(
+        self,
+        trends: list[TrendReport],
+        snapshots: dict,
+        code_quality,
+        *,
+        parallel: bool,
+    ) -> list[AlgorithmReport]:
+        if not parallel or len(trends) <= 1 or self.config.parallel_workers <= 1:
+            out: list[AlgorithmReport] = []
+            for trend in trends:
+                snap = snapshots.get(trend.symbol)
+                if snap:
+                    out.append(self.julie.refine(trend, snap, code_quality=code_quality))
+            return out
+
+        algorithms: list[AlgorithmReport] = []
+        workers = min(self.config.parallel_workers, len(trends))
+
+        def _one(trend: TrendReport) -> AlgorithmReport | None:
+            snap = snapshots.get(trend.symbol)
+            if not snap:
+                return None
+            return self.julie.refine(trend, snap, code_quality=code_quality)
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_one, t): t for t in trends}
+            for fut in as_completed(futures):
+                report = fut.result()
+                if report is not None:
+                    algorithms.append(report)
+        algorithms.sort(key=lambda a: a.symbol)
+        return algorithms
+
+    def _dispatch_cycle_notifications(
+        self, result: TeamCycleResult, *, run_id: str
+    ) -> None:
+        notes = self.notify_policy.evaluate_cycle(result, run_id=run_id)
+        if not notes:
+            return
+        if self.analytics:
+            self.notify_policy.log_all(self.analytics.store, notes)
+        for note in notes:
+            self._push_structured(note)
+
+    def _push_structured(self, note: StructuredNotification) -> None:
+        try:
+            if self.aaron.notifier.configured:
+                channels = self.aaron.notifier.send_structured(note)
+                self.journal.record(
+                    "team.notification.push",
+                    {
+                        "kind": note.kind.value,
+                        "title": note.concise_title(),
+                        "channels": channels,
+                    },
+                )
+            else:
+                self.journal.record("team.notification.logged", note.to_payload())
+        except Exception as exc:  # noqa: BLE001
+            self.journal.record(
+                "team.notification.error",
+                {"error": str(exc), "payload": note.to_payload()},
+            )
 
 
 def _inject_team_brief(
