@@ -13,6 +13,7 @@ Commands:
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa workloop   Run the autonomous discover→merge improvement loop.
+  aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -30,6 +31,7 @@ from aoa.config import Config
 from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
+from aoa.repair.orchestrator import RepairOrchestrator
 from aoa.reporting import position_pnl, summarize_journal
 from aoa.simulation.live import LiveMarketTracker
 from aoa.simulation.scenarios import extract_scenario, list_scenarios
@@ -759,6 +761,53 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     return 0
 
 
+def _print_repair_result(result) -> None:
+    run = result.run
+    print(f"\n=== Fable 5 repair triage ({run.run_id}) ===")
+    print(f"Queue: {result.queue_path}")
+    if not run.items:
+        print("No repair candidates — system looks healthy.")
+        return
+    for item in run.items:
+        flag = "FIX" if item.fixable else "WATCH"
+        print(f"  [{flag}] {item.title} ({item.source}, {item.severity})")
+        if item.detail:
+            print(f"        {item.detail[:120]}")
+
+
+def cmd_repair_triage(cfg: Config, *, no_sync: bool) -> int:
+    if not cfg.repair_enabled:
+        print("Repair loop is disabled (AOA_REPAIR_ENABLED=false).")
+        return 0
+    orch = RepairOrchestrator(cfg)
+    result = orch.triage(sync_state=not no_sync)
+    _print_repair_result(result)
+    if cfg.repair_sync_state and not no_sync:
+        print(f"STATE.md updated at {result.state_path}")
+    return 1 if any(i.severity == "critical" and i.fixable for i in result.run.items) else 0
+
+
+def cmd_repair_queue(cfg: Config) -> int:
+    orch = RepairOrchestrator(cfg)
+    items = orch.queue()
+    if not items:
+        print("Repair queue is empty. Run: aoa repair triage")
+        return 0
+    for item in items:
+        print(f"{item.item_id}  [{item.status}] {item.title} ({item.severity})")
+    return 0
+
+
+def cmd_repair_worktree(cfg: Config, *, item_id: str) -> int:
+    orch = RepairOrchestrator(cfg)
+    info = orch.prepare_worktree(item_id=item_id or None)
+    if not info.get("ok"):
+        print(f"Worktree failed: {info.get('error', 'unknown')}", file=sys.stderr)
+        return 1
+    print(f"Repair worktree: {info['path']} (branch {info['branch']})")
+    return 0
+
+
 def cmd_serve(cfg: Config) -> int:
     try:
         import uvicorn
@@ -986,6 +1035,21 @@ def main(argv: list[str] | None = None) -> int:
     wl_log = wl_sub.add_parser("log", help="Tail the work-loop audit log.")
     wl_log.add_argument("-n", type=int, default=20, help="Number of entries to show.")
 
+    rp = sub.add_parser(
+        "repair",
+        help="Fable 5 repair loop — discover issues, queue fixes, isolated worktrees.",
+    )
+    rp_sub = rp.add_subparsers(dest="repair_command", required=True)
+    rp_triage = rp_sub.add_parser("triage", help="Scan audits/verify/STATE.md and refresh queue.")
+    rp_triage.add_argument(
+        "--no-sync",
+        action="store_true",
+        help="Do not rewrite STATE.md from discovery results.",
+    )
+    rp_sub.add_parser("queue", help="Show the current repair queue.")
+    rp_wt = rp_sub.add_parser("worktree", help="Create an isolated git worktree for a fix.")
+    rp_wt.add_argument("--item-id", default="", help="Repair item id (optional).")
+
     args = parser.parse_args(argv)
     cfg = Config.from_env()
 
@@ -1053,6 +1117,13 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_workloop_approve(cfg, approver=approver, note=args.note)
             if args.workloop_command == "log":
                 return cmd_workloop_log(cfg, args.n)
+        if args.command == "repair":
+            if args.repair_command == "triage":
+                return cmd_repair_triage(cfg, no_sync=getattr(args, "no_sync", False))
+            if args.repair_command == "queue":
+                return cmd_repair_queue(cfg)
+            if args.repair_command == "worktree":
+                return cmd_repair_worktree(cfg, item_id=getattr(args, "item_id", ""))
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

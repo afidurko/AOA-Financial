@@ -8,3 +8,5 @@
 | 2026-07-03 21:17 | git-hygiene | — | rebased | Rebased `cursor/loop-engineering-87f6` onto `origin/main` (0 behind, 3 ahead). Force-pushed. |
 | 2026-07-03 21:28 | review-fixes | — | merged-prep | Addressed PR review: STATE refresh, docs/safety.md, Bob optional web import, loop-budget table format, GHA v5/v6, README link. |
 | 2026-07-04 04:15 | daily-triage | L1 | report-only | Loop engineering improvements implemented. tokens_estimate=8000 |
+| 2026-07-04 04:00 | fable-repair | L2 | scaffold | Fable 5 repair loop: aoa repair triage, fable-repair skill, docs/fable5-repair-loop.md. |
+| 2026-07-04 04:30 | fable-repair | L2 | fix-proposed | Item 977dc826: run_verify python -m + quick mode. PR #29. |

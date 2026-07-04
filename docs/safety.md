@@ -34,3 +34,9 @@ MCP is optional for daily triage. When enabled:
 
 - GitHub label or `STATE.md` flag: `loop-pause-all`
 - Pause Cursor Automations and report-only until cleared by a human.
+
+## Fable 5 repair loop
+
+- Maker (`minimal-fix`) and checker (`loop-verifier`) **must run in separate agent contexts**.
+- Fixes run in `.aoa-worktrees/` only; draft PRs only.
+- See `docs/fable5-repair-loop.md` and `LOOP.md`.

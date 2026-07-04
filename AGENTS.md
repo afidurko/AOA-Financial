@@ -37,7 +37,7 @@ loop-constraints → loop-budget (start) → loop-triage → STATE.md + loop-run
 L2 (one item per run):
 
 ```
-… → minimal-fix → loop-verifier → draft PR (human merge)
+aoa repair triage → … → minimal-fix → loop-verifier → draft PR (human merge)
 ```
 
 ## Project skills
@@ -47,6 +47,7 @@ L2 (one item per run):
 | `loop-constraints` | Binding guardrails (runs first) |
 | `loop-budget` | Token caps and run-log enforcement |
 | `loop-triage` | Daily engineering triage → `STATE.md` |
-| `minimal-fix` | Smallest L2+ fix for one triage item |
+| `fable-repair` | Fable 5 orchestrator — discover, delegate, verify |
+| `minimal-fix` | Smallest L2+ fix for one item (maker) |
 | `loop-verifier` | Maker/checker for L2+ code changes |
 | `coding-engineer` | Code health, Bob/Julie audit patterns |
