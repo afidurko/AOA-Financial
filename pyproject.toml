@@ -27,7 +27,9 @@ tradingagents-bedrock = [
 # Only needed for aoa.adapt.torch_lora (general-purpose PyTorch LoRA). The
 # swarm's own signal adaptation is pure-Python and needs none of this.
 torch = ["torch>=2.0.0"]
-all = ["aoa-financial[dev,web,tradingagents,torch]"]
+# FinancePy quant context for Andrea's options/hedge analysis (GPL-3.0 optional).
+financepy = ["financepy>=1.0.0"]
+all = ["aoa-financial[dev,web,tradingagents,torch,financepy]"]
 
 [project.scripts]
 aoa = "aoa.cli:main"
