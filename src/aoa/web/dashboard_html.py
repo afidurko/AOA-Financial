@@ -46,7 +46,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <body>
   <header>
     <div><h1>AOA Financial</h1> <span id="mode-badge" class="badge badge-paper">…</span></div>
-    <div id="market-status" class="stat-sm">Market: —</div>
+    <div style="display:flex;align-items:center;gap:1rem">
+      <a id="openstock-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">OpenStock ↗</a>
+      <div id="market-status" class="stat-sm">Market: —</div>
+    </div>
   </header>
   <main>
     <div class="actions">
@@ -139,8 +142,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     });
     function toggleMember(el){ el.classList.toggle('open'); }
     async function refresh(){
-      const [status,last,journal,roi,approvals,research,promotions] = await Promise.all([
+      const [status,config,last,journal,roi,approvals,research,promotions] = await Promise.all([
         fetch('/api/status').then(r=>r.json()),
+        fetch('/api/config').then(r=>r.json()).catch(()=>({})),
         fetch('/api/last-cycle').then(r=>r.json()),
         fetch('/api/journal?n=20').then(r=>r.json()),
         fetch('/api/analytics/roi').then(r=>r.json()).catch(()=>({})),
@@ -148,6 +152,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         fetch('/api/research/proposals').then(r=>r.json()).catch(()=>({items:[]})),
         fetch('/api/team/expansions').then(r=>r.json()).catch(()=>({items:[]})),
       ]);
+      const osLink=document.getElementById('openstock-link');
+      if(config.openstock_url){
+        osLink.href=config.openstock_url;
+        osLink.style.display='inline';
+      } else {
+        osLink.style.display='none';
+      }
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;
       badge.className='badge '+(status.mode==='live'?'badge-live':status.mode==='dry-run'?'badge-dry':'badge-paper');

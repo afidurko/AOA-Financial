@@ -84,6 +84,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "loop_running": runner.state.running,
             "opportunity_sweep_enabled": cfg.opportunity_sweep_enabled,
             "opportunity_sweep_seconds": cfg.opportunity_sweep_seconds,
+            "openstock_url": cfg.openstock_url,
         }
 
     @app.get("/api/status")
