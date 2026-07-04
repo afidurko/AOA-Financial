@@ -98,12 +98,17 @@ def test_full_team_cycle(fake_broker, fake_llm, tmp_path):
     assert result.algorithms
     assert result.decision is not None
 
-    events = {e["event"] for e in journal.tail(50)}
+    events = {e["event"] for e in journal.tail(100)}
     assert "team.bob.health" in events
     assert "team.tom.trends" in events
     assert "team.julie.algorithms" in events
     assert "team.alan.decision" in events
     assert "team.aaron.review" in events
+    assert "team.morgan.context" in events
+    assert "team.hailey.catalysts" in events
+    assert "team.andrea.risk_plans" in events
+    assert "team.alex.brief" in events
+    assert result.assistant is not None
 
 
 def test_aaron_escalates_on_critical_health(fake_broker, fake_llm):

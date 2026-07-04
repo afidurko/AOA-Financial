@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
+from aoa.web.opportunity_sweep import OpportunitySweepLoop, SweepState
 
 
 class CycleBusyError(RuntimeError):
@@ -28,11 +29,21 @@ class LoopRunner:
     def __init__(self, team: TeamOrchestrator, cycle_seconds: int) -> None:
         self.team = team
         self.cycle_seconds = cycle_seconds
+        self.cycle_seconds_open = team.config.cycle_seconds_market_open
+        self.cycle_seconds_closed = team.config.cycle_seconds_market_closed
         self.state = LoopState()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
         self._cycle_lock = threading.Lock()
+        cfg = team.config
+        self.sweep = OpportunitySweepLoop(
+            team,
+            enabled=cfg.opportunity_sweep_enabled,
+            threshold_seconds=cfg.opportunity_sweep_seconds,
+            poll_seconds=cfg.opportunity_sweep_poll_seconds,
+            cycle_lock=self._cycle_lock,
+        )
 
     @property
     def broker(self):
@@ -42,6 +53,9 @@ class LoopRunner:
     def journal(self):
         return self.team.journal
 
+    def sweep_state(self) -> SweepState:
+        return self.sweep.snapshot_state()
+
     def start(self) -> None:
         with self._lock:
             if self.state.running:
@@ -50,9 +64,11 @@ class LoopRunner:
             self.state.running = True
             self._thread = threading.Thread(target=self._run, name="aoa-loop", daemon=True)
             self._thread.start()
+            self.sweep.start()
 
     def stop(self) -> None:
         self._stop.set()
+        self.sweep.stop()
         with self._lock:
             if self._thread is not None:
                 self._thread.join(timeout=5)
@@ -64,6 +80,7 @@ class LoopRunner:
             raise CycleBusyError("A swarm cycle is already running")
         try:
             result = self.team.run_cycle()
+            self.sweep.record_cycle_result(result)
             with self._lock:
                 self.state.last_cycle_at = datetime.now(timezone.utc).isoformat()
                 self.state.last_result = result
@@ -77,6 +94,14 @@ class LoopRunner:
         finally:
             self._cycle_lock.release()
 
+    def run_sweep_once(self):
+        if not self._cycle_lock.acquire(blocking=False):
+            raise CycleBusyError("A swarm cycle is already running")
+        try:
+            return self.sweep.run_sweep_now()
+        finally:
+            self._cycle_lock.release()
+
     def _run(self) -> None:
         while not self._stop.is_set():
             try:
@@ -87,4 +112,12 @@ class LoopRunner:
             except Exception as exc:  # noqa: BLE001 — background loop must survive
                 with self._lock:
                     self.state.last_error = str(exc)
-            self._stop.wait(self.cycle_seconds)
+            self._stop.wait(self._effective_cycle_seconds())
+
+    def _effective_cycle_seconds(self) -> int:
+        base = self.cycle_seconds
+        if self.team.broker.is_market_open() and self.cycle_seconds_open > 0:
+            return self.cycle_seconds_open
+        if not self.team.broker.is_market_open() and self.cycle_seconds_closed > 0:
+            return self.cycle_seconds_closed
+        return base

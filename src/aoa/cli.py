@@ -176,6 +176,47 @@ def _print_team(result: TeamCycleResult) -> None:
                 f"  {a.symbol:<6} [{flag}] strength={a.adjusted_strength:.2f}  "
                 f"{a.method_notes[:50]}"
             )
+    if result.market_contexts:
+        print("\n=== Morgan — market, equity & options volume ===")
+        for m in result.market_contexts:
+            print(
+                f"  {m.symbol:<6} {m.volume_regime:<8} ratio={m.volume_ratio}  "
+                f"{m.summary[:50]}"
+            )
+            if m.options_volume_note:
+                print(f"         options: {m.options_volume_note[:70]}")
+    if result.catalysts:
+        print("\n=== Hailey — news & catalysts ===")
+        for c in result.catalysts:
+            print(
+                f"  {c.symbol:<6} risk={c.event_risk:<6} sentiment={c.headline_sentiment:<8}  "
+                f"{c.catalyst_summary[:50]}"
+            )
+    if result.risk_plans:
+        print("\n=== Andrea — pre-execution risk plans ===")
+        for r in result.risk_plans:
+            p = r.plan
+            flag = "OK" if r.approved_for_execution else "HOLD"
+            print(
+                f"  [{flag}] {r.symbol:<6} qty={p.quantity:.0f} cost=${p.est_cost:,.0f}  "
+                f"entry={p.entry_price} stop={p.stop_loss} tp={p.take_profit}  "
+                f"R:R={p.reward_risk_ratio}"
+            )
+            if r.hedging:
+                print(f"         hedge: {r.hedging[:60]}")
+    if result.assistant:
+        print("\n=== Alex — your priorities ===")
+        print(f"  Focus: {result.assistant.focus}")
+        print(f"  {result.assistant.summary}")
+        for label, items in (
+            ("MUST DO", result.assistant.must_do),
+            ("SHOULD DO", result.assistant.should_do),
+            ("CAN WAIT", result.assistant.can_wait),
+        ):
+            if items:
+                print(f"\n  {label}:")
+                for item in items:
+                    print(f"    • {item.title}: {item.detail[:60]}")
     if result.decision:
         print("\n=== Alan — decision brief ===")
         print(f"  {result.decision.summary} (confidence={result.decision.confidence:.2f})")
@@ -404,6 +445,46 @@ def cmd_team_brief(cfg: Config) -> int:
     )
     return 0
 
+
+def cmd_assistant(cfg: Config) -> int:
+    team = build_team(cfg)
+    brief = team.run_assistant_brief()
+    print("\n=== Alex — your priorities ===")
+    print(f"Focus: {brief.focus}")
+    print(brief.summary)
+    for label, items in (
+        ("MUST DO", brief.must_do),
+        ("SHOULD DO", brief.should_do),
+        ("CAN WAIT", brief.can_wait),
+    ):
+        if items:
+            print(f"\n{label}:")
+            for item in items:
+                hint = f" → {item.action_hint}" if item.action_hint else ""
+                print(f"  • {item.title}: {item.detail}{hint}")
+    return 0
+
+
+def cmd_team_promote(cfg: Config) -> int:
+    team = build_team(cfg)
+    if team.analytics is None:
+        print("Analytics disabled — set AOA_ANALYTICS_ENABLED=1 to store proposals.")
+        return 1
+    print("\n=== Team promotions — each lead is proposing a sub-team ===\n")
+    proposals = team.propose_team_expansions()
+    for p in proposals:
+        print(f"{p.lead_name} → {p.promotion_title}")
+        print(f"  Team: {p.team_name}")
+        print(f"  Mission: {p.mission}")
+        if p.expansion_rationale:
+            print(f"  Why: {p.expansion_rationale}")
+        for m in p.members:
+            resp = ", ".join(m.responsibilities)
+            print(f"    • {m.name} ({m.role}): {resp}")
+        print()
+    print(f"{len(proposals)} proposals sent for your review.")
+    print("Edit or approve in the dashboard → Promotions tab, or via the API.")
+    return 0
 
 
 def cmd_analyze(cfg: Config, symbol: str, timeframe: str, limit: int) -> int:
@@ -810,10 +891,16 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
     sub.add_parser("loop", help="Run team cycles continuously.")
+    sub.add_parser("assistant", help="Alex — prioritized must-do vs should-do brief.")
     team = sub.add_parser("team", help="Team-specific commands.")
     team_sub = team.add_subparsers(dest="team_command", required=True)
     team_sub.add_parser("health", help="Run Bob's health and code-integrity checks.")
-    team_sub.add_parser("brief", help="Run Tom→Julie→Alan brief without trading.")
+    team_sub.add_parser("brief", help="Run Tom→Julie→Morgan→Alan brief without trading.")
+    team_sub.add_parser("assistant", help="Alex — prioritized must-do vs should-do brief.")
+    team_sub.add_parser(
+        "promote",
+        help="Each lead proposes a sub-team for your approval.",
+    )
     sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
@@ -911,11 +998,17 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_run(cfg)
         if args.command == "loop":
             return cmd_loop(cfg)
+        if args.command == "assistant":
+            return cmd_assistant(cfg)
         if args.command == "team":
             if args.team_command == "health":
                 return cmd_team_health(cfg)
             if args.team_command == "brief":
                 return cmd_team_brief(cfg)
+            if args.team_command == "assistant":
+                return cmd_assistant(cfg)
+            if args.team_command == "promote":
+                return cmd_team_promote(cfg)
         if args.command == "serve":
             return cmd_serve(cfg)
         if args.command == "journal":

@@ -11,6 +11,8 @@ from typing import Any
 
 import httpx
 
+from aoa.notify.types import StructuredNotification
+
 
 class NotificationError(RuntimeError):
     """Raised when a custom app notification could not be delivered."""
@@ -33,6 +35,33 @@ def build_custom_app_payload(
         "priority": "high" if reason == "unfixable" else "normal",
         "device_id": device_id or None,
     }
+
+
+def send_structured_webhook(
+    webhook_url: str,
+    notification: StructuredNotification,
+    *,
+    api_key: str = "",
+    device_id: str = "",
+    timeout: float = 15.0,
+) -> None:
+    """Deliver a structured trading/analysis alert to the custom app webhook."""
+    url = webhook_url.strip()
+    if not url:
+        raise NotificationError("AOA_CUSTOM_APP_WEBHOOK_URL is not set.")
+
+    payload = notification.to_payload()
+    if device_id:
+        payload["device_id"] = device_id
+    headers = {"Content-Type": "application/json", "User-Agent": "AOA-Financial/1.0"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        raise NotificationError(f"Custom app webhook delivery failed: {exc}") from exc
 
 
 def send_custom_app_webhook(

@@ -35,6 +35,7 @@ class CycleContext:
     signal_adapter: SignalAdapter | None = None
     adapt_pending: dict[str, dict] = field(default_factory=dict)
     plasticity: PlasticityStore | None = None
+    analytics_bridge: object | None = None
     blackboard: Blackboard = field(default_factory=Blackboard)
     notes: list[str] = field(default_factory=list)
     execution: ExecutionReport | None = None

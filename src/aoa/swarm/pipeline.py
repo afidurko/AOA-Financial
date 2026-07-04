@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
@@ -14,6 +15,10 @@ class PipelineStage(ABC):
 
     name: str
     checkpoint: bool = False  # snapshot environment after this stage for editing
+
+    def should_run(self, ctx: CycleContext) -> bool:
+        """Return False to skip this stage (recorded as skipped in metrics)."""
+        return True
 
     @abstractmethod
     def run(self, ctx: CycleContext) -> bool:
@@ -60,10 +65,33 @@ class Pipeline:
         bus = ctx.blackboard.events
         bus.emit("stage.start", stage.name)
         ctx.journal.record("pipeline.stage.start", {"stage": stage.name})
+        t0 = time.perf_counter()
+        if not stage.should_run(ctx):
+            elapsed_ms = (time.perf_counter() - t0) * 1000
+            ctx.journal.record(
+                "pipeline.stage.skipped",
+                {"stage": stage.name, "duration_ms": round(elapsed_ms, 2)},
+            )
+            bus.emit("stage.skipped", stage.name)
+            _record_stage_metric(ctx, stage.name, elapsed_ms, skipped=True)
+            return True
         continue_cycle = stage.run(ctx)
+        elapsed_ms = (time.perf_counter() - t0) * 1000
+        ctx.journal.record(
+            "pipeline.stage.complete",
+            {"stage": stage.name, "duration_ms": round(elapsed_ms, 2)},
+        )
+        _record_stage_metric(ctx, stage.name, elapsed_ms, skipped=False)
         if stage.checkpoint:
             ctx.blackboard.environment.checkpoint(stage.name)
             bus.emit("stage.checkpoint", stage.name, {"stage": stage.name})
         bus.emit("stage.complete", stage.name)
-        ctx.journal.record("pipeline.stage.complete", {"stage": stage.name})
         return continue_cycle
+
+
+def _record_stage_metric(
+    ctx: CycleContext, stage: str, duration_ms: float, *, skipped: bool
+) -> None:
+    bridge = getattr(ctx, "analytics_bridge", None)
+    if bridge is not None:
+        bridge.record_stage(stage, duration_ms, skipped=skipped)

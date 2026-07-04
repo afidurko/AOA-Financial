@@ -1,4 +1,4 @@
-"""Shared types for the five-member agent team."""
+"""Shared types for the agent team."""
 
 from __future__ import annotations
 
@@ -115,6 +115,263 @@ class DecisionBrief:
         if self.code_quality:
             ctx["code_quality"] = self.code_quality
         return ctx
+
+
+@dataclass
+class SubTeamMember:
+    name: str
+    role: str
+    responsibilities: list[str] = field(default_factory=list)
+
+    def to_context(self) -> dict:
+        return {
+            "name": self.name,
+            "role": self.role,
+            "responsibilities": self.responsibilities,
+        }
+
+
+@dataclass(frozen=True)
+class ApprovedSubTeam:
+    """Approved sub-team roster loaded from analytics store."""
+
+    lead_name: str
+    team_name: str
+    mission: str
+    members: list[SubTeamMember]
+    resolved_at: str = ""
+
+
+@dataclass
+class TeamExpansionProposal:
+    """A lead's proposed sub-team promotion — requires user approval."""
+
+    lead_name: str
+    lead_role: str
+    promotion_title: str
+    team_name: str
+    mission: str
+    members: list[SubTeamMember] = field(default_factory=list)
+    expansion_rationale: str = ""
+    first_quarter_goals: list[str] = field(default_factory=list)
+    proposal_id: str = ""
+    status: str = "pending"
+
+    def to_context(self) -> dict:
+        return {
+            "id": self.proposal_id,
+            "lead_name": self.lead_name,
+            "lead_role": self.lead_role,
+            "promotion_title": self.promotion_title,
+            "team_name": self.team_name,
+            "mission": self.mission,
+            "members": [m.to_context() for m in self.members],
+            "expansion_rationale": self.expansion_rationale,
+            "first_quarter_goals": self.first_quarter_goals,
+            "status": self.status,
+        }
+
+    @classmethod
+    def from_store_row(cls, row: dict) -> TeamExpansionProposal:
+        payload = row.get("payload") or {}
+        if isinstance(payload, str):
+            import json
+
+            payload = json.loads(payload)
+        members = [
+            SubTeamMember(
+                name=m.get("name", ""),
+                role=m.get("role", ""),
+                responsibilities=list(m.get("responsibilities") or []),
+            )
+            for m in payload.get("members") or []
+        ]
+        return cls(
+            lead_name=row.get("lead_name", payload.get("lead_name", "")),
+            lead_role=row.get("lead_role", payload.get("lead_role", "")),
+            promotion_title=row.get("promotion_title", payload.get("promotion_title", "")),
+            team_name=row.get("team_name", payload.get("team_name", "")),
+            mission=row.get("mission", payload.get("mission", "")),
+            members=members,
+            expansion_rationale=payload.get("expansion_rationale", ""),
+            first_quarter_goals=list(payload.get("first_quarter_goals") or []),
+            proposal_id=row.get("id", ""),
+            status=row.get("status", "pending"),
+        )
+
+
+@dataclass
+class CatalystReport:
+    """Hailey — news, catalysts, and event-risk read."""
+
+    symbol: str
+    catalyst_summary: str
+    event_risk: str  # low | medium | high
+    headline_sentiment: str  # bullish | bearish | neutral
+    key_events: list[str] = field(default_factory=list)
+    macro_note: str = ""
+    impact_score: float = 0.0
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "catalyst_summary": self.catalyst_summary,
+            "event_risk": self.event_risk,
+            "headline_sentiment": self.headline_sentiment,
+            "key_events": self.key_events,
+            "macro_note": self.macro_note,
+            "impact_score": round(self.impact_score, 2),
+        }
+
+
+@dataclass
+class TradePlanLevels:
+    """Andrea — concrete entry/exit levels for pre-execution review."""
+
+    symbol: str
+    action: str
+    instrument: str  # equity | option | hedge | watch
+    entry_price: float | None
+    stop_loss: float | None
+    take_profit: float | None
+    quantity: float
+    est_cost: float
+    max_risk_dollars: float
+    reward_risk_ratio: float | None
+    hedge_recommendation: str = ""
+    options_analysis: str = ""
+    pre_execution_note: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "action": self.action,
+            "instrument": self.instrument,
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
+            "quantity": self.quantity,
+            "est_cost": round(self.est_cost, 2),
+            "max_risk_dollars": round(self.max_risk_dollars, 2),
+            "reward_risk_ratio": self.reward_risk_ratio,
+            "hedge_recommendation": self.hedge_recommendation,
+            "options_analysis": self.options_analysis,
+            "pre_execution_note": self.pre_execution_note,
+        }
+
+
+@dataclass
+class RiskPlanReport:
+    """Andrea — risk, hedging, and pre-execution trade plan with viz stats."""
+
+    symbol: str
+    summary: str
+    approved_for_execution: bool
+    plan: TradePlanLevels
+    hedging: str = ""
+    stats: dict = field(default_factory=dict)
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "summary": self.summary,
+            "approved_for_execution": self.approved_for_execution,
+            "plan": self.plan.to_context(),
+            "hedging": self.hedging,
+            "stats": self.stats,
+        }
+
+
+@dataclass
+class OptionsVolumeHighlight:
+    """Notable options activity at a strike/expiry."""
+
+    expiration: str
+    strike: float
+    option_type: str  # call | put
+    volume: float
+    price: float
+    open_interest: float = 0.0
+
+    def to_context(self) -> dict:
+        return {
+            "expiration": self.expiration,
+            "strike": self.strike,
+            "option_type": self.option_type,
+            "volume": self.volume,
+            "price": self.price,
+            "open_interest": self.open_interest,
+        }
+
+
+@dataclass
+class MarketContextReport:
+    """Morgan — volume, liquidity, and market-microstructure read."""
+
+    symbol: str
+    volume_regime: str  # elevated | normal | thin
+    volume_ratio: float | None
+    liquidity_note: str
+    summary: str
+    options_volume_note: str = ""
+    options_highlights: list[OptionsVolumeHighlight] = field(default_factory=list)
+    options_by_expiration: dict[str, float] = field(default_factory=dict)
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "volume_regime": self.volume_regime,
+            "volume_ratio": self.volume_ratio,
+            "liquidity_note": self.liquidity_note,
+            "summary": self.summary,
+            "options_volume_note": self.options_volume_note,
+            "options_highlights": [h.to_context() for h in self.options_highlights],
+            "options_by_expiration": self.options_by_expiration,
+        }
+
+
+class PriorityLevel(str, Enum):
+    MUST = "must"
+    SHOULD = "should"
+    LATER = "later"
+
+
+@dataclass
+class PriorityItem:
+    level: PriorityLevel
+    title: str
+    detail: str
+    source: str = ""
+    action_hint: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "level": self.level.value,
+            "title": self.title,
+            "detail": self.detail,
+            "source": self.source,
+            "action_hint": self.action_hint,
+        }
+
+
+@dataclass
+class AssistantBrief:
+    """Alex — executive assistant prioritization for the user."""
+
+    must_do: list[PriorityItem] = field(default_factory=list)
+    should_do: list[PriorityItem] = field(default_factory=list)
+    can_wait: list[PriorityItem] = field(default_factory=list)
+    summary: str = ""
+    focus: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "must_do": [i.to_context() for i in self.must_do],
+            "should_do": [i.to_context() for i in self.should_do],
+            "can_wait": [i.to_context() for i in self.can_wait],
+            "summary": self.summary,
+            "focus": self.focus,
+        }
 
 
 @dataclass

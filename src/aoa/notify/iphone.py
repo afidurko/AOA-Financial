@@ -11,7 +11,8 @@ from enum import Enum
 
 import httpx
 
-from aoa.notify.custom_app import send_custom_app_webhook
+from aoa.notify.custom_app import send_custom_app_webhook, send_structured_webhook
+from aoa.notify.types import StructuredNotification
 
 
 class NotificationError(RuntimeError):
@@ -21,6 +22,7 @@ class NotificationError(RuntimeError):
 class NotificationReason(str, Enum):
     UNFIXABLE = "unfixable"
     NEEDS_VERIFICATION = "needs_verification"
+    INFORM = "inform"
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,37 @@ class IPhoneNotifier:
             delivered.append("ntfy")
         return delivered
 
+    def send_structured(self, notification: StructuredNotification) -> list[str]:
+        """Deliver a structured trading/analysis alert."""
+        if not self.configured:
+            raise NotificationError("iPhone push is not configured.")
+        delivered: list[str] = []
+        if self.custom_app_webhook_url:
+            send_structured_webhook(
+                self.custom_app_webhook_url,
+                notification,
+                api_key=self.custom_app_api_key,
+                device_id=self.custom_app_device_id,
+            )
+            delivered.append("custom_app")
+        else:
+            legacy = IPhoneNotification(
+                title=notification.concise_title(),
+                message=notification.message,
+                reason=(
+                    NotificationReason.NEEDS_VERIFICATION
+                    if notification.requires_response
+                    else NotificationReason.INFORM
+                ),
+            )
+            if self.pushover_user_key and self.pushover_app_token:
+                self._send_pushover(legacy)
+                delivered.append("pushover")
+            if self.ntfy_topic:
+                self._send_ntfy(legacy)
+                delivered.append("ntfy")
+        return delivered
+
     def _send_custom_app(self, notification: IPhoneNotification) -> None:
         try:
             send_custom_app_webhook(
@@ -97,7 +130,11 @@ class IPhoneNotifier:
             raise NotificationError(str(exc)) from exc
 
     def _send_pushover(self, notification: IPhoneNotification) -> None:
-        priority = 1 if notification.reason is NotificationReason.UNFIXABLE else 0
+        priority = (
+            1
+            if notification.reason is NotificationReason.UNFIXABLE
+            else 0
+        )
         try:
             resp = httpx.post(
                 "https://api.pushover.net/1/messages.json",

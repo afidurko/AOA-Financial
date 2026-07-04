@@ -91,22 +91,56 @@ class FakeBroker(Broker):
         return ["AAPL", "MSFT", "NVDA"][:limit]
 
     def get_option_chain(self, underlying, expiration=None, option_type=None):
-        otype = OptionType.CALL if (option_type or "call") == "call" else OptionType.PUT
-        return [
+        contracts = [
             OptionContract(
                 symbol=f"{underlying}250117C00100000",
                 underlying=underlying,
-                option_type=otype,
+                option_type=OptionType.CALL,
                 strike=100.0,
                 expiration="2025-01-17",
                 bid=2.0,
                 ask=2.2,
                 last=2.1,
+                volume=850,
                 open_interest=500,
                 implied_volatility=0.35,
                 delta=0.5,
-            )
+            ),
+            OptionContract(
+                symbol=f"{underlying}250117P00100000",
+                underlying=underlying,
+                option_type=OptionType.PUT,
+                strike=100.0,
+                expiration="2025-01-17",
+                bid=1.8,
+                ask=2.0,
+                last=1.9,
+                volume=420,
+                open_interest=300,
+                implied_volatility=0.32,
+                delta=-0.45,
+            ),
+            OptionContract(
+                symbol=f"{underlying}250221C00105000",
+                underlying=underlying,
+                option_type=OptionType.CALL,
+                strike=105.0,
+                expiration="2025-02-21",
+                bid=1.5,
+                ask=1.7,
+                last=1.6,
+                volume=1200,
+                open_interest=800,
+                implied_volatility=0.30,
+                delta=0.42,
+            ),
         ]
+        if expiration:
+            contracts = [c for c in contracts if c.expiration == expiration]
+        if option_type:
+            want = OptionType.CALL if option_type == "call" else OptionType.PUT
+            contracts = [c for c in contracts if c.option_type is want]
+        return contracts
 
     def submit_order(self, request: OrderRequest) -> Order:
         self.submitted.append(request)
@@ -150,6 +184,53 @@ class FakeLLM:
     _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
     _ALAN = frozenset({"recommendations", "summary", "confidence"})
     _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
+    _MORGAN = frozenset(
+        {
+            "volume_regime",
+            "volume_ratio",
+            "liquidity_note",
+            "options_volume_note",
+            "summary",
+        }
+    )
+    _SUB_MEMBER = frozenset({"findings", "assessment"})
+    _HAILEY = frozenset(
+        {
+            "catalyst_summary",
+            "event_risk",
+            "headline_sentiment",
+            "key_events",
+            "macro_note",
+            "impact_score",
+        }
+    )
+    _ANDREA = frozenset(
+        {
+            "summary",
+            "approved_for_execution",
+            "hedging",
+            "options_analysis",
+            "hedge_recommendation",
+            "pre_execution_note",
+            "action",
+            "instrument",
+            "entry_price",
+            "stop_loss",
+            "take_profit",
+            "quantity",
+        }
+    )
+    _ALEX = frozenset({"summary", "focus", "must_do", "should_do", "can_wait"})
+    _EXPANSION = frozenset(
+        {
+            "promotion_title",
+            "team_name",
+            "mission",
+            "expansion_rationale",
+            "first_quarter_goals",
+            "members",
+        }
+    )
     _NEWS = frozenset({"direction", "conviction", "summary", "key_events", "macro_risk"})
     _SENTIMENT = frozenset(
         {"direction", "conviction", "sentiment_score", "summary", "drivers"}
@@ -306,6 +387,7 @@ class FakeLLM:
                         "completed": True,
                         "notes": "Validated Tom's read.",
                     },
+                    {"name": "Morgan", "role": "Market & Volume Analyst", "completed": True, "notes": "ok"},
                     {
                         "name": "Bob",
                         "role": "Systems Health & Code Integrity",
@@ -314,6 +396,83 @@ class FakeLLM:
                     },
                     {"name": "Alan", "role": "Decision Aggregator & Code Oversight", "completed": True, "notes": "Decision brief ready."},
                     {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
+                    {"name": "Alex", "role": "Executive Assistant", "completed": True, "notes": "ok"},
+                ],
+            }
+        if required == self._MORGAN:
+            return {
+                "volume_regime": "normal",
+                "volume_ratio": 1.1,
+                "liquidity_note": "Adequate liquidity for cash-account sizing.",
+                "options_volume_note": "Feb expiry leads; 105C active.",
+                "summary": "Volume in line with 20-day average; options confirm interest.",
+            }
+        if required == self._SUB_MEMBER:
+            return {
+                "findings": ["Pullback held on rising volume", "Pattern alignment ok"],
+                "assessment": "Constructive swing setup from specialty lens.",
+                "confidence": 0.7,
+                "recommendation": "Support lead uptrend call.",
+            }
+        if required == self._HAILEY:
+            return {
+                "catalyst_summary": "No major headlines; macro backdrop stable.",
+                "event_risk": "low",
+                "headline_sentiment": "neutral",
+                "key_events": ["Sector rotation"],
+                "macro_note": "Fed speakers quiet this week.",
+                "impact_score": 0.25,
+            }
+        if required == self._ANDREA:
+            return {
+                "summary": "Prudent long with defined risk.",
+                "approved_for_execution": True,
+                "hedging": "Consider protective put if event risk rises.",
+                "options_analysis": "Long call optional for convexity.",
+                "hedge_recommendation": "None required at current event risk.",
+                "pre_execution_note": "Use bracket order with stop below support.",
+                "action": "enter_long",
+                "instrument": "equity",
+                "entry_price": 100.0,
+                "stop_loss": 92.0,
+                "take_profit": 112.0,
+                "quantity": 50,
+            }
+        if required == self._ALEX:
+            return {
+                "summary": "1 should-do, nothing blocking.",
+                "focus": "Review approved proposal",
+                "must_do": [],
+                "should_do": [
+                    {
+                        "title": "Review approved trade",
+                        "detail": "One proposal approved this cycle.",
+                        "action_hint": "Check dashboard Trades tab.",
+                    }
+                ],
+                "can_wait": [],
+            }
+        if required == self._EXPANSION:
+            lead = "Lead"
+            if "Lead:" in prompt:
+                lead = prompt.split("Lead:")[1].split("(")[0].strip()
+            return {
+                "promotion_title": f"Director — {lead}",
+                "team_name": f"{lead} Desk",
+                "mission": f"Expand {lead}'s domain capacity.",
+                "expansion_rationale": "Parallel specialists reduce cycle bottlenecks.",
+                "first_quarter_goals": ["Onboard roles", "Integrate with journal"],
+                "members": [
+                    {
+                        "name": f"{lead}-A",
+                        "role": "Specialist",
+                        "responsibilities": ["Support lead tasks", "Log findings"],
+                    },
+                    {
+                        "name": f"{lead}-B",
+                        "role": "Analyst",
+                        "responsibilities": ["Cross-check outputs", "Flag regressions"],
+                    },
                 ],
             }
         raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
