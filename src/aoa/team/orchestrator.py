@@ -33,6 +33,15 @@ from aoa.team.models import (
 )
 from aoa.team.morgan import MorganAgent
 from aoa.team.remediation import RemediationAction, RemediationResult, TeamRemediator
+from aoa.team.subteam import (
+    ApprovedSubTeam,
+    SubTeamRunner,
+    load_approved_subteams,
+    run_alan_with_subteam,
+    run_julie_with_subteam,
+    run_morgan_with_subteam,
+    run_tom_with_subteam,
+)
 from aoa.team.tom import TomAgent
 
 
@@ -117,44 +126,16 @@ class TeamOrchestrator:
         universe: list[str] | None = None,
         scanner_context: list[dict] | None = None,
     ) -> tuple[list[TrendReport], list[AlgorithmReport], DecisionBrief]:
-        """Tom → Julie → Alan pipeline without executing trades."""
+        """Tom → Julie → Morgan → Alan pipeline without executing trades."""
         symbols = universe or list(self.config.universe) or self.broker.get_most_active(limit=10)
         self.trading.market.clear_cache()
         snapshots = self.trading.market.snapshots(symbols)
 
-        code_quality = self.bob.audit_codebase()
-        self.journal.record("team.bob.code_quality", code_quality.to_context())
-
-        trends = self.tom.analyze_trends(snapshots)
-        self.journal.record(
-            "team.tom.trends",
-            {"reports": [t.to_context() for t in trends]},
-        )
-
-        algorithms: list[AlgorithmReport] = []
-        if trends:
-            algorithms = self._julie_for_trends(
-                trends, snapshots, code_quality, parallel=self.config.team_parallel
-            )
-        self.journal.record(
-            "team.julie.algorithms",
-            {"reports": [a.to_context() for a in algorithms]},
-        )
-
-        market_contexts = self.morgan.analyze_contexts(snapshots) if snapshots else []
-        self.journal.record(
-            "team.morgan.context",
-            {"reports": [m.to_context() for m in market_contexts]},
-        )
-
-        decision = self.alan.aggregate(
-            trends,
-            algorithms,
+        trends, algorithms, market_contexts, decision, _ = self._run_analysis_pipeline(
+            snapshots,
             scanner_context=scanner_context,
-            code_quality=code_quality,
-            market_contexts=market_contexts,
         )
-        self.journal.record("team.alan.decision", decision.to_context())
+        _ = market_contexts  # brief API returns decision only; contexts are in journal
         return trends, algorithms, decision
 
     def run_cycle(self, *, max_candidates: int = 6) -> TeamCycleResult:
@@ -270,94 +251,76 @@ class TeamOrchestrator:
         candidate_symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
         candidate_snaps = {s: bb.snapshots[s] for s in candidate_symbols if s in bb.snapshots}
 
-        code_quality = self.bob.audit_codebase()
-        self.journal.record("team.bob.code_quality", code_quality.to_context())
+        subteams = self._approved_subteams()
+        trends, algorithms, market_contexts, decision, code_quality = self._run_analysis_pipeline(
+            candidate_snaps,
+            scanner_context=bb.candidates,
+            subteams=subteams,
+        )
         self.journal.record("team.julie.code_audit", code_quality.to_context())
 
-        trends = self.tom.analyze_trends(candidate_snaps) if candidate_snaps else []
         if candidate_snaps and not trends:
             team_remediation.append(
                 self.remediator.retry_team_member(
                     "Tom",
-                    lambda: self.tom.analyze_trends(candidate_snaps),
+                    lambda: self._run_trends(candidate_snaps, subteams),
                 )
             )
-            trends = self.tom.analyze_trends(candidate_snaps)
-        self.journal.record(
-            "team.tom.trends",
-            {"reports": [t.to_context() for t in trends]},
-        )
-
-        algorithms: list[AlgorithmReport] = []
-        if trends:
-            algorithms = self._julie_for_trends(
-                trends,
-                candidate_snaps,
-                code_quality,
-                parallel=self.config.team_parallel,
+            trends = self._run_trends(candidate_snaps, subteams)
+            self.journal.record(
+                "team.tom.trends",
+                {"reports": [t.to_context() for t in trends]},
             )
+
         if trends and len(algorithms) < len(trends):
             team_remediation.append(
                 self.remediator.retry_team_member(
                     "Julie",
-                    lambda: [
-                        self.julie.refine(
-                            t, candidate_snaps[t.symbol], code_quality=code_quality
-                        )
-                        for t in trends
-                        if t.symbol in candidate_snaps
-                    ],
+                    lambda: self._run_julie_for_trends(
+                        trends,
+                        candidate_snaps,
+                        code_quality,
+                        subteams,
+                        parallel=self.config.team_parallel,
+                    ),
                     expect_count=len(trends),
                 )
             )
-            algorithms = [
-                self.julie.refine(
-                    t, candidate_snaps[t.symbol], code_quality=code_quality
-                )
-                for t in trends
-                if t.symbol in candidate_snaps
-            ]
-        self.journal.record(
-            "team.julie.algorithms",
-            {"reports": [a.to_context() for a in algorithms]},
-        )
+            algorithms = self._run_julie_for_trends(
+                trends,
+                candidate_snaps,
+                code_quality,
+                subteams,
+                parallel=self.config.team_parallel,
+            )
+            self.journal.record(
+                "team.julie.algorithms",
+                {"reports": [a.to_context() for a in algorithms]},
+            )
 
-        market_contexts: list[MarketContextReport] = []
-        if candidate_snaps:
-            market_contexts = self.morgan.analyze_contexts(candidate_snaps)
-        self.journal.record(
-            "team.morgan.context",
-            {"reports": [m.to_context() for m in market_contexts]},
-        )
-
-        decision = self.alan.aggregate(
-            trends,
-            algorithms,
-            scanner_context=bb.candidates,
-            code_quality=code_quality,
-            market_contexts=market_contexts,
-        )
         if trends and not decision.recommendations:
             team_remediation.append(
                 self.remediator.retry_team_member(
                     "Alan",
-                    lambda: self.alan.aggregate(
+                    lambda: self._run_alan(
                         trends,
                         algorithms,
+                        subteams,
                         scanner_context=bb.candidates,
                         code_quality=code_quality,
                         market_contexts=market_contexts,
                     ),
                 )
             )
-            decision = self.alan.aggregate(
+            decision = self._run_alan(
                 trends,
                 algorithms,
+                subteams,
                 scanner_context=bb.candidates,
                 code_quality=code_quality,
                 market_contexts=market_contexts,
             )
-        self.journal.record("team.alan.decision", decision.to_context())
+            self.journal.record("team.alan.decision", decision.to_context())
 
         _inject_team_brief(bb.environment, trends, algorithms, decision, candidate_symbols)
         if decision.summary:
@@ -373,6 +336,158 @@ class TeamOrchestrator:
         cr._team_decision = decision  # type: ignore[attr-defined]
         cr._team_market_contexts = market_contexts  # type: ignore[attr-defined]
         return cr, team_remediation
+
+    def _approved_subteams(self) -> dict[str, ApprovedSubTeam]:
+        if not self.config.team_subagents_enabled or self.analytics is None:
+            return {}
+        return load_approved_subteams(self.analytics.store)
+
+    def _subteam_runner(self) -> SubTeamRunner:
+        return SubTeamRunner(
+            self.llm,
+            self.journal,
+            parallel=self.config.team_parallel,
+            max_workers=self.config.parallel_workers,
+        )
+
+    def _run_analysis_pipeline(
+        self,
+        snapshots: dict,
+        *,
+        scanner_context: list[dict] | None = None,
+        subteams: dict[str, ApprovedSubTeam] | None = None,
+    ) -> tuple[
+        list[TrendReport],
+        list[AlgorithmReport],
+        list[MarketContextReport],
+        DecisionBrief,
+        object,
+    ]:
+        subteams = subteams if subteams is not None else self._approved_subteams()
+        code_quality = self.bob.audit_codebase()
+        self.journal.record("team.bob.code_quality", code_quality.to_context())
+
+        trends = self._run_trends(snapshots, subteams) if snapshots else []
+        self.journal.record(
+            "team.tom.trends",
+            {"reports": [t.to_context() for t in trends], "subteam": "Tom" in subteams},
+        )
+
+        algorithms: list[AlgorithmReport] = []
+        if trends:
+            algorithms = self._run_julie_for_trends(
+                trends,
+                snapshots,
+                code_quality,
+                subteams,
+                parallel=self.config.team_parallel,
+            )
+        self.journal.record(
+            "team.julie.algorithms",
+            {"reports": [a.to_context() for a in algorithms], "subteam": "Julie" in subteams},
+        )
+
+        market_contexts = self._run_morgan(snapshots, subteams) if snapshots else []
+        self.journal.record(
+            "team.morgan.context",
+            {"reports": [m.to_context() for m in market_contexts], "subteam": "Morgan" in subteams},
+        )
+
+        decision = self._run_alan(
+            trends,
+            algorithms,
+            subteams,
+            scanner_context=scanner_context,
+            code_quality=code_quality,
+            market_contexts=market_contexts,
+        )
+        self.journal.record(
+            "team.alan.decision",
+            {**decision.to_context(), "subteam": "Alan" in subteams},
+        )
+        return trends, algorithms, market_contexts, decision, code_quality
+
+    def _run_trends(
+        self, snapshots: dict, subteams: dict[str, ApprovedSubTeam]
+    ) -> list[TrendReport]:
+        team = subteams.get("Tom")
+        if team:
+            return run_tom_with_subteam(
+                self.tom, team, snapshots, self._subteam_runner()
+            )
+        return self.tom.analyze_trends(snapshots)
+
+    def _run_morgan(
+        self, snapshots: dict, subteams: dict[str, ApprovedSubTeam]
+    ) -> list[MarketContextReport]:
+        team = subteams.get("Morgan")
+        if team:
+            return [
+                run_morgan_with_subteam(self.morgan, team, snap, self._subteam_runner())
+                for snap in snapshots.values()
+            ]
+        return self.morgan.analyze_contexts(snapshots)
+
+    def _run_alan(
+        self,
+        trends: list[TrendReport],
+        algorithms: list[AlgorithmReport],
+        subteams: dict[str, ApprovedSubTeam],
+        *,
+        scanner_context: list[dict] | None = None,
+        code_quality=None,
+        market_contexts: list[MarketContextReport] | None = None,
+    ) -> DecisionBrief:
+        team = subteams.get("Alan")
+        if team:
+            return run_alan_with_subteam(
+                self.alan,
+                team,
+                trends,
+                algorithms,
+                self._subteam_runner(),
+                scanner_context=scanner_context,
+                code_quality=code_quality,
+                market_contexts=market_contexts,
+            )
+        return self.alan.aggregate(
+            trends,
+            algorithms,
+            scanner_context=scanner_context,
+            code_quality=code_quality,
+            market_contexts=market_contexts,
+        )
+
+    def _run_julie_for_trends(
+        self,
+        trends: list[TrendReport],
+        snapshots: dict,
+        code_quality,
+        subteams: dict[str, ApprovedSubTeam],
+        *,
+        parallel: bool,
+    ) -> list[AlgorithmReport]:
+        team = subteams.get("Julie")
+        if team:
+            runner = self._subteam_runner()
+            out: list[AlgorithmReport] = []
+            for trend in trends:
+                snap = snapshots.get(trend.symbol)
+                if snap:
+                    out.append(
+                        run_julie_with_subteam(
+                            self.julie,
+                            team,
+                            trend,
+                            snap,
+                            runner,
+                            code_quality=code_quality,
+                        )
+                    )
+            return out
+        return self._julie_for_trends(
+            trends, snapshots, code_quality, parallel=parallel
+        )
 
     def _julie_for_trends(
         self,

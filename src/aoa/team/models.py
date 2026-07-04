@@ -131,6 +131,17 @@ class SubTeamMember:
         }
 
 
+@dataclass(frozen=True)
+class ApprovedSubTeam:
+    """Approved sub-team roster loaded from analytics store."""
+
+    lead_name: str
+    team_name: str
+    mission: str
+    members: list[SubTeamMember]
+    resolved_at: str = ""
+
+
 @dataclass
 class TeamExpansionProposal:
     """A lead's proposed sub-team promotion — requires user approval."""

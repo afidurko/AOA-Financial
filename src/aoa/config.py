@@ -177,6 +177,7 @@ class Config:
     # Analytics + notifications
     analytics_enabled: bool = True
     team_parallel: bool = True
+    team_subagents_enabled: bool = True
     notify_push_opportunities: bool = True
     notify_push_halts: bool = True
     notify_min_conviction: float = 0.65
@@ -298,6 +299,7 @@ class Config:
             cycle_seconds_market_closed=_int("AOA_CYCLE_SECONDS_MARKET_CLOSED", 0),
             analytics_enabled=_bool("AOA_ANALYTICS_ENABLED", True),
             team_parallel=_bool("AOA_TEAM_PARALLEL", True),
+            team_subagents_enabled=_bool("AOA_TEAM_SUBAGENTS_ENABLED", True),
             notify_push_opportunities=_bool("AOA_NOTIFY_PUSH_OPPORTUNITIES", True),
             notify_push_halts=_bool("AOA_NOTIFY_PUSH_HALTS", True),
             notify_min_conviction=_float("AOA_NOTIFY_MIN_CONVICTION", 0.65),

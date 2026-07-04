@@ -78,6 +78,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "news_enabled": cfg.news_enabled,
             "team_mode": True,
             "team_parallel": cfg.team_parallel,
+            "team_subagents_enabled": cfg.team_subagents_enabled,
             "analytics_enabled": cfg.analytics_enabled,
             "scholar_enabled": cfg.scholar_enabled,
             "loop_running": runner.state.running,

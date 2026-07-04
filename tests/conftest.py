@@ -193,6 +193,7 @@ class FakeLLM:
             "summary",
         }
     )
+    _SUB_MEMBER = frozenset({"findings", "assessment"})
     _ALEX = frozenset({"summary", "focus", "must_do", "should_do", "can_wait"})
     _EXPANSION = frozenset(
         {
@@ -379,6 +380,13 @@ class FakeLLM:
                 "liquidity_note": "Adequate liquidity for cash-account sizing.",
                 "options_volume_note": "Feb expiry leads; 105C active.",
                 "summary": "Volume in line with 20-day average; options confirm interest.",
+            }
+        if required == self._SUB_MEMBER:
+            return {
+                "findings": ["Pullback held on rising volume", "Pattern alignment ok"],
+                "assessment": "Constructive swing setup from specialty lens.",
+                "confidence": 0.7,
+                "recommendation": "Support lead uptrend call.",
             }
         if required == self._ALEX:
             return {
