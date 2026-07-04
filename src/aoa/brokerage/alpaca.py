@@ -215,16 +215,21 @@ def _bar_from_sdk(row) -> Bar:
 class AlpacaBroker(Broker):
     def __init__(
         self,
-        key_id: str,
-        secret_key: str,
+        key_id: str = "",
+        secret_key: str = "",
         *,
+        oauth_token: str = "",
         live: bool = False,
         bar_feed: str = "iex",
         timeout: float = 20.0,
         data_feed: str = "",
         bar_adjustment: str = "split",
     ) -> None:
-        if not key_id or not secret_key:
+        has_oauth = bool(oauth_token)
+        has_keys = bool(key_id and secret_key)
+        if has_oauth and has_keys:
+            raise BrokerError("Provide Alpaca OAuth token or API keys, not both.")
+        if not has_oauth and not has_keys:
             raise BrokerError("Alpaca credentials are required.")
         if bar_feed not in _FEED_MAP:
             raise BrokerError(f"Unsupported Alpaca bar feed: {bar_feed}")
@@ -245,7 +250,10 @@ class AlpacaBroker(Broker):
                 f"expected one of {', '.join(sorted(VALID_ALPACA_BAR_ADJUSTMENTS))}."
             )
         paper = not live
-        creds = {"api_key": key_id, "secret_key": secret_key}
+        if has_oauth:
+            creds = {"oauth_token": oauth_token}
+        else:
+            creds = {"api_key": key_id, "secret_key": secret_key}
         self._trading = TradingClient(paper=paper, **creds)
         self._stock_data = StockHistoricalDataClient(**creds)
         self._crypto_data = CryptoHistoricalDataClient()

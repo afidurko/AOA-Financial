@@ -105,6 +105,38 @@ def _parse_csv_paths(name: str) -> tuple[str, ...]:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+def _resolve_alpaca_auth() -> tuple[str, str, str, str, str, bool | None]:
+    """Return (key_id, secret, oauth_token, source, cli_profile, cli_live)."""
+    key_id = os.environ.get("ALPACA_API_KEY_ID", "").strip()
+    secret = os.environ.get("ALPACA_API_SECRET_KEY", "").strip()
+    if not key_id:
+        key_id = os.environ.get("ALPACA_API_KEY", "").strip()
+    if not secret:
+        secret = os.environ.get("ALPACA_SECRET_KEY", "").strip()
+    if key_id and secret:
+        return key_id, secret, "", "env", "", None
+
+    if not _bool("AOA_ALPACA_USE_CLI_PROFILE", True):
+        return "", "", "", "", "", None
+
+    from aoa.brokerage.alpaca_cli_profile import load_alpaca_cli_profile
+
+    profile = load_alpaca_cli_profile()
+    if profile is None:
+        return "", "", "", "", "", None
+
+    if profile.oauth_token:
+        return "", "", profile.oauth_token, profile.source, profile.profile_name, profile.live_trade
+    return (
+        profile.key_id,
+        profile.secret_key,
+        "",
+        profile.source,
+        profile.profile_name,
+        profile.live_trade,
+    )
+
+
 def data_dir_for(env: str) -> Path:
     base = Path(os.environ.get("AOA_DATA_DIR", "data"))
     return base / env
@@ -173,6 +205,9 @@ class Config:
 
     alpaca_key_id: str = ""
     alpaca_secret_key: str = ""
+    alpaca_oauth_token: str = ""
+    alpaca_auth_source: str = ""
+    alpaca_cli_profile: str = ""
     alpaca_live: bool = False
     alpaca_data_feed: str = ""
     alpaca_bar_adjustment: str = "split"
@@ -268,7 +303,9 @@ class Config:
 
     @property
     def has_brokerage_creds(self) -> bool:
-        return bool(self.alpaca_key_id and self.alpaca_secret_key)
+        return bool(self.alpaca_oauth_token) or bool(
+            self.alpaca_key_id and self.alpaca_secret_key
+        )
 
     @property
     def trading_mode(self) -> str:
@@ -295,6 +332,14 @@ class Config:
             sym.strip().upper() for sym in universe_raw.split(",") if sym.strip()
         )
         live_ack = os.environ.get("AOA_LIVE_ACK", "").strip() == "I_UNDERSTAND"
+        alpaca_key_id, alpaca_secret, alpaca_oauth, alpaca_source, alpaca_cli_profile, cli_live = (
+            _resolve_alpaca_auth()
+        )
+        alpaca_live = _bool("ALPACA_LIVE", False)
+        if os.environ.get("ALPACA_LIVE_TRADE", "").strip():
+            alpaca_live = _bool("ALPACA_LIVE_TRADE", False)
+        elif cli_live is True and not os.environ.get("ALPACA_LIVE"):
+            alpaca_live = True
 
         return cls(
             env=env,
@@ -308,9 +353,12 @@ class Config:
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
-            alpaca_key_id=os.environ.get("ALPACA_API_KEY_ID", ""),
-            alpaca_secret_key=os.environ.get("ALPACA_API_SECRET_KEY", ""),
-            alpaca_live=_bool("ALPACA_LIVE", False),
+            alpaca_key_id=alpaca_key_id,
+            alpaca_secret_key=alpaca_secret,
+            alpaca_oauth_token=alpaca_oauth,
+            alpaca_auth_source=alpaca_source,
+            alpaca_cli_profile=alpaca_cli_profile,
+            alpaca_live=alpaca_live,
             alpaca_data_feed=os.environ.get("ALPACA_DATA_FEED", "").strip().lower(),
             alpaca_bar_adjustment=os.environ.get("ALPACA_BAR_ADJUSTMENT", "split").strip().lower(),
             universe=universe,
@@ -406,8 +454,10 @@ class Config:
                 problems.append("ANTHROPIC_API_KEY is not set — the agents cannot reason.")
             if not self.has_brokerage_creds:
                 problems.append(
-                    "ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY are not set — "
-                    "no market data or order execution is possible."
+                    "Alpaca credentials missing — set ALPACA_API_KEY_ID and "
+                    "ALPACA_API_SECRET_KEY in .env, or run "
+                    "`alpaca profile login` (paper OAuth) / "
+                    "`alpaca profile login --api-key`. See SETUP-AWAITING-YOU.md."
                 )
         if self.alpaca_data_feed and self.alpaca_data_feed not in VALID_ALPACA_DATA_FEEDS:
             problems.append(

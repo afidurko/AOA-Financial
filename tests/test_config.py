@@ -43,6 +43,31 @@ def test_validate_clean_config():
     assert cfg.validate() == []
 
 
+def test_has_brokerage_creds_accepts_oauth():
+    cfg = Config(alpaca_oauth_token="oauth-token")
+    assert cfg.has_brokerage_creds is True
+
+
+def test_from_env_loads_alpaca_cli_oauth_profile(tmp_path, monkeypatch):
+    config_dir = tmp_path / "alpaca"
+    profiles = config_dir / "profiles"
+    profiles.mkdir(parents=True)
+    (profiles / "paper.yaml").write_text(
+        'access_token: "cli-oauth-token"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("ALPACA_CONFIG_DIR", str(config_dir))
+    monkeypatch.delenv("ALPACA_API_KEY_ID", raising=False)
+    monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
+    monkeypatch.delenv("ALPACA_API_KEY", raising=False)
+    monkeypatch.delenv("ALPACA_SECRET_KEY", raising=False)
+
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.alpaca_oauth_token == "cli-oauth-token"
+    assert cfg.alpaca_auth_source == "cli-oauth"
+    assert cfg.has_brokerage_creds is True
+
+
 def test_validate_rejects_bad_effort():
     cfg = Config(
         anthropic_api_key="x",

@@ -11,7 +11,11 @@ cp .env.example .env
 Edit `.env` and set at minimum:
 
 - `ANTHROPIC_API_KEY` — Claude API access for agent reasoning
-- `ALPACA_API_KEY_ID` and `ALPACA_API_SECRET_KEY` — paper trading (keep `ALPACA_LIVE=false`)
+- **Alpaca (pick one):**
+  - `alpaca profile login` — OAuth paper login; AOA reads the CLI profile automatically
+  - `ALPACA_API_KEY_ID` + `ALPACA_API_SECRET_KEY` — paper Trading API keys (`PK...`)
+
+See `SETUP-AWAITING-YOU.md` and run `bash scripts/setup_alpaca_auth.sh` for a guided checklist.
 
 See `.env.example` for workloop, cycle timing, and optional extras.
 

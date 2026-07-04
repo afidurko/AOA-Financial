@@ -57,17 +57,23 @@ class AlpacaNewsFeed(NewsFeed):
 
     def __init__(
         self,
-        key_id: str,
-        secret_key: str,
+        key_id: str = "",
+        secret_key: str = "",
         *,
+        oauth_token: str = "",
         lookback_hours: int = 72,
         timeout: float = 20.0,
     ) -> None:
         del timeout  # alpaca-py manages HTTP timeouts internally
-        if not key_id or not secret_key:
+        has_oauth = bool(oauth_token)
+        has_keys = bool(key_id and secret_key)
+        if not has_oauth and not has_keys:
             raise BrokerError("Alpaca credentials are required for the news feed.")
         self.lookback_hours = lookback_hours
-        self._client = NewsClient(api_key=key_id, secret_key=secret_key)
+        if has_oauth:
+            self._client = NewsClient(oauth_token=oauth_token)
+        else:
+            self._client = NewsClient(api_key=key_id, secret_key=secret_key)
         self._cache: dict[str, list[NewsItem]] = {}
 
     def close(self) -> None:
