@@ -115,8 +115,13 @@ def test_cmd_doctor_reports_stock_bars_check(monkeypatch):
     broker.get_account.return_value.equity = 50_000.0
     broker.is_market_open.return_value = True
     broker.verify_stock_bars.return_value = _sample_bar()
+    fetcher = MagicMock()
+    fetcher.verify_crypto.return_value = _sample_bar()
+    monkeypatch.setattr("aoa.cli.AlpacaBarsFetcher", lambda _cfg: fetcher)
     monkeypatch.setattr("aoa.cli.build_broker", lambda _cfg: broker)
     monkeypatch.setattr("aoa.cli.build_llm", lambda _cfg: MagicMock())
 
     assert cmd_doctor(cfg) == 0
+    fetcher.verify_crypto.assert_called_once_with("BTC/USD", limit=1)
+    fetcher.close.assert_called_once()
     broker.verify_stock_bars.assert_called_once_with("SPY", limit=1)
