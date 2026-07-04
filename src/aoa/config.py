@@ -182,6 +182,11 @@ class Config:
     notify_push_halts: bool = True
     notify_min_conviction: float = 0.65
 
+    # Idle opportunity sweep — market analysis when no alerts or opportunity pushes
+    opportunity_sweep_enabled: bool = True
+    opportunity_sweep_seconds: int = 900
+    opportunity_sweep_poll_seconds: int = 60
+
     # Literature research (Semantic Scholar — user approval required)
     scholar_enabled: bool = True
     scholar_query: str = "algorithmic trading momentum portfolio optimization"
@@ -303,6 +308,9 @@ class Config:
             notify_push_opportunities=_bool("AOA_NOTIFY_PUSH_OPPORTUNITIES", True),
             notify_push_halts=_bool("AOA_NOTIFY_PUSH_HALTS", True),
             notify_min_conviction=_float("AOA_NOTIFY_MIN_CONVICTION", 0.65),
+            opportunity_sweep_enabled=_bool("AOA_OPPORTUNITY_SWEEP_ENABLED", True),
+            opportunity_sweep_seconds=max(60, _int("AOA_OPPORTUNITY_SWEEP_SECONDS", 900)),
+            opportunity_sweep_poll_seconds=max(15, _int("AOA_OPPORTUNITY_SWEEP_POLL_SECONDS", 60)),
             scholar_enabled=_bool("AOA_SCHOLAR_ENABLED", True),
             scholar_query=os.environ.get(
                 "AOA_SCHOLAR_QUERY",

@@ -68,6 +68,17 @@ class TeamCycleResult:
     halt_reason: str = ""
 
 
+@dataclass
+class OpportunitySweepResult:
+    """Outcome of an idle-triggered market analysis sweep."""
+
+    trends: list[TrendReport] = field(default_factory=list)
+    algorithms: list[AlgorithmReport] = field(default_factory=list)
+    catalysts: list[CatalystReport] = field(default_factory=list)
+    decision: DecisionBrief | None = None
+    opportunities_notified: int = 0
+
+
 class TeamOrchestrator:
     """Runs Bob's health gate, team analysis chain, then the trading swarm."""
 
@@ -148,6 +159,63 @@ class TeamOrchestrator:
         )
         _ = market_contexts, catalysts
         return trends, algorithms, decision
+
+    def run_opportunity_sweep(
+        self,
+        *,
+        universe: list[str] | None = None,
+    ) -> OpportunitySweepResult:
+        """Tom → Julie → Morgan → Hailey → Alan analysis for overlooked setups."""
+        run_id = ""
+        if self.analytics:
+            run_id = self.analytics.begin_cycle()
+
+        self.journal.record(
+            "team.sweep.triggered",
+            {
+                "reason": "idle_no_alerts_or_opportunity_notifications",
+                "threshold_seconds": self.config.opportunity_sweep_seconds,
+            },
+        )
+
+        symbols = universe or list(self.config.universe) or self.broker.get_most_active(limit=10)
+        self.trading.market.clear_cache()
+        snapshots = self.trading.market.snapshots(symbols)
+
+        trends, algorithms, market_contexts, catalysts, decision, _ = self._run_analysis_pipeline(
+            snapshots,
+        )
+        _ = market_contexts
+
+        notes = self.notify_policy.evaluate_sweep(
+            trends,
+            decision,
+            run_id=run_id,
+            catalysts=catalysts,
+        )
+        if notes:
+            if self.analytics:
+                self.notify_policy.log_all(self.analytics.store, notes)
+            for note in notes:
+                self._push_structured(note)
+
+        result = OpportunitySweepResult(
+            trends=trends,
+            algorithms=algorithms,
+            catalysts=catalysts,
+            decision=decision,
+            opportunities_notified=len(notes),
+        )
+        self.journal.record(
+            "team.sweep.complete",
+            {
+                "trends": len(trends),
+                "catalysts": len(catalysts),
+                "opportunities_notified": len(notes),
+                "summary": decision.summary if decision else "",
+            },
+        )
+        return result
 
     def run_cycle(self, *, max_candidates: int = 6) -> TeamCycleResult:
         result = TeamCycleResult()

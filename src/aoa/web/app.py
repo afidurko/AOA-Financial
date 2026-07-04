@@ -82,6 +82,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "analytics_enabled": cfg.analytics_enabled,
             "scholar_enabled": cfg.scholar_enabled,
             "loop_running": runner.state.running,
+            "opportunity_sweep_enabled": cfg.opportunity_sweep_enabled,
+            "opportunity_sweep_seconds": cfg.opportunity_sweep_seconds,
         }
 
     @app.get("/api/status")
@@ -105,6 +107,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 "last_cycle_at": runner.state.last_cycle_at,
                 "last_error": runner.state.last_error,
             },
+            "opportunity_sweep": _sweep_state_dict(runner.sweep_state()),
         }
 
     @app.get("/api/journal")
@@ -132,6 +135,27 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     def loop_stop(request: Request) -> dict[str, str]:
         request.app.state.runner.stop()
         return {"status": "stopped"}
+
+    @app.get("/api/opportunity-sweep")
+    def opportunity_sweep_status(request: Request) -> dict[str, Any]:
+        runner = request.app.state.runner
+        return {"sweep": _sweep_state_dict(runner.sweep_state())}
+
+    @app.post("/api/opportunity-sweep/run")
+    def opportunity_sweep_run(request: Request) -> dict[str, Any]:
+        runner = request.app.state.runner
+        try:
+            result = runner.run_sweep_once()
+        except CycleBusyError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except (BrokerError, LLMError) as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {
+            "trends": len(result.trends),
+            "catalysts": len(result.catalysts),
+            "opportunities_notified": result.opportunities_notified,
+            "summary": result.decision.summary if result.decision else "",
+        }
 
     @app.get("/api/last-cycle")
     def last_cycle(request: Request) -> dict[str, Any]:
@@ -300,6 +324,21 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         return DASHBOARD_HTML
 
     return app
+
+
+def _sweep_state_dict(state) -> dict[str, Any]:
+    return {
+        "enabled": state.enabled,
+        "idle_seconds": round(state.idle_seconds, 1),
+        "threshold_seconds": state.threshold_seconds,
+        "seconds_until_sweep": max(0.0, round(state.threshold_seconds - state.idle_seconds, 1)),
+        "last_activity_at": state.last_activity_at,
+        "last_sweep_at": state.last_sweep_at,
+        "sweeps_completed": state.sweeps_completed,
+        "last_opportunities_found": state.last_opportunities_found,
+        "last_error": state.last_error,
+        "sweep_running": state.sweep_running,
+    }
 
 
 def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:

@@ -8,6 +8,7 @@ from aoa.notify.types import NotificationKind, StructuredNotification
 
 if TYPE_CHECKING:
     from aoa.analytics.store import AnalyticsStore
+    from aoa.team.models import CatalystReport, DecisionBrief, TrendReport
     from aoa.team.orchestrator import TeamCycleResult
 
 
@@ -110,6 +111,98 @@ class NotificationPolicy:
             )
 
         return _dedupe(out)
+
+    def evaluate_sweep(
+        self,
+        trends: list[TrendReport],
+        decision: DecisionBrief | None,
+        *,
+        run_id: str = "",
+        catalysts: list[CatalystReport] | None = None,
+    ) -> list[StructuredNotification]:
+        """Surface high-conviction setups the routine cycle may have missed."""
+        out: list[StructuredNotification] = []
+        if not self.push_opportunities:
+            return out
+
+        for trend in trends:
+            ctx = trend.to_context()
+            conf = ctx.get("strength")
+            if conf is None or conf < self.min_conviction:
+                continue
+            sym = ctx.get("symbol", "")
+            out.append(
+                StructuredNotification(
+                    kind=NotificationKind.OPPORTUNITY,
+                    title=f"{sym} · overlooked {ctx.get('direction', '—')} setup",
+                    message=ctx.get("rationale", "")[:280],
+                    symbol=sym,
+                    conviction=conf,
+                    metrics={
+                        "timeframe": ctx.get("timeframe"),
+                        "agent": "Tom",
+                        "source": "opportunity_sweep",
+                    },
+                    run_id=run_id,
+                    journal_event="team.sweep.opportunity",
+                    priority="high" if conf >= 0.8 else "normal",
+                )
+            )
+
+        if decision:
+            for rec in decision.recommendations:
+                sym = (rec.get("symbol") or "").upper()
+                conf = rec.get("confidence")
+                if not sym or conf is None or conf < self.min_conviction:
+                    continue
+                out.append(
+                    StructuredNotification(
+                        kind=NotificationKind.OPPORTUNITY,
+                        title=f"{sym} · Alan sweep pick",
+                        message=rec.get("rationale", decision.summary)[:280],
+                        symbol=sym,
+                        conviction=conf,
+                        metrics={
+                            "side": rec.get("side"),
+                            "agent": "Alan",
+                            "source": "opportunity_sweep",
+                        },
+                        run_id=run_id,
+                        journal_event="team.sweep.opportunity",
+                        priority="high" if conf >= 0.8 else "normal",
+                    )
+                )
+
+        for cat in catalysts or []:
+            ctx = cat.to_context()
+            impact = ctx.get("impact_score")
+            if impact is None or impact < self.min_conviction:
+                continue
+            sym = ctx.get("symbol", "")
+            out.append(
+                StructuredNotification(
+                    kind=NotificationKind.ANALYSIS,
+                    title=f"{sym} · catalyst watch",
+                    message=ctx.get("catalyst_summary", "")[:280],
+                    symbol=sym,
+                    conviction=impact,
+                    metrics={"agent": "Hailey", "source": "opportunity_sweep"},
+                    run_id=run_id,
+                    journal_event="team.sweep.catalyst",
+                )
+            )
+
+        return _dedupe(out)
+
+    @staticmethod
+    def had_meaningful_activity(notifications: list[StructuredNotification]) -> bool:
+        """True when a cycle produced alerts or stock-opportunity pushes."""
+        for note in notifications:
+            if note.kind is NotificationKind.ALERT:
+                return True
+            if note.kind is NotificationKind.OPPORTUNITY:
+                return True
+        return False
 
     def log_all(
         self,
