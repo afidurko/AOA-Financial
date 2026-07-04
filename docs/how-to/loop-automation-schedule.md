@@ -26,6 +26,47 @@ Exit codes: `0` = proceed (`triage-ok` or `l2-allowed`), `1` = skip (`skip` / `l
 
 ---
 
+## Prompt shortkeys (copy-paste)
+
+Source of truth: `loop-prompts.yaml`
+
+```bash
+aoa tasks list              # all shortkeys + task loops
+aoa tasks show L1           # Automation A prompt → paste into Cursor
+aoa tasks show L2           # Automation B prompt
+aoa tasks show GATE-A       # preflight only
+aoa tasks show SETUP        # Max 5× first-time setup
+aoa tasks show REVIEW       # weekly human review
+```
+
+| Shortkey | Use |
+|----------|-----|
+| **L1** | Cursor Automation A — daily triage |
+| **L2** | Cursor Automation B — one fix + draft PR |
+| **GATE-A** / **GATE-B** | Preflight only |
+| **SETUP** | Max 5× env + first `aoa run` |
+| **REVIEW** | Weekly STATE / PR review |
+| **PAUSE** / **RESUME** | Kill switch on/off |
+
+**Cursor / VS Code:** Run Task → “AOA: copy prompt L1” (see `.vscode/tasks.json`).
+
+---
+
+## Deterministic task loops (no LLM)
+
+Automate the cheap steps locally or in cron; paste **L1** / **L2** into Cloud Agent for reasoning.
+
+```bash
+aoa tasks run tier1-check    # gate only
+aoa tasks run tier1            # gate → repair triage → ruff → pytest → log
+aoa tasks run tier2-check      # gate repair → log if blocked
+aoa tasks run verify           # ruff + pytest only
+```
+
+Example cron: `bash scripts/install_loop_cron.example.sh --print`
+
+---
+
 ## Cursor Cloud Agent — two automations
 
 Create **two** scheduled automations in Cursor (repo: AOA-Financial, branch: `main`).

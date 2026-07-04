@@ -26,6 +26,18 @@ patterns:
     skills: [loop-triage, loop-budget, loop-constraints]
     state: STATE.md
     level: L1
+    prompt_shortkey: L1
+    cli: aoa tasks run tier1-check
+
+  - id: loop-tasks
+    name: Loop Task Runners
+    file: docs/how-to/loop-automation-schedule.md
+    goal: Deterministic preflight and verify without LLM tokens
+    cadence: 1d
+    risk: low
+    cli: aoa tasks run tier1
+    prompts: loop-prompts.yaml
+    level: L1
 
   - id: workloop
     name: AOA Work Loop

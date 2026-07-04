@@ -80,6 +80,10 @@ def _sync_state_md(state_path: Path, items: list[RepairItem], run_id: str) -> No
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     high = [i for i in items if i.severity == "critical" and i.fixable]
     watch = [i for i in items if i.severity in {"degraded", "watch"} or not i.fixable]
+    preserved = _preserve_state_sections(
+        state_path,
+        ("## Loop automation", "## Next actions"),
+    )
 
     lines = [
         "# Loop State — AOA-Financial",
@@ -105,6 +109,10 @@ def _sync_state_md(state_path: Path, items: list[RepairItem], run_id: str) -> No
     else:
         lines.append("_(none)_")
 
+    if preserved:
+        lines.append("")
+        lines.extend(preserved)
+
     lines.extend(
         [
             "",
@@ -118,3 +126,42 @@ def _sync_state_md(state_path: Path, items: list[RepairItem], run_id: str) -> No
         ]
     )
     state_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def _preserve_state_sections(state_path: Path, headers: tuple[str, ...]) -> list[str]:
+    """Keep human-edited sections across repair triage syncs."""
+    if not state_path.is_file():
+        return []
+    text = state_path.read_text(encoding="utf-8")
+    out: list[str] = []
+    for header in headers:
+        block = _extract_section(text, header)
+        if block:
+            out.extend(block)
+            if not block[-1].strip():
+                pass
+            else:
+                out.append("")
+    while out and not out[-1].strip():
+        out.pop()
+    return out
+
+
+def _extract_section(text: str, header: str) -> list[str]:
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == header.strip():
+            start = i
+            break
+    if start is None:
+        return []
+    end = len(lines)
+    for j in range(start + 1, len(lines)):
+        if lines[j].startswith("## ") and lines[j].strip() != header.strip():
+            end = j
+            break
+    block = lines[start:end]
+    while block and not block[-1].strip():
+        block.pop()
+    return block

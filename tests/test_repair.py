@@ -84,3 +84,34 @@ def test_repair_orchestrator_sync_state(tmp_path):
     text = state_path.read_text(encoding="utf-8")
     assert "Ruff failure" in text
     assert "abc123" in text
+
+
+def test_sync_state_preserves_loop_automation_section(tmp_path):
+    state_path = tmp_path / "STATE.md"
+    state_path.write_text(
+        "# Loop State\n\n## Watch List\n\n- **x** — y\n\n"
+        "## Loop automation\n\n- L2: disabled\n\n"
+        "## Next actions\n\n| When | Owner | Task |\n",
+        encoding="utf-8",
+    )
+    from aoa.repair.models import RepairItem
+    from aoa.repair.orchestrator import _sync_state_md
+
+    _sync_state_md(
+        state_path,
+        [
+            RepairItem(
+                item_id="w1",
+                title="Watch item",
+                source="state",
+                severity="watch",
+                fixable=False,
+                detail="detail",
+            )
+        ],
+        "run2",
+    )
+    text = state_path.read_text(encoding="utf-8")
+    assert "## Loop automation" in text
+    assert "L2: disabled" in text
+    assert "## Next actions" in text

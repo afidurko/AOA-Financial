@@ -1,0 +1,128 @@
+# Copy-paste prompts for AOA loop automations.
+# List:  aoa tasks list
+# Show:  aoa tasks show L1
+# Run:   aoa tasks run tier1
+
+prompts:
+  L1:
+    title: Daily triage (Automation A)
+    tier: "1"
+    automation: "AOA daily triage"
+    cadence: "Daily 14:00 UTC"
+    body: |
+      Run loop-constraints, then loop-budget, then loop-triage on AOA-Financial.
+
+      Read STATE.md, LOOP.md, loop-constraints.md, loop-budget.md first.
+      Run: python3 -m aoa.cli repair gate --for triage
+      If gate action is "pause", update STATE.md High Priority with loop-pause-all note and exit.
+      If action is "skip", log to loop-run-log.md and exit (daily cap reached).
+
+      Always:
+      1. loop-triage → update STATE.md + append loop-run-log.md (Level L1, outcome report-only)
+      2. python3 -m aoa.cli repair triage → refresh queue.json
+
+      Do NOT change application code in this automation.
+      Do NOT open a fix PR unless a separate L2 automation runs.
+      Never auto-merge. Never edit .env or live trading paths.
+
+  L2:
+    title: Fable repair fix (Automation B)
+    tier: "2"
+    automation: "AOA fable repair L2"
+    cadence: "Daily 15:00 UTC (after L2 enabled in STATE.md)"
+    body: |
+      Run the fable-repair skill on AOA-Financial.
+      Read loop-constraints.md, docs/safety.md, LOOP.md.
+
+      Run: python3 -m aoa.cli repair gate --for repair --json
+      If action is not "l2-allowed", append one line to loop-run-log.md (outcome: report-only, note gate reason) and exit.
+
+      If l2-allowed:
+      1. aoa repair worktree --item-id <first fixable item_id from queue.json>
+      2. minimal-fix (maker) — ONE item only
+      3. loop-verifier (checker) in a NEW agent context — never self-verify
+      4. python3 -m ruff check src tests && python3 -m pytest -q
+      5. Draft PR only; never auto-merge; never push without draft PR
+
+      Respect denylist: src/aoa/risk/guards.py, .env*, profiles/live.env
+      Max 3 fix attempts per item; escalate in STATE.md after that.
+
+  GATE-A:
+    title: Preflight Automation A only
+    tier: check
+    body: |
+      Run loop-constraints on AOA-Financial, then:
+      python3 -m aoa.cli repair gate --for triage
+      Report the gate action and reason. Do not change code unless action is pause (log only).
+
+  GATE-B:
+    title: Preflight Automation B only
+    tier: check
+    body: |
+      Run loop-constraints on AOA-Financial, then:
+      python3 -m aoa.cli repair gate --for repair --json
+      Report JSON. Exit without code changes unless l2-allowed and user asked for a fix.
+
+  PAUSE:
+    title: Activate kill switch
+    tier: ops
+    body: |
+      On AOA-Financial: add `loop-pause-all` under STATE.md High Priority, append a row to loop-run-log.md (outcome: paused), and remind the user to disable Cursor Automations A and B.
+
+  RESUME:
+    title: Clear kill switch
+    tier: ops
+    body: |
+      On AOA-Financial: remove loop-pause-all from STATE.md High Priority after human confirms root cause fixed. Append resume note to loop-run-log.md.
+
+  SETUP:
+    title: Max 5× first-time setup
+    tier: human
+    body: |
+      Walk me through SETUP-AWAITING-YOU.md for AOA-Financial in paper-dry mode:
+      1. ANTHROPIC_API_KEY in .env
+      2. alpaca profile login (paper) or PK keys
+      3. pip install -e ".[dev]" && python3 -m aoa.cli doctor
+      4. python3 -m aoa.cli run (single paper-dry cycle)
+      Do not enable live trading. Do not paste secrets into chat.
+
+  REVIEW:
+    title: Weekly loop review (Max 5×)
+    tier: human
+    cadence: "Weekly Friday"
+    body: |
+      Review AOA-Financial loop state:
+      - Read STATE.md and loop-run-log.md (last 7 days)
+      - List open draft PRs and watch items
+      - Run: python3 -m aoa.cli tasks run tier1-check
+      - Recommend merge, pause, or L2 promotion actions only — no auto-merge.
+
+tasks:
+  tier1-check:
+    title: Tier 1 preflight (no LLM)
+    steps:
+      - gate-triage
+    on_skip: log
+    on_pause: exit
+
+  tier1:
+    title: Tier 1 deterministic loop
+    steps:
+      - gate-triage
+      - repair-triage
+      - verify-quick
+      - log-triage
+    on_skip: log
+    on_pause: exit
+
+  tier2-check:
+    title: Tier 2 preflight (no LLM)
+    steps:
+      - gate-repair
+    on_skip: log
+    on_pause: exit
+
+  verify:
+    title: Local verify only
+    steps:
+      - verify-quick

@@ -1,0 +1,54 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "AOA: tasks list (shortkeys)",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks list",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: copy prompt L1",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks show L1",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: copy prompt L2",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks show L2",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: run tier1 (deterministic)",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks run tier1",
+      "group": { "kind": "test", "isDefault": false },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: run tier1-check",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks run tier1-check",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: run tier2-check",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks run tier2-check",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: verify (ruff + pytest)",
+      "type": "shell",
+      "command": "python3 -m aoa.cli tasks run verify",
+      "group": { "kind": "test", "isDefault": true },
+      "presentation": { "reveal": "always", "panel": "shared" }
+    }
+  ]
+}
