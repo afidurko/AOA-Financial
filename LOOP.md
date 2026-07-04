@@ -1,7 +1,6 @@
-# Loop Configuration — AOA-Financial
+# Loop Configuration — AOA-Financial (Fable 5)
 
-> Scaffolded from [afidurko/loop-engineering](https://github.com/afidurko/loop-engineering) via `npx @cobusgreyling/loop-init`.
-> Loop Ready score: **100/100** (scaffold complete) — see `npx @cobusgreyling/loop-audit . --suggest`.
+> Scaffolded from [afidurko/loop-engineering](https://github.com/afidurko/loop-engineering).
 > **Operational level: L1 report-only** until [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md) is complete and a human approves L2.
 
 ## Loop run order
@@ -12,76 +11,99 @@ Every daily triage run:
 loop-constraints → loop-budget (start) → loop-triage → STATE.md + loop-run-log.md → loop-budget (end)
 ```
 
-L2 adds (one item per run):
+L2 repair (one item per run):
 
 ```
-… → minimal-fix → loop-verifier → draft PR (human merge)
+fable-repair → aoa repair triage → worktree → minimal-fix → loop-verifier → draft PR (human merge)
 ```
 
-## Active Loops
+## Active loops
 
-| Pattern | Cadence | Status | Command |
-|---------|---------|--------|---------|
-| Daily Triage | 1d | L1 report-only | Cursor Agent or Cloud Automation (below) |
-| Trading swarm | `AOA_CYCLE_SECONDS` | existing | `aoa loop` / `LoopRunner` in web |
-| Work loop | `AOA_WORKLOOP_INTERVAL_SECONDS` | existing | `aoa workloop loop` |
+| Pattern | Cadence | Level | Command / skill |
+|---------|---------|-------|-----------------|
+| Daily triage | 1d | L1 | `loop-triage` skill |
+| **Fable 5 repair** | on-demand / 1d | L2 | `aoa repair triage` + `fable-repair` skill |
+| Trading swarm | `AOA_CYCLE_SECONDS` | prod | `aoa loop` / web `LoopRunner` |
+| Work loop | `AOA_WORKLOOP_INTERVAL_SECONDS` | gated | `aoa workloop loop` |
 
-## Cursor automation (week one — report only)
+## Fable 5 harness (six blocks)
 
-In Cursor → Automations (or Cloud Agent on schedule):
+```
+ Automations          Worktrees              Skills
+ aoa repair triage    .aoa-worktrees/        fable-repair (orchestrator)
+ Cursor Automations   repair/<id> branches   minimal-fix (maker)
+                                              loop-verifier (checker)
+        │                    │                      │
+        └──────── Connectors ─┴── State ────────────┘
+              Bob audit, verify, STATE.md, repair/queue.json
+```
+
+### Repair workflow (L2)
+
+```bash
+aoa repair triage              # discover → queue.json + STATE.md (quick verify)
+aoa repair queue               # list fixable items
+aoa repair worktree --item-id X   # isolated branch for fix
+python3 -m ruff check src tests && python3 -m pytest -q
+# maker: minimal-fix → checker: loop-verifier (separate agent pass)
+```
+
+## Cursor automation (L1 triage)
 
 ```text
 Run the loop-triage skill on AOA-Financial.
 Read STATE.md and LOOP.md first.
-Follow loop run order in LOOP.md (constraints → budget → triage → state + run-log).
-Respect loop-constraints.md and existing skills (coding-engineer, loop-*).
-Do not open PRs or modify source code in week one (L1).
-Flag anything ambiguous or high-risk for human review.
+Follow loop run order (constraints → budget → triage → state + run-log).
+No code changes in week one (L1).
 ```
 
-Manual equivalent: invoke the `loop-triage` skill in Agent chat on your chosen cadence.
+## Cursor automation (Fable 5 repair — L2)
 
-## Human Gates
+```text
+Run the fable-repair skill on AOA-Financial.
+Read LOOP.md, loop-constraints.md, docs/safety.md.
+Run aoa repair triage. Fix at most ONE queued item in a worktree.
+Use minimal-fix (maker) then loop-verifier (checker) in separate contexts.
+Draft PR only; never auto-merge.
+```
 
-- No auto-fix until L2 checklist complete ([docs/loop-l2-checklist.md](docs/loop-l2-checklist.md); `loop-verifier` required for code changes).
-- Trading / live paths: never auto-merge; `AOA_LIVE_ACK` required for live env.
-- Workloop execute/merge: requires Aaron approval (`aoa workloop approve`).
+## Human gates
 
-## Budget
+- No auto-fix until L2 checklist complete ([docs/loop-l2-checklist.md](docs/loop-l2-checklist.md))
+- Maker/checker split required (never self-verify)
+- Trading / live: `AOA_LIVE_ACK` required; loops never submit live orders
+- Workloop merge: `aoa workloop approve` (Aaron)
 
-- Max sub-agent spawns per run: 0 (L1) / 2 (L2)
-- Max tokens/day: 100k (see `loop-budget.md`)
-- Append each run to `loop-run-log.md` (markdown table); use `loop-budget` skill at start/end
-- Safety reference: `docs/safety.md`
-- Kill switch: `loop-pause-all` label or flag in `STATE.md` High Priority
+## Budget & safety
+
+- Caps: `loop-budget.md` | Kill switch: `loop-pause-all` in `STATE.md`
+- Run log: `loop-run-log.md` | Safety: `docs/safety.md` | Constraints: `loop-constraints.md`
 
 ## Run log schema (`loop-run-log.md`)
 
 | Column | Allowed values |
 |--------|----------------|
-| Timestamp (UTC) | ISO8601, e.g. `2026-07-04 12:00` |
-| Loop | `daily-triage`, `trading-swarm`, `workloop`, or `maintenance` (hygiene/review runs) |
-| Level | `L1`, `L2`, `L3`, or `—` for non-level maintenance |
-| Outcome | `report-only`, `acted`, `exit-budget`, `exit-pause`, `merged-prep`, etc. |
+| Timestamp (UTC) | ISO8601 |
+| Loop | `daily-triage`, `fable-repair`, `trading-swarm`, `workloop`, `maintenance` |
+| Level | `L1`, `L2`, `L3`, or `—` |
+| Outcome | `report-only`, `fix-proposed`, `merged-prep`, etc. |
 | Notes | Brief; optional `tokens_estimate=N` |
-
-Prefer `daily-triage` + `L1`/`L2` for triage runs. Use `maintenance` for git hygiene or PR review prep.
 
 ## Skills (Cursor)
 
-| Skill | Path |
+| Skill | Role |
 |-------|------|
-| loop-constraints | `.cursor/skills/loop-constraints/SKILL.md` |
-| loop-budget | `.cursor/skills/loop-budget/SKILL.md` |
-| loop-triage | `.cursor/skills/loop-triage/SKILL.md` |
-| minimal-fix | `.cursor/skills/minimal-fix/SKILL.md` |
-| loop-verifier | `.cursor/skills/loop-verifier/SKILL.md` |
-| coding-engineer | `.cursor/skills/coding-engineer/SKILL.md` |
+| `loop-constraints` | Binding guardrails (runs first) |
+| `loop-budget` | Token / run caps |
+| `loop-triage` | L1 signal → `STATE.md` |
+| `fable-repair` | L2 orchestrator |
+| `minimal-fix` | Maker — smallest diff |
+| `loop-verifier` | Checker — reject by default |
+| `coding-engineer` | Bob/Julie audit patterns |
 
 ## Links
 
 - Fork: [github.com/afidurko/loop-engineering](https://github.com/afidurko/loop-engineering)
-- Upstream: [github.com/cobusgreyling/loop-engineering](https://github.com/cobusgreyling/loop-engineering)
-- Pattern: [daily-triage](https://github.com/cobusgreyling/loop-engineering/blob/main/patterns/daily-triage.md)
-- Cursor example: [examples/cursor/daily-triage.md](https://github.com/cobusgreyling/loop-engineering/blob/main/examples/cursor/daily-triage.md)
+- Fable 5: [docs/fable5-repair-loop.md](docs/fable5-repair-loop.md)
 - L2 promotion: [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md)
+- Patterns: `patterns/registry.yaml`

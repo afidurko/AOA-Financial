@@ -138,6 +138,13 @@ def analytics_db_path_for(env: str) -> Path:
     return data_dir_for(env) / "analytics" / "aoa.sqlite"
 
 
+def repair_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_REPAIR_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "repair"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -157,6 +164,7 @@ class Config:
     plasticity_path: Path = field(default_factory=lambda: plasticity_path_for("paper-dry"))
     workloop_path: Path = field(default_factory=lambda: workloop_path_for("paper-dry"))
     analytics_db_path: Path = field(default_factory=lambda: analytics_db_path_for("paper-dry"))
+    repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
 
     # LLM
     anthropic_api_key: str = ""
@@ -240,6 +248,11 @@ class Config:
     workloop_extra_sources: tuple[str, ...] = ()
     workloop_interval_seconds: int = 3600
 
+    # Fable 5 repair loop (loop-engineering L2: triage → minimal-fix → verifier)
+    repair_enabled: bool = True
+    repair_sync_state: bool = True
+    repair_worktrees_dir: str = ".aoa-worktrees"
+
     trading_agents_enabled: bool = True
     trading_agents_debate_rounds: int = 1
 
@@ -290,6 +303,7 @@ class Config:
             plasticity_path=plasticity_path_for(env),
             workloop_path=workloop_path_for(env),
             analytics_db_path=analytics_db_path_for(env),
+            repair_path=repair_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-20250514"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -360,6 +374,10 @@ class Config:
             workloop_base_branch=os.environ.get("AOA_WORKLOOP_BASE_BRANCH", "main").strip() or "main",
             workloop_extra_sources=_parse_csv_paths("AOA_WORKLOOP_EXTRA_SOURCES"),
             workloop_interval_seconds=max(60, _int("AOA_WORKLOOP_INTERVAL_SECONDS", 3600)),
+            repair_enabled=_bool("AOA_REPAIR_ENABLED", True),
+            repair_sync_state=_bool("AOA_REPAIR_SYNC_STATE", True),
+            repair_worktrees_dir=os.environ.get("AOA_REPAIR_WORKTREES_DIR", ".aoa-worktrees").strip()
+            or ".aoa-worktrees",
             trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
             trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(

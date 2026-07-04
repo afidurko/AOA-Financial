@@ -238,6 +238,9 @@ journal/*.jsonl
 # Learned low-rank adapter state
 .aoa/
 
+# Fable 5 repair worktrees (isolated fix attempts)
+.aoa-worktrees/
+
 # OS / editor
 .DS_Store
 

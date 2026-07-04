@@ -574,9 +574,13 @@ aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 aoa report     # activity summary (from journal) + live P&L snapshot
 
-# Loop engineering (daily triage, L1 report-only):
+# Loop engineering (daily triage L1 — see LOOP.md):
 # Cursor Agent: loop-constraints → loop-budget → loop-triage; state in STATE.md
-# See LOOP.md, loop-constraints.md, docs/safety.md, docs/how-to/fresh-clone.md
+
+# Fable 5 repair (L2 — see docs/fable5-repair-loop.md):
+aoa repair triage    # discover issues → repair queue + STATE.md
+aoa repair queue     # list queued fixes
+aoa repair worktree  # isolated git worktree for a fix
 
 # Work loop (autonomous discover→merge; requires approval before merge):
 aoa workloop status
@@ -896,7 +900,7 @@ model.merge()                        # fold the delta in for fast inference
   per-symbol overrides, or `edit_domain()` to patch a specific specialist slice.
 - **Tune risk**: adjust the `AOA_*` limits in `.env` (or `RiskLimits` defaults).
 - **Add a UI panel**: extend `aoa/web/app.py` dashboard or add API routes.
-- **Loop engineering**: daily agent triage via `LOOP.md`, `STATE.md`, and `.cursor/skills/loop-*` (from [loop-engineering](https://github.com/afidurko/loop-engineering)).
+- **Loop engineering**: Fable 5 repair loop via `LOOP.md`, `aoa repair triage`, and `.cursor/skills/fable-repair` ([loop-engineering](https://github.com/afidurko/loop-engineering)).
 - **Adapt signals**: enable LoRA-style conviction recalibration with `AOA_ADAPT_*`,
   or reuse `aoa.adapt.torch_lora.LoRALinear` for neural-net fine-tuning elsewhere.
 

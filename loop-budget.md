@@ -7,6 +7,7 @@
 | Loop | Max runs/day | Max tokens/day | Max sub-agent spawns/run |
 |------|--------------|----------------|--------------------------|
 | Daily Triage (Cursor) | 2 | 100k | 0 (L1) / 2 (L2) |
+| Fable 5 repair (`aoa repair triage`) | 4 | 200k | 2 (maker + verifier) |
 | Trading swarm (`aoa loop`) | per market hours | broker/API bounded | N/A |
 | Work loop (`aoa workloop loop`) | per `AOA_WORKLOOP_INTERVAL_SECONDS` | LLM bounded | 0 until approved |
 

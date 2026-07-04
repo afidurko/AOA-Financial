@@ -1,0 +1,48 @@
+# Machine-readable pattern registry — AOA-Financial + loop-engineering
+
+patterns:
+  - id: fable-repair
+    name: Fable 5 Repair Loop
+    file: docs/fable5-repair-loop.md
+    goal: Discover code-health/verify failures and queue minimal fixes with maker-checker
+    cadence: 1d-on-demand
+    risk: medium
+    tools: [cursor, claude-code, fable-5]
+    skills: [fable-repair, minimal-fix, loop-verifier, coding-engineer]
+    state: STATE.md
+    queue: data/{AOA_ENV}/repair/queue.json
+    phases: [discover, worktree, fix, verify, pr-draft]
+    human_gates: [denylist-paths, draft-pr-only, max-3-attempts]
+    cli: aoa repair triage
+    level: L2
+
+  - id: daily-triage
+    name: Daily Triage
+    file: LOOP.md
+    goal: Prioritized scan of CI, issues, commits
+    cadence: 1d
+    risk: low
+    tools: [cursor]
+    skills: [loop-triage, loop-budget, loop-constraints]
+    state: STATE.md
+    level: L1
+
+  - id: workloop
+    name: AOA Work Loop
+    file: src/aoa/workloop/
+    goal: Discover→merge autonomous improvements with team + Aaron gates
+    cadence: AOA_WORKLOOP_INTERVAL_SECONDS
+    risk: high
+    skills: [coding-engineer]
+    state: data/{AOA_ENV}/workloop/
+    level: L2-gated
+
+  - id: trading-swarm
+    name: Trading Swarm Loop
+    file: src/aoa/web/loop_runner.py
+    goal: Market analysis→decision→execution cycles
+    cadence: AOA_CYCLE_SECONDS
+    risk: high
+    cli: aoa loop
+    human_gates: [live-ack, risk-guards]
+    level: prod
