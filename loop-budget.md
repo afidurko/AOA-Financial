@@ -19,7 +19,11 @@
 ## Kill switch
 
 - GitHub label or issue: `loop-pause-all`
-- Resume only after human clears the flag in `STATE.md`
+- Resume only after human clears the flag in `STATE.md` and this Alerts section
+
+## Alerts This Period
+
+_(none)_
 
 ## Estimate spend
 

@@ -17,6 +17,20 @@ def discover_sources(config: Config, repo_root: Path | None = None) -> list[Lear
     _add_file_source(sources, "plasticity", config.plasticity_path, "Cross-cycle plastic memory")
     _add_file_source(sources, "ci", root / ".github/workflows/ci.yml", "CI verification pipeline")
     _add_file_source(sources, "readme", root / "README.md", "Project architecture and operations")
+    _add_file_source(sources, "loop_state", root / "STATE.md", "Daily triage state and watch list")
+    _add_file_source(sources, "loop_config", root / "LOOP.md", "Loop cadence, skills, and run order")
+    _add_file_source(
+        sources,
+        "loop_constraints",
+        root / "loop-constraints.md",
+        "Binding guardrails for agent loops",
+    )
+    _add_file_source(
+        sources,
+        "loop_run_log",
+        root / "loop-run-log.md",
+        "Loop run history and budget events",
+    )
     _add_dir_source(sources, "tests", root / "tests", "Regression and integration tests")
     _add_dir_source(sources, "profiles", root / "profiles", "Environment profiles")
     _add_dir_source(sources, "agents", root / "src/aoa/agents", "Specialist agent implementations")

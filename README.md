@@ -515,8 +515,10 @@ analysis model, and the full swarm pipeline with persistence.
 git clone <this repo>
 cd AOA-Financial
 python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"      # or: pip install -r requirements-dev.txt
+pip install -e ".[dev,web]"   # or core-only: pip install -e ".[dev]"
 ```
+
+See [docs/how-to/fresh-clone.md](docs/how-to/fresh-clone.md) for first-time setup.
 
 Requires Python 3.10+.
 
@@ -572,8 +574,15 @@ aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 aoa report     # activity summary (from journal) + live P&L snapshot
 
-# Loop engineering (daily triage, L1 report-only — see LOOP.md):
-# Cursor Agent: run loop-triage skill; state in STATE.md
+# Loop engineering (daily triage, L1 report-only):
+# Cursor Agent: loop-constraints → loop-budget → loop-triage; state in STATE.md
+# See LOOP.md, loop-constraints.md, docs/safety.md, docs/how-to/fresh-clone.md
+
+# Work loop (autonomous discover→merge; requires approval before merge):
+aoa workloop status
+aoa workloop run --dry-run
+aoa workloop loop          # scheduled improvement cycles
+aoa workloop approve       # Aaron approval gate before merge/execute
 
 # Market-trend analysis & scenario simulation (no LLM, no orders):
 aoa analyze AAPL                       # characterize the historical trend & drawdowns
@@ -591,6 +600,23 @@ the broker isn't reachable, so the activity summary still works offline.
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.
+
+### Work loop
+
+The **work loop** (`aoa workloop`) is a separate autonomous improvement cycle:
+discover → extract → adapt → propose → team review → verify → upgrade → merge.
+It learns from the journal, CI, tests, and loop state files (`STATE.md`, `LOOP.md`).
+
+| Command | Purpose |
+|---------|---------|
+| `aoa workloop status` | Show last run and pending approvals |
+| `aoa workloop run` | Run one full cycle |
+| `aoa workloop run --dry-run` | Propose without executing merges |
+| `aoa workloop loop` | Run on `AOA_WORKLOOP_INTERVAL_SECONDS` cadence |
+| `aoa workloop approve` | Aaron approval before merge/execute |
+
+Enable with `AOA_WORKLOOP_ENABLED=true` in `.env`. Merge requires explicit approval
+every run (`loop-constraints.md`, `docs/safety.md`).
 
 ### Market data (Alpaca)
 
@@ -789,6 +815,14 @@ aoa_financial/             # optional deep analysis & forecasting (no live order
 profiles/                  # environment profiles (paper-dry, paper, live, …)
 data/                      # per-environment runtime state (gitignored)
 tests/                     # pytest suite (src/aoa) + unittest suite (aoa_financial)
+LOOP.md                    # loop cadence, skills, run order (L1 report-only default)
+STATE.md                   # daily triage state (High Priority, Watch List)
+loop-constraints.md        # binding agent guardrails
+loop-run-log.md            # loop run history
+loop-budget.md             # token/run caps
+.cursor/skills/            # loop-triage, minimal-fix, loop-verifier, …
+docs/safety.md             # agent safety policy
+docs/how-to/fresh-clone.md # first-time setup checklist
 examples/run_demo.py       # aoa_financial end-to-end demonstration
 deploy/                    # systemd unit files for production
 Dockerfile                 # container image
@@ -802,10 +836,13 @@ touching agent or orchestration code.
 ## Test
 
 ```bash
-ruff check .
-pytest                                    # src/aoa trading swarm (pytest)
-python -m unittest discover -s tests -v # aoa_financial core (unittest, offline)
+python3 -m ruff check src tests
+python3 -m pytest -q                       # src/aoa trading swarm (pytest)
+python3 -m unittest discover -s tests -p 'test_core.py' -v  # aoa_financial (unittest, offline)
 ```
+
+Full install: `pip install -e ".[dev,web]"`. Core-only: `pip install -e ".[dev]"`.
+See [AGENTS.md](AGENTS.md) and [docs/how-to/fresh-clone.md](docs/how-to/fresh-clone.md).
 
 The trading-swarm suite runs end-to-end against an in-memory fake broker and a
 canned-response fake LLM — no network, no API keys, no real orders. The

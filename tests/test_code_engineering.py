@@ -16,6 +16,7 @@ def test_code_quality_audit_passes_in_repo():
     assert "pricing" in areas
     assert "web_app" in areas
     assert "pipeline" in areas
+    assert "loop_scaffold" in areas
 
 
 def test_import_sweep_skips_optional_modules():

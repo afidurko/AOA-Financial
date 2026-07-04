@@ -34,6 +34,46 @@ jobs:
       - name: Test with pytest
         run: pytest
 
+  test-core-only:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install core dependencies (no web extra)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Test with pytest
+        run: pytest -q
+
+  test-aoa-financial:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Run aoa_financial unittest suite
+        run: python -m unittest discover -s tests -p 'test_core.py' -v
+
   integration:
     runs-on: ubuntu-latest
     needs: test
