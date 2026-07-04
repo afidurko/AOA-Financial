@@ -93,11 +93,11 @@ class FakeBroker(Broker):
     def get_option_chain(self, underlying, expiration=None, option_type=None):
         contracts = [
             OptionContract(
-                symbol=f"{underlying}250117C00100000",
+                symbol=f"{underlying}261218C00100000",
                 underlying=underlying,
                 option_type=OptionType.CALL,
                 strike=100.0,
-                expiration="2025-01-17",
+                expiration="2026-12-18",
                 bid=2.0,
                 ask=2.2,
                 last=2.1,
@@ -107,11 +107,11 @@ class FakeBroker(Broker):
                 delta=0.5,
             ),
             OptionContract(
-                symbol=f"{underlying}250117P00100000",
+                symbol=f"{underlying}261218P00100000",
                 underlying=underlying,
                 option_type=OptionType.PUT,
                 strike=100.0,
-                expiration="2025-01-17",
+                expiration="2026-12-18",
                 bid=1.8,
                 ask=2.0,
                 last=1.9,
@@ -121,11 +121,11 @@ class FakeBroker(Broker):
                 delta=-0.45,
             ),
             OptionContract(
-                symbol=f"{underlying}250221C00105000",
+                symbol=f"{underlying}270219C00105000",
                 underlying=underlying,
                 option_type=OptionType.CALL,
                 strike=105.0,
-                expiration="2025-02-21",
+                expiration="2027-02-19",
                 bid=1.5,
                 ask=1.7,
                 last=1.6,
@@ -283,7 +283,7 @@ class FakeLLM:
         if required == self._OPTIONS:
             return {
                 "strategy": "long_call",
-                "contract_symbol": "AAPL250117C00100000",
+                "contract_symbol": "AAPL261218C00100000",
                 "contracts": 1,
                 "max_premium_per_contract": 2.5,
                 "rationale": "defined-risk bullish expression",

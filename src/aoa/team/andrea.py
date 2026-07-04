@@ -7,8 +7,10 @@ import math
 from typing import TYPE_CHECKING, Any
 
 from aoa.agents.base import Agent, TradeProposal
+from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, Side
 from aoa.data.market_data import SymbolSnapshot
+from aoa.risk.options_quant import build_andrea_quant_context
 from aoa.team.models import (
     AlgorithmReport,
     CatalystReport,
@@ -69,7 +71,10 @@ class AndreaAgent(Agent):
         "protective puts, collars, or cash-secured hedges when event risk is elevated. "
         "Reject or downgrade trades when reward/risk is poor, catalyst risk is high, or "
         "position size exceeds prudent limits. Quantities must respect max position sizing. "
-        "Never propose naked short options or margin strategies."
+        "Never propose naked short options or margin strategies. "
+        "When FinancePy quant context is provided, use model fair value, Greeks, "
+        "mispricing vs market mid, and protective-put hedge costs to ground "
+        "your options_analysis and hedge_recommendation."
     )
 
     def __init__(self, llm, broker: Broker, config: Config) -> None:
@@ -105,6 +110,13 @@ class AndreaAgent(Agent):
         for sym in sorted(targets):
             prop = prop_by.get(sym)
             snap = snapshots.get(sym)
+            quant_ctx = _financepy_context(
+                self.broker,
+                sym,
+                snap,
+                options_ideas.get(sym),
+                account.options_level,
+            )
             ctx = _build_symbol_context(
                 sym,
                 prop=prop,
@@ -113,6 +125,7 @@ class AndreaAgent(Agent):
                 market=morgan_by.get(sym),
                 catalyst=catalyst_by.get(sym),
                 options_idea=options_ideas.get(sym),
+                quant_context=quant_ctx,
                 account=account.to_context(),
                 max_position_pct=self.config.risk.max_position_pct,
             )
@@ -153,6 +166,34 @@ def _target_symbols(
     return symbols
 
 
+def _financepy_context(
+    broker,
+    symbol: str,
+    snap: SymbolSnapshot | None,
+    options_idea: dict | None,
+    options_level: int,
+) -> dict | None:
+    """Fetch option chain and build FinancePy quant context when available."""
+    spot = snap.reference_price() if snap else None
+    if not spot or options_level < 2:
+        return None
+    chain = None
+    try:
+        chain = broker.get_option_chain(symbol)
+    except BrokerError:
+        return None
+    except Exception:  # noqa: BLE001
+        return None
+    if not chain:
+        return None
+    return build_andrea_quant_context(
+        symbol,
+        spot,
+        options_idea=options_idea,
+        option_chain=chain,
+    )
+
+
 def _build_symbol_context(
     symbol: str,
     *,
@@ -162,6 +203,7 @@ def _build_symbol_context(
     market: MarketContextReport | None,
     catalyst: CatalystReport | None,
     options_idea: dict | None,
+    quant_context: dict | None,
     account: dict,
     max_position_pct: float,
 ) -> str:
@@ -182,6 +224,8 @@ def _build_symbol_context(
         chunks.append(f"Hailey catalyst: {json.dumps(catalyst.to_context(), default=str)}")
     if options_idea:
         chunks.append(f"Options idea: {json.dumps(options_idea, default=str)}")
+    if quant_context:
+        chunks.append(f"FinancePy quant context: {json.dumps(quant_context, default=str)}")
     return "\n".join(chunks)
 
 

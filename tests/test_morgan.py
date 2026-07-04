@@ -32,8 +32,8 @@ def test_options_volume_scan_groups_by_expiration(fake_broker):
     )
     scan = _scan_options_volume(fake_broker, snap)
     assert scan["available"] is True
-    assert scan["by_expiration"]["2025-02-21"] > 0
-    assert scan["by_expiration"]["2025-01-17"] > 0
+    assert scan["by_expiration"]["2027-02-19"] > 0
+    assert scan["by_expiration"]["2026-12-18"] > 0
     assert scan["highlights"]
     assert scan["highlights"][0]["volume"] > 0
     assert "expiration" in scan["highlights"][0]
