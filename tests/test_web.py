@@ -106,6 +106,13 @@ def test_api_approvals_and_research(client, monkeypatch):
     assert r.status_code == 200
 
 
+def test_api_assistant_brief(client):
+    r = client.get("/api/assistant/brief")
+    assert r.status_code == 200
+    assert "brief" in r.json()
+    assert "must_do" in r.json()["brief"]
+
+
 def test_api_run_returns_409_when_cycle_busy(client):
     runner = client.app.state.runner
     assert runner._cycle_lock.acquire(blocking=False)

@@ -63,12 +63,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="card"><h2>ROI summary</h2><div class="stat-sm" id="roi-summary">—</div></div>
     </div>
     <div class="tabs">
+      <div class="tab" data-tab="assistant">Assistant</div>
       <div class="tab active" data-tab="team">Team</div>
       <div class="tab" data-tab="analysts">Analysts</div>
       <div class="tab" data-tab="trades">Trades</div>
       <div class="tab" data-tab="approvals">Approvals</div>
       <div class="tab" data-tab="research">Research</div>
       <div class="tab" data-tab="journal">Journal</div>
+    </div>
+    <div id="panel-assistant" class="panel card">
+      <h2>Alex — your priorities</h2>
+      <div class="stat-sm" id="assistant-focus">Focus: —</div>
+      <div class="stat-sm" id="assistant-summary" style="margin:.5rem 0"></div>
+      <div id="assistant-must"></div>
+      <div id="assistant-should"></div>
+      <div id="assistant-later"></div>
+      <button class="secondary" style="margin-top:.75rem" onclick="loadAssistant()">Refresh priorities</button>
     </div>
     <div id="panel-team" class="panel active card">
       <h2>Team roster — click to expand</h2>
@@ -134,6 +144,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const r=last.result||{};
       renderTeam(r);
       renderAnalysts(r);
+      renderAssistantFrom(r.assistant);
       document.getElementById('positions-body').innerHTML=status.positions.length
         ? status.positions.map(p=>`<tr><td>${p.symbol}</td><td>${p.qty}</td><td>${fmt(p.market_value)}</td><td>${fmt(p.unrealized_pl)}</td></tr>`).join('')
         : '<tr><td colspan="4">No positions</td></tr>';
@@ -152,8 +163,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         {name:'Bob',role:'Health',data:r.health,summary:r.health?.summary},
         {name:'Tom',role:'Trends',data:r.trends,count:(r.trends||[]).length},
         {name:'Julie',role:'Algorithms',data:r.algorithms,count:(r.algorithms||[]).length},
+        {name:'Morgan',role:'Volume',data:r.market_contexts,count:(r.market_contexts||[]).length},
         {name:'Alan',role:'Decision',data:r.decision,summary:r.decision?.summary},
         {name:'Aaron',role:'CEO',data:r.ceo,summary:r.ceo?.summary},
+        {name:'Alex',role:'Assistant',data:r.assistant,summary:r.assistant?.focus},
       ];
       document.getElementById('team-roster').innerHTML=roster.map(m=>{
         const ok=m.data&&(m.count===undefined||m.count>0||m.data.can_proceed!==false);
@@ -165,6 +178,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       const rows=[...(r.analyst_reports||[])];
       (r.trends||[]).forEach(t=>rows.push({symbol:t.symbol,analyst:'Tom',direction:t.direction,conviction:t.strength,summary:t.rationale}));
       (r.algorithms||[]).forEach(a=>rows.push({symbol:a.symbol,analyst:'Julie',direction:a.validated?'validated':'review',conviction:a.adjusted_strength,summary:a.method_notes}));
+      (r.market_contexts||[]).forEach(m=>rows.push({symbol:m.symbol,analyst:'Morgan',direction:m.volume_regime,conviction:m.volume_ratio,summary:m.summary}));
       document.getElementById('analysts-body').innerHTML=rows.length
         ? rows.map(x=>`<tr><td>${x.symbol||''}</td><td>${x.analyst||''}</td><td>${x.direction||''}</td><td>${x.conviction??'—'}</td><td>${(x.summary||'').slice(0,80)}</td></tr>`).join('')
         : '<tr><td colspan="5">No reports yet</td></tr>';
@@ -185,6 +199,22 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           ${p.source_url?`<a href="${p.source_url}" target="_blank" style="color:var(--accent);font-size:.8rem">Paper</a> `:''}
           ${p.status==='pending'?`<button class="ok" onclick="resolveResearch('${p.id}','approved')">Approve</button> <button class="danger" onclick="resolveResearch('${p.id}','rejected')">Reject</button>`:''}
         </div>`).join(''):'<p class="stat-sm">Run Scholar scan to discover algorithm edges</p>';
+    }
+    function renderAssistantFrom(a){
+      if(!a){ document.getElementById('assistant-focus').textContent='Focus: —'; return; }
+      document.getElementById('assistant-focus').textContent='Focus: '+(a.focus||'—');
+      document.getElementById('assistant-summary').textContent=a.summary||'';
+      const block=(id,title,items)=>{ document.getElementById(id).innerHTML=items?.length
+        ? `<h3 style="font-size:.8rem;color:var(--muted);margin:.75rem 0 .35rem">${title}</h3>`+
+          items.map(i=>`<div style="border-left:3px solid var(--border);padding:.35rem .65rem;margin-bottom:.35rem"><strong>${i.title}</strong><br><span style="font-size:.85rem;color:var(--muted)">${i.detail||''}</span></div>`).join('')
+        : ''; };
+      block('assistant-must','Must do',a.must_do);
+      block('assistant-should','Should do',a.should_do);
+      block('assistant-later','Can wait',a.can_wait);
+    }
+    async function loadAssistant(){
+      const d=await fetch('/api/assistant/brief').then(r=>r.json());
+      renderAssistantFrom(d.brief);
     }
     async function runCycle(){ toast('Running…'); const r=await fetch('/api/run',{method:'POST'}); if(!r.ok){toast('Failed');return;} toast('Done'); refresh(); }
     async function startLoop(){ await fetch('/api/loop/start',{method:'POST'}); toast('Loop started'); refresh(); }

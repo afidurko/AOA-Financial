@@ -275,9 +275,11 @@ def _ensure_roster(status: list[TeamMemberStatus]) -> list[TeamMemberStatus]:
     roster = [
         ("Tom", "Trend Analyst"),
         ("Julie", "Algorithm Specialist"),
+        ("Morgan", "Market & Volume Analyst"),
         ("Bob", "Systems Health"),
         ("Alan", "Decision Aggregator"),
         ("Aaron", "CEO"),
+        ("Alex", "Executive Assistant"),
     ]
     by_name = {m.name: m for m in status}
     out: list[TeamMemberStatus] = []

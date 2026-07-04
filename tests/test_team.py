@@ -104,6 +104,9 @@ def test_full_team_cycle(fake_broker, fake_llm, tmp_path):
     assert "team.julie.algorithms" in events
     assert "team.alan.decision" in events
     assert "team.aaron.review" in events
+    assert "team.morgan.context" in events
+    assert "team.alex.brief" in events
+    assert result.assistant is not None
 
 
 def test_aaron_escalates_on_critical_health(fake_broker, fake_llm):

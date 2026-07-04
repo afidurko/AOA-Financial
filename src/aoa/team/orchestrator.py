@@ -18,15 +18,19 @@ from aoa.notify.types import StructuredNotification
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.aaron import AaronAgent
 from aoa.team.alan import AlanAgent
+from aoa.team.alex import AlexAgent
 from aoa.team.bob import BobAgent
 from aoa.team.julie import JulieAgent
 from aoa.team.models import (
     AlgorithmReport,
+    AssistantBrief,
     CEOReport,
     DecisionBrief,
     HealthReport,
+    MarketContextReport,
     TrendReport,
 )
+from aoa.team.morgan import MorganAgent
 from aoa.team.remediation import RemediationAction, RemediationResult, TeamRemediator
 from aoa.team.tom import TomAgent
 
@@ -40,14 +44,16 @@ class TeamCycleResult:
     trends: list[TrendReport] = field(default_factory=list)
     algorithms: list[AlgorithmReport] = field(default_factory=list)
     decision: DecisionBrief | None = None
+    market_contexts: list[MarketContextReport] = field(default_factory=list)
     ceo: CEOReport | None = None
+    assistant: AssistantBrief | None = None
     remediation: RemediationResult | None = None
     halted: bool = False
     halt_reason: str = ""
 
 
 class TeamOrchestrator:
-    """Runs Bob's health gate, Tom→Julie→Alan analysis, then the trading swarm."""
+    """Runs Bob's health gate, Tom→Julie→Morgan→Alan analysis, then the trading swarm."""
 
     def __init__(
         self,
@@ -65,8 +71,10 @@ class TeamOrchestrator:
 
         self.tom = TomAgent(llm)
         self.julie = JulieAgent(llm)
+        self.morgan = MorganAgent(llm)
         self.bob = BobAgent(config, broker)
         self.alan = AlanAgent(llm)
+        self.alex = AlexAgent(llm)
         self.remediator = TeamRemediator(self.bob, broker)
         notifier = IPhoneNotifier(
             custom_app_webhook_url=config.custom_app_webhook_url,
@@ -132,11 +140,18 @@ class TeamOrchestrator:
             {"reports": [a.to_context() for a in algorithms]},
         )
 
+        market_contexts = self.morgan.analyze_contexts(snapshots) if snapshots else []
+        self.journal.record(
+            "team.morgan.context",
+            {"reports": [m.to_context() for m in market_contexts]},
+        )
+
         decision = self.alan.aggregate(
             trends,
             algorithms,
             scanner_context=scanner_context,
             code_quality=code_quality,
+            market_contexts=market_contexts,
         )
         self.journal.record("team.alan.decision", decision.to_context())
         return trends, algorithms, decision
@@ -174,6 +189,7 @@ class TeamOrchestrator:
             if self.analytics:
                 self.analytics.persist_cycle(result)
             self._dispatch_cycle_notifications(result, run_id=run_id)
+            result.assistant = self._run_assistant(result)
             return result
 
         cycle, team_remediation = self._run_team_trading_cycle(max_candidates=max_candidates)
@@ -181,6 +197,7 @@ class TeamOrchestrator:
         result.trends = getattr(cycle, "_team_trends", [])
         result.algorithms = getattr(cycle, "_team_algorithms", [])
         result.decision = getattr(cycle, "_team_decision", None)
+        result.market_contexts = getattr(cycle, "_team_market_contexts", [])
 
         result.ceo = self.aaron.review(
             health=health,
@@ -197,7 +214,28 @@ class TeamOrchestrator:
         if self.analytics:
             self.analytics.persist_cycle(result)
         self._dispatch_cycle_notifications(result, run_id=run_id)
+        result.assistant = self._run_assistant(result)
         return result
+
+    def run_assistant_brief(self, *, last_cycle: TeamCycleResult | None = None) -> AssistantBrief:
+        """On-demand prioritization brief for the user (Alex)."""
+        cycle = last_cycle
+        brief = self.alex.prioritize(
+            cycle=cycle,
+            analytics_store=self.analytics.store if self.analytics else None,
+            market_open=self.broker.is_market_open(),
+        )
+        self.journal.record("team.alex.brief", brief.to_context())
+        return brief
+
+    def _run_assistant(self, result: TeamCycleResult) -> AssistantBrief:
+        brief = self.alex.prioritize(
+            cycle=result,
+            analytics_store=self.analytics.store if self.analytics else None,
+            market_open=self.broker.is_market_open(),
+        )
+        self.journal.record("team.alex.brief", brief.to_context())
+        return brief
 
     def _run_team_trading_cycle(
         self, *, max_candidates: int
@@ -272,11 +310,20 @@ class TeamOrchestrator:
             {"reports": [a.to_context() for a in algorithms]},
         )
 
+        market_contexts: list[MarketContextReport] = []
+        if candidate_snaps:
+            market_contexts = self.morgan.analyze_contexts(candidate_snaps)
+        self.journal.record(
+            "team.morgan.context",
+            {"reports": [m.to_context() for m in market_contexts]},
+        )
+
         decision = self.alan.aggregate(
             trends,
             algorithms,
             scanner_context=bb.candidates,
             code_quality=code_quality,
+            market_contexts=market_contexts,
         )
         if trends and not decision.recommendations:
             team_remediation.append(
@@ -287,6 +334,7 @@ class TeamOrchestrator:
                         algorithms,
                         scanner_context=bb.candidates,
                         code_quality=code_quality,
+                        market_contexts=market_contexts,
                     ),
                 )
             )
@@ -295,6 +343,7 @@ class TeamOrchestrator:
                 algorithms,
                 scanner_context=bb.candidates,
                 code_quality=code_quality,
+                market_contexts=market_contexts,
             )
         self.journal.record("team.alan.decision", decision.to_context())
 
@@ -310,6 +359,7 @@ class TeamOrchestrator:
         cr._team_trends = trends  # type: ignore[attr-defined]
         cr._team_algorithms = algorithms  # type: ignore[attr-defined]
         cr._team_decision = decision  # type: ignore[attr-defined]
+        cr._team_market_contexts = market_contexts  # type: ignore[attr-defined]
         return cr, team_remediation
 
     def _julie_for_trends(

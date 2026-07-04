@@ -60,6 +60,7 @@ class AlanAgent(Agent):
         *,
         scanner_context: list[dict] | None = None,
         code_quality: CodeQualityReport | None = None,
+        market_contexts: list | None = None,
     ) -> DecisionBrief:
         by_symbol = {a.symbol: a for a in algorithms}
         pairs = [
@@ -79,6 +80,11 @@ class AlanAgent(Agent):
             prompt += (
                 f"\nBob/Julie code-quality audit:\n"
                 f"{json.dumps(code_quality.to_context(), default=str)}\n"
+            )
+        if market_contexts:
+            prompt += (
+                f"\nMorgan market/volume context:\n"
+                f"{json.dumps([m.to_context() for m in market_contexts], default=str)}\n"
             )
         prompt += "\nProduce the aggregated decision brief as JSON."
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)

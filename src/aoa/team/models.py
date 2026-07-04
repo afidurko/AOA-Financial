@@ -1,4 +1,4 @@
-"""Shared types for the five-member agent team."""
+"""Shared types for the agent team."""
 
 from __future__ import annotations
 
@@ -115,6 +115,70 @@ class DecisionBrief:
         if self.code_quality:
             ctx["code_quality"] = self.code_quality
         return ctx
+
+
+@dataclass
+class MarketContextReport:
+    """Morgan — volume, liquidity, and market-microstructure read."""
+
+    symbol: str
+    volume_regime: str  # elevated | normal | thin
+    volume_ratio: float | None
+    liquidity_note: str
+    summary: str
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "volume_regime": self.volume_regime,
+            "volume_ratio": self.volume_ratio,
+            "liquidity_note": self.liquidity_note,
+            "summary": self.summary,
+        }
+
+
+class PriorityLevel(str, Enum):
+    MUST = "must"
+    SHOULD = "should"
+    LATER = "later"
+
+
+@dataclass
+class PriorityItem:
+    level: PriorityLevel
+    title: str
+    detail: str
+    source: str = ""
+    action_hint: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "level": self.level.value,
+            "title": self.title,
+            "detail": self.detail,
+            "source": self.source,
+            "action_hint": self.action_hint,
+        }
+
+
+@dataclass
+class AssistantBrief:
+    """Alex — executive assistant prioritization for the user."""
+
+    must_do: list[PriorityItem] = field(default_factory=list)
+    should_do: list[PriorityItem] = field(default_factory=list)
+    can_wait: list[PriorityItem] = field(default_factory=list)
+    summary: str = ""
+    focus: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "must_do": [i.to_context() for i in self.must_do],
+            "should_do": [i.to_context() for i in self.should_do],
+            "can_wait": [i.to_context() for i in self.can_wait],
+            "summary": self.summary,
+            "focus": self.focus,
+        }
 
 
 @dataclass

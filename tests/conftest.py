@@ -150,6 +150,8 @@ class FakeLLM:
     _JULIE = frozenset({"validated", "adjusted_strength", "method_notes", "signals"})
     _ALAN = frozenset({"recommendations", "summary", "confidence"})
     _AARON = frozenset({"overall_ok", "summary", "user_notifications", "team_status"})
+    _MORGAN = frozenset({"volume_regime", "volume_ratio", "liquidity_note", "summary"})
+    _ALEX = frozenset({"summary", "focus", "must_do", "should_do", "can_wait"})
     _NEWS = frozenset({"direction", "conviction", "summary", "key_events", "macro_risk"})
     _SENTIMENT = frozenset(
         {"direction", "conviction", "sentiment_score", "summary", "drivers"}
@@ -306,6 +308,7 @@ class FakeLLM:
                         "completed": True,
                         "notes": "Validated Tom's read.",
                     },
+                    {"name": "Morgan", "role": "Market & Volume Analyst", "completed": True, "notes": "ok"},
                     {
                         "name": "Bob",
                         "role": "Systems Health & Code Integrity",
@@ -314,7 +317,29 @@ class FakeLLM:
                     },
                     {"name": "Alan", "role": "Decision Aggregator & Code Oversight", "completed": True, "notes": "Decision brief ready."},
                     {"name": "Aaron", "role": "CEO", "completed": True, "notes": "ok"},
+                    {"name": "Alex", "role": "Executive Assistant", "completed": True, "notes": "ok"},
                 ],
+            }
+        if required == self._MORGAN:
+            return {
+                "volume_regime": "normal",
+                "volume_ratio": 1.1,
+                "liquidity_note": "Adequate liquidity for cash-account sizing.",
+                "summary": "Volume in line with 20-day average.",
+            }
+        if required == self._ALEX:
+            return {
+                "summary": "1 should-do, nothing blocking.",
+                "focus": "Review approved proposal",
+                "must_do": [],
+                "should_do": [
+                    {
+                        "title": "Review approved trade",
+                        "detail": "One proposal approved this cycle.",
+                        "action_hint": "Check dashboard Trades tab.",
+                    }
+                ],
+                "can_wait": [],
             }
         raise ValueError(f"FakeLLM: unhandled schema required keys {sorted(required)!r}")
 

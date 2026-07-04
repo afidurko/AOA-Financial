@@ -197,6 +197,13 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail="Proposal not found")
         return {"id": proposal_id, "status": body.status}
 
+    @app.get("/api/assistant/brief")
+    def assistant_brief(request: Request) -> dict[str, Any]:
+        team = request.app.state.team
+        runner = request.app.state.runner
+        brief = team.run_assistant_brief(last_cycle=runner.state.last_result)
+        return {"brief": brief.to_context()}
+
     @app.get("/api/events/stream")
     async def events_stream(request: Request) -> StreamingResponse:
         runner: LoopRunner = request.app.state.runner
@@ -229,8 +236,10 @@ def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
         "health": result.health.to_context() if result.health else None,
         "trends": [t.to_context() for t in result.trends],
         "algorithms": [a.to_context() for a in result.algorithms],
+        "market_contexts": [m.to_context() for m in result.market_contexts],
         "decision": result.decision.to_context() if result.decision else None,
         "ceo": result.ceo.to_context() if result.ceo else None,
+        "assistant": result.assistant.to_context() if result.assistant else None,
         "team_status": result.ceo.team_status if result.ceo else [],
         "notes": [],
         "commentary": "",

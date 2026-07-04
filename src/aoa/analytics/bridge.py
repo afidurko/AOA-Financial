@@ -138,6 +138,18 @@ def _extract_signals(result: TeamCycleResult) -> list[dict[str, Any]]:
                 "metrics": {"signals": ctx.get("signals")},
             }
         )
+    for mc in result.market_contexts:
+        ctx = mc.to_context()
+        signals.append(
+            {
+                "ticker": ctx.get("symbol", ""),
+                "agent": "Morgan",
+                "direction": ctx.get("volume_regime", ""),
+                "conviction": ctx.get("volume_ratio"),
+                "summary": ctx.get("summary", ""),
+                "metrics": {"liquidity": ctx.get("liquidity_note")},
+            }
+        )
     if result.cycle:
         for report in _analyst_reports_from_env(result.cycle.blackboard.environment):
             signals.append(
