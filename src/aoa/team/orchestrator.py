@@ -19,15 +19,19 @@ from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.aaron import AaronAgent
 from aoa.team.alan import AlanAgent
 from aoa.team.alex import AlexAgent
+from aoa.team.andrea import AndreaAgent
 from aoa.team.bob import BobAgent
+from aoa.team.hailey import HaileyAgent
 from aoa.team.julie import JulieAgent
 from aoa.team.models import (
     AlgorithmReport,
     AssistantBrief,
+    CatalystReport,
     CEOReport,
     DecisionBrief,
     HealthReport,
     MarketContextReport,
+    RiskPlanReport,
     TeamExpansionProposal,
     TrendReport,
 )
@@ -55,6 +59,8 @@ class TeamCycleResult:
     algorithms: list[AlgorithmReport] = field(default_factory=list)
     decision: DecisionBrief | None = None
     market_contexts: list[MarketContextReport] = field(default_factory=list)
+    catalysts: list[CatalystReport] = field(default_factory=list)
+    risk_plans: list[RiskPlanReport] = field(default_factory=list)
     ceo: CEOReport | None = None
     assistant: AssistantBrief | None = None
     remediation: RemediationResult | None = None
@@ -63,7 +69,7 @@ class TeamCycleResult:
 
 
 class TeamOrchestrator:
-    """Runs Bob's health gate, Tom→Julie→Morgan→Alan analysis, then the trading swarm."""
+    """Runs Bob's health gate, team analysis chain, then the trading swarm."""
 
     def __init__(
         self,
@@ -78,10 +84,15 @@ class TeamOrchestrator:
         self.broker = broker
         self.llm = llm
         self.journal = journal or Journal(config.journal_path)
+        from aoa.data.news import NullNewsFeed
+
+        self.news_feed = news or NullNewsFeed()
 
         self.tom = TomAgent(llm)
         self.julie = JulieAgent(llm)
         self.morgan = MorganAgent(llm, broker)
+        self.hailey = HaileyAgent(llm, self.news_feed)
+        self.andrea = AndreaAgent(llm, broker, config)
         self.bob = BobAgent(config, broker)
         self.alan = AlanAgent(llm)
         self.alex = AlexAgent(llm)
@@ -131,11 +142,11 @@ class TeamOrchestrator:
         self.trading.market.clear_cache()
         snapshots = self.trading.market.snapshots(symbols)
 
-        trends, algorithms, market_contexts, decision, _ = self._run_analysis_pipeline(
+        trends, algorithms, market_contexts, catalysts, decision, _ = self._run_analysis_pipeline(
             snapshots,
             scanner_context=scanner_context,
         )
-        _ = market_contexts  # brief API returns decision only; contexts are in journal
+        _ = market_contexts, catalysts
         return trends, algorithms, decision
 
     def run_cycle(self, *, max_candidates: int = 6) -> TeamCycleResult:
@@ -180,12 +191,16 @@ class TeamOrchestrator:
         result.algorithms = getattr(cycle, "_team_algorithms", [])
         result.decision = getattr(cycle, "_team_decision", None)
         result.market_contexts = getattr(cycle, "_team_market_contexts", [])
+        result.catalysts = getattr(cycle, "_team_catalysts", [])
+        result.risk_plans = getattr(cycle, "_team_risk_plans", [])
 
         result.ceo = self.aaron.review(
             health=health,
             tom_done=len(result.trends) > 0 or not cycle.blackboard.universe,
             julie_done=len(result.algorithms) > 0 or not cycle.blackboard.candidates,
             alan_done=result.decision is not None,
+            hailey_done=len(result.catalysts) > 0 or not cycle.blackboard.candidates,
+            andrea_done=len(result.risk_plans) > 0 or not cycle.blackboard.candidates,
             decision=result.decision,
             tom_count=len(result.trends),
             julie_count=len(result.algorithms),
@@ -246,16 +261,20 @@ class TeamOrchestrator:
             cr._team_trends = []  # type: ignore[attr-defined]
             cr._team_algorithms = []  # type: ignore[attr-defined]
             cr._team_decision = None  # type: ignore[attr-defined]
+            cr._team_catalysts = []  # type: ignore[attr-defined]
+            cr._team_risk_plans = []  # type: ignore[attr-defined]
             return cr, team_remediation
 
         candidate_symbols = [c.get("symbol", "").upper() for c in bb.candidates if c.get("symbol")]
         candidate_snaps = {s: bb.snapshots[s] for s in candidate_symbols if s in bb.snapshots}
 
         subteams = self._approved_subteams()
-        trends, algorithms, market_contexts, decision, code_quality = self._run_analysis_pipeline(
-            candidate_snaps,
-            scanner_context=bb.candidates,
-            subteams=subteams,
+        trends, algorithms, market_contexts, catalysts, decision, code_quality = (
+            self._run_analysis_pipeline(
+                candidate_snaps,
+                scanner_context=bb.candidates,
+                subteams=subteams,
+            )
         )
         self.journal.record("team.julie.code_audit", code_quality.to_context())
 
@@ -309,6 +328,7 @@ class TeamOrchestrator:
                         scanner_context=bb.candidates,
                         code_quality=code_quality,
                         market_contexts=market_contexts,
+                        catalyst_contexts=catalysts,
                     ),
                 )
             )
@@ -319,15 +339,42 @@ class TeamOrchestrator:
                 scanner_context=bb.candidates,
                 code_quality=code_quality,
                 market_contexts=market_contexts,
+                catalyst_contexts=catalysts,
             )
             self.journal.record("team.alan.decision", decision.to_context())
 
-        _inject_team_brief(bb.environment, trends, algorithms, decision, candidate_symbols)
+        _inject_team_brief(
+            bb.environment,
+            trends,
+            algorithms,
+            decision,
+            candidate_symbols,
+            catalysts=catalysts,
+        )
         if decision.summary:
             prefix = decision.summary
             bb.commentary = f"{prefix}\n\n{bb.commentary}".strip() if bb.commentary else prefix
 
-        orch.pipeline.run_from(ctx, "portfolio")
+        orch.pipeline.run_until(ctx, "execute")
+        orch._ctx = ctx
+
+        risk_plans = self.andrea.analyze_plans(
+            proposals=list(bb.proposals),
+            decision=decision,
+            trends=trends,
+            algorithms=algorithms,
+            market_contexts=market_contexts,
+            catalysts=catalysts,
+            snapshots=candidate_snaps,
+            options_ideas=bb.options_ideas,
+        )
+        self.journal.record(
+            "team.andrea.risk_plans",
+            {"reports": [r.to_context() for r in risk_plans]},
+        )
+        _inject_risk_plans(bb.environment, risk_plans, candidate_symbols)
+
+        orch.pipeline.run_from(ctx, "execute")
         orch._ctx = ctx
 
         cr = CycleResult(blackboard=bb, execution=ctx.execution, notes=ctx.notes)
@@ -335,6 +382,8 @@ class TeamOrchestrator:
         cr._team_algorithms = algorithms  # type: ignore[attr-defined]
         cr._team_decision = decision  # type: ignore[attr-defined]
         cr._team_market_contexts = market_contexts  # type: ignore[attr-defined]
+        cr._team_catalysts = catalysts  # type: ignore[attr-defined]
+        cr._team_risk_plans = risk_plans  # type: ignore[attr-defined]
         return cr, team_remediation
 
     def _approved_subteams(self) -> dict[str, ApprovedSubTeam]:
@@ -360,6 +409,7 @@ class TeamOrchestrator:
         list[TrendReport],
         list[AlgorithmReport],
         list[MarketContextReport],
+        list[CatalystReport],
         DecisionBrief,
         object,
     ]:
@@ -393,6 +443,12 @@ class TeamOrchestrator:
             {"reports": [m.to_context() for m in market_contexts], "subteam": "Morgan" in subteams},
         )
 
+        catalysts = self.hailey.analyze_contexts(snapshots) if snapshots else []
+        self.journal.record(
+            "team.hailey.catalysts",
+            {"reports": [c.to_context() for c in catalysts]},
+        )
+
         decision = self._run_alan(
             trends,
             algorithms,
@@ -400,12 +456,13 @@ class TeamOrchestrator:
             scanner_context=scanner_context,
             code_quality=code_quality,
             market_contexts=market_contexts,
+            catalyst_contexts=catalysts,
         )
         self.journal.record(
             "team.alan.decision",
             {**decision.to_context(), "subteam": "Alan" in subteams},
         )
-        return trends, algorithms, market_contexts, decision, code_quality
+        return trends, algorithms, market_contexts, catalysts, decision, code_quality
 
     def _run_trends(
         self, snapshots: dict, subteams: dict[str, ApprovedSubTeam]
@@ -437,6 +494,7 @@ class TeamOrchestrator:
         scanner_context: list[dict] | None = None,
         code_quality=None,
         market_contexts: list[MarketContextReport] | None = None,
+        catalyst_contexts: list[CatalystReport] | None = None,
     ) -> DecisionBrief:
         team = subteams.get("Alan")
         if team:
@@ -449,6 +507,7 @@ class TeamOrchestrator:
                 scanner_context=scanner_context,
                 code_quality=code_quality,
                 market_contexts=market_contexts,
+                catalyst_contexts=catalyst_contexts,
             )
         return self.alan.aggregate(
             trends,
@@ -456,6 +515,7 @@ class TeamOrchestrator:
             scanner_context=scanner_context,
             code_quality=code_quality,
             market_contexts=market_contexts,
+            catalyst_contexts=catalyst_contexts,
         )
 
     def _run_julie_for_trends(
@@ -561,11 +621,14 @@ def _inject_team_brief(
     algorithms: list[AlgorithmReport],
     decision: DecisionBrief,
     symbols: list[str],
+    *,
+    catalysts: list[CatalystReport] | None = None,
 ) -> None:
     brief_ctx = decision.to_context()
     environment.global_context["team_brief"] = brief_ctx
     trend_by = {t.symbol: t for t in trends}
     algo_by = {a.symbol: a for a in algorithms}
+    catalyst_by = {c.symbol: c for c in (catalysts or [])}
     rec_by = {r["symbol"].upper(): r for r in decision.recommendations if r.get("symbol")}
     for sym in symbols:
         environment.set_domain(
@@ -573,7 +636,24 @@ def _inject_team_brief(
             {
                 "trend": trend_by[sym].to_context() if sym in trend_by else None,
                 "algorithm": algo_by[sym].to_context() if sym in algo_by else None,
+                "catalyst": catalyst_by[sym].to_context() if sym in catalyst_by else None,
                 "recommendation": rec_by.get(sym),
                 "team_brief": brief_ctx,
             },
         )
+
+
+def _inject_risk_plans(
+    environment,
+    risk_plans: list[RiskPlanReport],
+    symbols: list[str],
+) -> None:
+    by_sym = {r.symbol.upper(): r for r in risk_plans}
+    environment.global_context["risk_plans"] = [r.to_context() for r in risk_plans]
+    for sym in symbols:
+        plan = by_sym.get(sym)
+        if plan is None:
+            continue
+        slice_ = environment.domains.get(f"team:{sym}")
+        if slice_ is not None:
+            slice_.data["risk_plan"] = plan.to_context()

@@ -71,6 +71,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tab" data-tab="approvals">Approvals</div>
       <div class="tab" data-tab="research">Research</div>
       <div class="tab" data-tab="promotions">Promotions</div>
+      <div class="tab" data-tab="catalysts">Catalysts</div>
+      <div class="tab" data-tab="risk">Risk plans</div>
       <div class="tab" data-tab="journal">Journal</div>
     </div>
     <div id="panel-assistant" class="panel card">
@@ -111,6 +113,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <h2>Team promotions — review &amp; edit before approving</h2>
       <p class="stat-sm" style="margin-bottom:.75rem">Each lead proposes a small sub-team. Edit roles or mission, then approve or reject.</p>
       <div id="promotions-list"></div>
+    </div>
+    <div id="panel-catalysts" class="panel card">
+      <h2>Hailey — news &amp; catalysts</h2>
+      <div id="catalysts-list"></div>
+    </div>
+    <div id="panel-risk" class="panel card">
+      <h2>Andrea — pre-execution risk &amp; trade plans</h2>
+      <div id="risk-plans-list"></div>
     </div>
     <div id="panel-journal" class="panel card">
       <h2>Journal tail</h2>
@@ -166,6 +176,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       renderApprovals(approvals.items||[]);
       renderResearch(research.items||[]);
       renderPromotions(promotions.items||[]);
+      renderCatalysts(r.catalysts||[]);
+      renderRiskPlans(r.risk_plans||[]);
     }
     function renderTeam(r){
       const roster=[
@@ -173,7 +185,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         {name:'Tom',role:'Trends',data:r.trends,count:(r.trends||[]).length},
         {name:'Julie',role:'Algorithms',data:r.algorithms,count:(r.algorithms||[]).length},
         {name:'Morgan',role:'Volume & Options',data:r.market_contexts,count:(r.market_contexts||[]).length},
+        {name:'Hailey',role:'Catalysts',data:r.catalysts,count:(r.catalysts||[]).length},
         {name:'Alan',role:'Decision',data:r.decision,summary:r.decision?.summary},
+        {name:'Andrea',role:'Risk',data:r.risk_plans,count:(r.risk_plans||[]).length},
         {name:'Aaron',role:'CEO',data:r.ceo,summary:r.ceo?.summary},
         {name:'Alex',role:'Assistant',data:r.assistant,summary:r.assistant?.focus},
       ];
@@ -188,6 +202,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       (r.trends||[]).forEach(t=>rows.push({symbol:t.symbol,analyst:'Tom',direction:t.direction,conviction:t.strength,summary:t.rationale}));
       (r.algorithms||[]).forEach(a=>rows.push({symbol:a.symbol,analyst:'Julie',direction:a.validated?'validated':'review',conviction:a.adjusted_strength,summary:a.method_notes}));
       (r.market_contexts||[]).forEach(m=>rows.push({symbol:m.symbol,analyst:'Morgan',direction:m.volume_regime,conviction:m.volume_ratio,summary:(m.options_volume_note?m.options_volume_note+' · ':'')+(m.summary||'')}));
+      (r.catalysts||[]).forEach(c=>rows.push({symbol:c.symbol,analyst:'Hailey',direction:c.headline_sentiment,conviction:c.impact_score,summary:c.catalyst_summary}));
       document.getElementById('analysts-body').innerHTML=rows.length
         ? rows.map(x=>`<tr><td>${x.symbol||''}</td><td>${x.analyst||''}</td><td>${x.direction||''}</td><td>${x.conviction??'—'}</td><td>${(x.summary||'').slice(0,80)}</td></tr>`).join('')
         : '<tr><td colspan="5">No reports yet</td></tr>';
@@ -241,6 +256,48 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           ${edit}
         </div>`;
       }).join(''):'<p class="stat-sm">Click “Build sub-teams” so each lead can propose their team for your approval.</p>';
+    }
+    function renderCatalysts(items){
+      document.getElementById('catalysts-list').innerHTML=items.length?items.map(c=>`
+        <div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.5rem">
+          <strong>${c.symbol}</strong> · event risk <span style="color:${c.event_risk==='high'?'var(--red)':c.event_risk==='medium'?'var(--amber)':'var(--green)'}">${c.event_risk}</span>
+          · sentiment ${c.headline_sentiment} · impact ${c.impact_score}
+          <p style="font-size:.85rem;margin:.35rem 0">${c.catalyst_summary||''}</p>
+          ${(c.key_events||[]).length?`<ul style="font-size:.8rem;margin-left:1.1rem">${c.key_events.map(e=>`<li>${e}</li>`).join('')}</ul>`:''}
+          ${c.macro_note?`<p style="font-size:.8rem;color:var(--muted)">${c.macro_note}</p>`:''}
+        </div>`).join(''):'<p class="stat-sm">No catalyst reports yet — run a cycle.</p>';
+    }
+    function levelPct(stats, price){
+      if(!stats||!price||!stats.bar_high||stats.bar_high<=stats.bar_low) return 50;
+      return ((price-stats.bar_low)/(stats.bar_high-stats.bar_low)*100).toFixed(1);
+    }
+    function renderRiskPlans(items){
+      document.getElementById('risk-plans-list').innerHTML=items.length?items.map(r=>{
+        const p=r.plan||{}; const s=r.stats||{};
+        const ok=r.approved_for_execution;
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.75rem">
+          <strong>${r.symbol}</strong>
+          <span style="color:${ok?'var(--green)':'var(--amber)'};margin-left:.5rem">${ok?'Approved':'Review'}</span>
+          <p style="font-size:.85rem;margin:.35rem 0">${r.summary||''}</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.5rem;font-size:.8rem;margin:.5rem 0">
+            <div>Qty <strong>${p.quantity??'—'}</strong></div>
+            <div>Cost <strong>${fmt(p.est_cost)}</strong></div>
+            <div>Max risk <strong>${fmt(p.max_risk_dollars)}</strong></div>
+            <div>R:R <strong>${p.reward_risk_ratio??'—'}</strong></div>
+            <div>Pos % <strong>${s.position_pct??'—'}%</strong></div>
+            <div>Risk % eq <strong>${s.risk_pct_equity??'—'}%</strong></div>
+          </div>
+          <div style="position:relative;height:28px;background:#0f1419;border:1px solid var(--border);border-radius:6px;margin:.5rem 0">
+            ${p.stop_loss?`<div title="Stop ${p.stop_loss}" style="position:absolute;left:${levelPct(s,p.stop_loss)}%;top:0;bottom:0;width:3px;background:var(--red)"></div>`:''}
+            ${p.entry_price?`<div title="Entry ${p.entry_price}" style="position:absolute;left:${levelPct(s,p.entry_price)}%;top:0;bottom:0;width:3px;background:var(--accent)"></div>`:''}
+            ${p.take_profit?`<div title="Target ${p.take_profit}" style="position:absolute;left:${levelPct(s,p.take_profit)}%;top:0;bottom:0;width:3px;background:var(--green)"></div>`:''}
+          </div>
+          <div style="font-size:.75rem;color:var(--muted)">Entry ${p.entry_price??'—'} · Stop ${p.stop_loss??'—'} · Target ${p.take_profit??'—'}</div>
+          ${r.hedging?`<p style="font-size:.8rem;margin-top:.35rem"><strong>Hedging:</strong> ${r.hedging}</p>`:''}
+          ${p.options_analysis?`<p style="font-size:.8rem"><strong>Options:</strong> ${p.options_analysis}</p>`:''}
+          ${p.pre_execution_note?`<p style="font-size:.8rem;color:var(--muted)">${p.pre_execution_note}</p>`:''}
+        </div>`;
+      }).join(''):'<p class="stat-sm">Andrea publishes plans after portfolio proposals, before execution.</p>';
     }
     function renderAssistantFrom(a){
       if(!a){ document.getElementById('assistant-focus').textContent='Focus: —'; return; }

@@ -185,6 +185,25 @@ def _print_team(result: TeamCycleResult) -> None:
             )
             if m.options_volume_note:
                 print(f"         options: {m.options_volume_note[:70]}")
+    if result.catalysts:
+        print("\n=== Hailey — news & catalysts ===")
+        for c in result.catalysts:
+            print(
+                f"  {c.symbol:<6} risk={c.event_risk:<6} sentiment={c.headline_sentiment:<8}  "
+                f"{c.catalyst_summary[:50]}"
+            )
+    if result.risk_plans:
+        print("\n=== Andrea — pre-execution risk plans ===")
+        for r in result.risk_plans:
+            p = r.plan
+            flag = "OK" if r.approved_for_execution else "HOLD"
+            print(
+                f"  [{flag}] {r.symbol:<6} qty={p.quantity:.0f} cost=${p.est_cost:,.0f}  "
+                f"entry={p.entry_price} stop={p.stop_loss} tp={p.take_profit}  "
+                f"R:R={p.reward_risk_ratio}"
+            )
+            if r.hedging:
+                print(f"         hedge: {r.hedging[:60]}")
     if result.assistant:
         print("\n=== Alex — your priorities ===")
         print(f"  Focus: {result.assistant.focus}")

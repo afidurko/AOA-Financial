@@ -68,9 +68,19 @@ LEAD_PROFILES: tuple[dict[str, str], ...] = (
         "domain": "volume regimes, liquidity, options flow by strike and expiry",
     },
     {
+        "name": "Hailey",
+        "role": "News & Catalyst Analyst",
+        "domain": "headlines, earnings, macro events, catalyst-driven risk",
+    },
+    {
         "name": "Alan",
         "role": "Decision Aggregator",
         "domain": "cross-agent synthesis, recommendation quality, confidence calibration",
+    },
+    {
+        "name": "Andrea",
+        "role": "Risk Manager",
+        "domain": "hedging, pre-execution sizing, stops, options structure review",
     },
     {
         "name": "Aaron",
@@ -186,9 +196,17 @@ def _fallback_proposal(profile: dict[str, str]) -> TeamExpansionProposal:
             SubTeamMember("Skyler", "Volume Tracker", ["Unusual volume alerts", "20d ratio monitoring"]),
             SubTeamMember("Reese", "Options Flow Clerk", ["Monitor options volume by strike/expiry", "Flag expiry clusters"]),
         ],
+        "Hailey": [
+            SubTeamMember("Nina", "Headline Scanner", ["Breaking news triage", "Earnings calendar"]),
+            SubTeamMember("Owen", "Macro Desk", ["Fed/macro risk flags", "Sector catalyst map"]),
+        ],
         "Alan": [
             SubTeamMember("Drew", "Bull Advocate", ["Constructive case builder", "Conviction scoring"]),
             SubTeamMember("Sam", "Risk Advocate", ["Watch/avoid arguments", "Conflict flagging"]),
+        ],
+        "Andrea": [
+            SubTeamMember("Paige", "Hedge Strategist", ["Protective put/collar ideas", "Tail-risk hedges"]),
+            SubTeamMember("Quinn", "Execution Guard", ["Stop/TP validation", "Pre-trade sizing checks"]),
         ],
         "Aaron": [
             SubTeamMember("Jamie", "Remediation Lead", ["Auto-fix retries", "Escalation triage"]),

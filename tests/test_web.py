@@ -117,7 +117,7 @@ def test_api_team_expansions_propose_and_resolve(client):
     r = client.post("/api/team/expansions/propose")
     assert r.status_code == 200
     proposals = r.json()["proposals"]
-    assert len(proposals) >= 7
+    assert len(proposals) >= 9
     items = client.get("/api/team/expansions").json()["items"]
     assert items
     pid = items[0]["id"]

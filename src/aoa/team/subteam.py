@@ -397,6 +397,7 @@ def run_alan_with_subteam(
     scanner_context: list[dict] | None = None,
     code_quality: CodeQualityReport | None = None,
     market_contexts: list[MarketContextReport] | None = None,
+    catalyst_contexts: list | None = None,
 ) -> DecisionBrief:
     by_symbol = {a.symbol: a for a in algorithms}
     pairs = [
@@ -418,6 +419,11 @@ def run_alan_with_subteam(
         task += (
             f"\nMorgan market context:\n"
             f"{json.dumps([m.to_context() for m in market_contexts], default=str)}\n"
+        )
+    if catalyst_contexts:
+        task += (
+            f"\nHailey catalyst context:\n"
+            f"{json.dumps([c.to_context() for c in catalyst_contexts], default=str)}\n"
         )
     members = runner.run_members(team, task, lead_slug="alan")
     try:
@@ -450,4 +456,5 @@ def run_alan_with_subteam(
             scanner_context=scanner_context,
             code_quality=code_quality,
             market_contexts=market_contexts,
+            catalyst_contexts=catalyst_contexts,
         )

@@ -310,6 +310,8 @@ def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
         "trends": [t.to_context() for t in result.trends],
         "algorithms": [a.to_context() for a in result.algorithms],
         "market_contexts": [m.to_context() for m in result.market_contexts],
+        "catalysts": [c.to_context() for c in result.catalysts],
+        "risk_plans": [r.to_context() for r in result.risk_plans],
         "decision": result.decision.to_context() if result.decision else None,
         "ceo": result.ceo.to_context() if result.ceo else None,
         "assistant": result.assistant.to_context() if result.assistant else None,

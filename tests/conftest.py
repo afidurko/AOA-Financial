@@ -194,6 +194,32 @@ class FakeLLM:
         }
     )
     _SUB_MEMBER = frozenset({"findings", "assessment"})
+    _HAILEY = frozenset(
+        {
+            "catalyst_summary",
+            "event_risk",
+            "headline_sentiment",
+            "key_events",
+            "macro_note",
+            "impact_score",
+        }
+    )
+    _ANDREA = frozenset(
+        {
+            "summary",
+            "approved_for_execution",
+            "hedging",
+            "options_analysis",
+            "hedge_recommendation",
+            "pre_execution_note",
+            "action",
+            "instrument",
+            "entry_price",
+            "stop_loss",
+            "take_profit",
+            "quantity",
+        }
+    )
     _ALEX = frozenset({"summary", "focus", "must_do", "should_do", "can_wait"})
     _EXPANSION = frozenset(
         {
@@ -387,6 +413,30 @@ class FakeLLM:
                 "assessment": "Constructive swing setup from specialty lens.",
                 "confidence": 0.7,
                 "recommendation": "Support lead uptrend call.",
+            }
+        if required == self._HAILEY:
+            return {
+                "catalyst_summary": "No major headlines; macro backdrop stable.",
+                "event_risk": "low",
+                "headline_sentiment": "neutral",
+                "key_events": ["Sector rotation"],
+                "macro_note": "Fed speakers quiet this week.",
+                "impact_score": 0.25,
+            }
+        if required == self._ANDREA:
+            return {
+                "summary": "Prudent long with defined risk.",
+                "approved_for_execution": True,
+                "hedging": "Consider protective put if event risk rises.",
+                "options_analysis": "Long call optional for convexity.",
+                "hedge_recommendation": "None required at current event risk.",
+                "pre_execution_note": "Use bracket order with stop below support.",
+                "action": "enter_long",
+                "instrument": "equity",
+                "entry_price": 100.0,
+                "stop_loss": 92.0,
+                "take_profit": 112.0,
+                "quantity": 50,
             }
         if required == self._ALEX:
             return {

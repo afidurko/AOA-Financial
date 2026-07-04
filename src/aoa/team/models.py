@@ -201,6 +201,88 @@ class TeamExpansionProposal:
 
 
 @dataclass
+class CatalystReport:
+    """Hailey — news, catalysts, and event-risk read."""
+
+    symbol: str
+    catalyst_summary: str
+    event_risk: str  # low | medium | high
+    headline_sentiment: str  # bullish | bearish | neutral
+    key_events: list[str] = field(default_factory=list)
+    macro_note: str = ""
+    impact_score: float = 0.0
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "catalyst_summary": self.catalyst_summary,
+            "event_risk": self.event_risk,
+            "headline_sentiment": self.headline_sentiment,
+            "key_events": self.key_events,
+            "macro_note": self.macro_note,
+            "impact_score": round(self.impact_score, 2),
+        }
+
+
+@dataclass
+class TradePlanLevels:
+    """Andrea — concrete entry/exit levels for pre-execution review."""
+
+    symbol: str
+    action: str
+    instrument: str  # equity | option | hedge | watch
+    entry_price: float | None
+    stop_loss: float | None
+    take_profit: float | None
+    quantity: float
+    est_cost: float
+    max_risk_dollars: float
+    reward_risk_ratio: float | None
+    hedge_recommendation: str = ""
+    options_analysis: str = ""
+    pre_execution_note: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "action": self.action,
+            "instrument": self.instrument,
+            "entry_price": self.entry_price,
+            "stop_loss": self.stop_loss,
+            "take_profit": self.take_profit,
+            "quantity": self.quantity,
+            "est_cost": round(self.est_cost, 2),
+            "max_risk_dollars": round(self.max_risk_dollars, 2),
+            "reward_risk_ratio": self.reward_risk_ratio,
+            "hedge_recommendation": self.hedge_recommendation,
+            "options_analysis": self.options_analysis,
+            "pre_execution_note": self.pre_execution_note,
+        }
+
+
+@dataclass
+class RiskPlanReport:
+    """Andrea — risk, hedging, and pre-execution trade plan with viz stats."""
+
+    symbol: str
+    summary: str
+    approved_for_execution: bool
+    plan: TradePlanLevels
+    hedging: str = ""
+    stats: dict = field(default_factory=dict)
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "summary": self.summary,
+            "approved_for_execution": self.approved_for_execution,
+            "plan": self.plan.to_context(),
+            "hedging": self.hedging,
+            "stats": self.stats,
+        }
+
+
+@dataclass
 class OptionsVolumeHighlight:
     """Notable options activity at a strike/expiry."""
 
