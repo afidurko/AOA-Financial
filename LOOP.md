@@ -55,9 +55,11 @@ Full prompts, cron examples, and gate logic: [docs/how-to/loop-automation-schedu
 Preflight before every automation run:
 
 ```bash
-python3 -m aoa.cli repair gate
 python3 -m aoa.cli repair gate --for triage
 python3 -m aoa.cli repair gate --for repair --json
+python3 -m aoa.cli tasks list
+python3 -m aoa.cli tasks run tier1          # deterministic Tier 1
+python3 -m aoa.cli tasks show L1            # copy Cloud Agent prompt
 ```
 
 | Automation | Cadence | Runs when |

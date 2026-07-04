@@ -5,6 +5,12 @@
 ```bash
 python3 -m ruff check src tests
 python3 -m pytest -q
+python3 -m aoa.cli tasks run verify       # same checks via task loop
+python3 -m aoa.cli tasks run tier1-check  # gate preflight
+python3 -m aoa.cli repair triage
+python3 -m aoa.cli repair gate --for triage
+python3 -m aoa.cli repair gate --for repair
+python3 -m aoa.cli team health
 ```
 
 Full install (web dashboard + import sweep):
@@ -33,6 +39,8 @@ pip install -e ".[dev]"
 ```
 loop-constraints → loop-budget (start) → loop-triage → STATE.md + loop-run-log.md → loop-budget (end)
 ```
+
+Deterministic preflight (no LLM): `aoa tasks run tier1` · Prompt shortkeys: `aoa tasks list` · `aoa tasks show L1`
 
 L2 (one item per run):
 

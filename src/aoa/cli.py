@@ -15,6 +15,7 @@ Commands:
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
+  aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -939,6 +940,44 @@ def cmd_repair_worktree(cfg: Config, *, item_id: str) -> int:
     return 0
 
 
+def cmd_tasks_list() -> int:
+    from aoa.loop.prompts import format_prompt_list
+
+    print(format_prompt_list())
+    return 0
+
+
+def cmd_tasks_show(shortkey: str) -> int:
+    from aoa.loop.prompts import get_prompt
+
+    prompt = get_prompt(shortkey)
+    if prompt is None:
+        print(f"Unknown shortkey {shortkey!r}. Run: aoa tasks list", file=sys.stderr)
+        return 1
+    header = f"=== {prompt.key}: {prompt.title} ==="
+    if prompt.automation:
+        header += f"\nAutomation: {prompt.automation}"
+    if prompt.cadence:
+        header += f"\nCadence: {prompt.cadence}"
+    print(header)
+    print()
+    print(prompt.body)
+    return 0
+
+
+def cmd_tasks_run(task: str) -> int:
+    from aoa.loop.prompts import run_task
+
+    result = run_task(task)
+    print(f"Task: {result.task}")
+    print(f"OK: {result.ok}")
+    if result.gate_action:
+        print(f"Gate: {result.gate_action}")
+    print(f"Steps: {', '.join(result.steps_run) or '(none)'}")
+    print(result.message)
+    return result.exit_code
+
+
 def cmd_serve(cfg: Config) -> int:
     try:
         import uvicorn
@@ -1214,6 +1253,23 @@ def main(argv: list[str] | None = None) -> int:
     rp_wt = rp_sub.add_parser("worktree", help="Create an isolated git worktree for a fix.")
     rp_wt.add_argument("--item-id", default="", help="Repair item id (optional).")
 
+    tk = sub.add_parser(
+        "tasks",
+        help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
+    )
+    tk_sub = tk.add_subparsers(dest="tasks_command", required=True)
+    tk_sub.add_parser("list", help="List prompt shortkeys and task loops.")
+    tk_show = tk_sub.add_parser("show", help="Print a copy-paste prompt by shortkey.")
+    tk_show.add_argument(
+        "shortkey",
+        help="Prompt key, e.g. L1, L2, GATE-A, SETUP (see: aoa tasks list).",
+    )
+    tk_run = tk_sub.add_parser(
+        "run",
+        help="Run a deterministic task loop (tier1, tier1-check, tier2-check, verify).",
+    )
+    tk_run.add_argument("task", help="Task name from loop-prompts.yaml.")
+
     args = parser.parse_args(argv)
     _ensure_env_template()
     cfg = Config.from_env()
@@ -1297,6 +1353,13 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.repair_command == "worktree":
                 return cmd_repair_worktree(cfg, item_id=getattr(args, "item_id", ""))
+        if args.command == "tasks":
+            if args.tasks_command == "list":
+                return cmd_tasks_list()
+            if args.tasks_command == "show":
+                return cmd_tasks_show(args.shortkey)
+            if args.tasks_command == "run":
+                return cmd_tasks_run(args.task)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
