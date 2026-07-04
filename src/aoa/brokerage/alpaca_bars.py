@@ -156,14 +156,16 @@ class AlpacaBarsFetcher:
             "limit": limit,
             "adjustment": _parse_adjustment(self._cfg.bar_adjustment),
         }
-        feed = self._cfg.data_feed.strip().lower()
-        if feed:
-            if feed not in VALID_ALPACA_DATA_FEEDS:
-                raise BrokerError(
-                    f"Invalid Alpaca data feed {feed!r}; "
-                    f"expected one of {', '.join(sorted(VALID_ALPACA_DATA_FEEDS))}."
-                )
-            kwargs["feed"] = _FEED_MAP[feed]
+        start, end = _crypto_window(timeframe, limit)
+        kwargs["start"] = start
+        kwargs["end"] = end
+        feed = self._cfg.data_feed.strip().lower() or self._cfg.bar_feed.strip().lower()
+        if feed not in VALID_ALPACA_DATA_FEEDS:
+            raise BrokerError(
+                f"Invalid Alpaca data feed {feed!r}; "
+                f"expected one of {', '.join(sorted(VALID_ALPACA_DATA_FEEDS))}."
+            )
+        kwargs["feed"] = _FEED_MAP[feed]
         request = StockBarsRequest(**kwargs)
         try:
             bar_set = self._stock.get_stock_bars(request)

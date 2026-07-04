@@ -70,6 +70,18 @@ def test_get_bars_delegates_to_batch():
     assert bars == ["bar1", "bar2"]
 
 
+def test_get_bars_batch_uses_bar_feed_when_data_feed_unset():
+    broker = AlpacaBroker("key", "secret", live=False, bar_feed="iex")
+    bar_set = MagicMock()
+    bar_set.data = {"SPY": [_sdk_bar()]}
+    broker._stock_data.get_stock_bars = MagicMock(return_value=bar_set)
+
+    broker.get_bars_batch(["SPY"], limit=1)
+
+    request = broker._stock_data.get_stock_bars.call_args.args[0]
+    assert request.feed is DataFeed.IEX
+
+
 def test_get_bars_batch_passes_feed_and_adjustment():
     broker = AlpacaBroker(
         "key",

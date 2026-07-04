@@ -388,7 +388,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         acct = broker.get_account()
         print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
         latest = broker.verify_stock_bars("SPY", limit=1)
-        feed = cfg.alpaca_data_feed or "default"
+        feed = cfg.alpaca_data_feed or cfg.bar_feed
         print(
             f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
             f"({latest.timestamp.date()}, feed={feed}, "

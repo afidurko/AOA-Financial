@@ -2,7 +2,7 @@
 
 Every agent reasons through this client. It standardizes on:
 
-- A configurable Claude model (default ``claude-sonnet-4-20250514``).
+- A configurable Claude model (default ``claude-sonnet-4-6``).
 - Adaptive thinking and structured JSON output when the API supports them.
 - Automatic fallback to a plain Messages call when advanced parameters fail.
 - A ``structured`` helper that constrains output to a JSON schema so agents
@@ -33,7 +33,7 @@ class LLMClient:
         self,
         api_key: str,
         *,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-sonnet-4-6",
         effort: str = "high",
         max_tokens: int = 8000,
     ) -> None:
