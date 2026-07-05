@@ -35,6 +35,7 @@ from aoa.brokerage.alpaca_bars import (
     partition_symbols,
 )
 from aoa.brokerage.base import Broker, BrokerError
+from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
 from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
@@ -54,6 +55,15 @@ from aoa.workloop.scheduler import build_scheduler
 
 
 def build_broker(cfg: Config) -> Broker:
+    if cfg.broker == "moomoo":
+        return MoomooBroker(
+            host=cfg.moomoo_opend_host,
+            port=cfg.moomoo_opend_port,
+            trd_env=cfg.moomoo_trd_env,
+            security_firm=cfg.moomoo_security_firm,
+            account_id=cfg.moomoo_account_id,
+            market=cfg.moomoo_market,
+        )
     return AlpacaBroker(
         cfg.alpaca_key_id,
         cfg.alpaca_secret_key,
@@ -70,7 +80,9 @@ def build_llm(cfg: Config) -> LLMClient:
 
 
 def build_news(cfg: Config) -> NewsFeed:
-    if not cfg.news_enabled or not cfg.has_brokerage_creds:
+    if not cfg.news_enabled:
+        return NullNewsFeed()
+    if cfg.broker == "moomoo" or not cfg.has_brokerage_creds:
         return NullNewsFeed()
     return AlpacaNewsFeed(
         cfg.alpaca_key_id,
@@ -355,50 +367,78 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         return 1
     tf_keys = ", ".join(t.key for t in cfg.bar_timeframes)
     print("  ✓ Configuration looks complete.")
+    print(f"  ✓ Broker backend: {cfg.broker}")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
-    if cfg.alpaca_auth_source:
+    if cfg.broker == "alpaca" and cfg.alpaca_auth_source:
         label = cfg.alpaca_auth_source
         if cfg.alpaca_cli_profile:
             label = f"{label} (profile {cfg.alpaca_cli_profile})"
         print(f"  ✓ Alpaca auth: {label}")
+    if cfg.broker == "moomoo":
+        print(
+            f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
+            f"({cfg.moomoo_trd_env})"
+        )
     if offline or cfg.is_test:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
         return 0
-    fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
-    try:
-        crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
-        print(
-            f"  ✓ Crypto bars API (no keys); BTC/USD last close "
-            f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
-        )
-    except BrokerError as exc:
-        print(f"  ✗ Crypto bars check failed: {exc}")
-        return 1
-    finally:
-        fetcher.close()
-    if not cfg.has_brokerage_creds:
-        print(
-            "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
-            "(crypto already works)."
-        )
-        print("  · Skipping broker account and stock-bar checks until keys are set.")
-        return 0
-    try:
-        broker = build_broker(cfg)
-        acct = broker.get_account()
-        print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
-        latest = broker.verify_stock_bars("SPY", limit=1)
-        feed = cfg.alpaca_data_feed or "default"
-        print(
-            f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
-            f"({latest.timestamp.date()}, feed={feed}, "
-            f"adjustment={cfg.alpaca_bar_adjustment})."
-        )
-    except BrokerError as exc:
-        print(f"  ✗ Broker check failed: {exc}")
-        return 1
+    if cfg.broker == "moomoo":
+        try:
+            broker = build_broker(cfg)
+            broker.ping()
+            acct = broker.get_account()
+            bars = broker.get_bars("SPY", timeframe="1Day", limit=1)
+            print(f"  ✓ Moomoo OpenD reachable ({broker.name}); equity ${acct.equity:,.2f}.")
+            if bars:
+                latest = bars[-1]
+                print(
+                    f"  ✓ Moomoo bars; SPY last close ${latest.close:,.2f} "
+                    f"({latest.timestamp.date()})."
+                )
+        except BrokerError as exc:
+            print(f"  ✗ Moomoo OpenD check failed: {exc}")
+            print("  · Start OpenD on your machine and unlock trading if using REAL.")
+            print("  · See docs/how-to/setup-moomoo.md")
+            return 1
+        finally:
+            if "broker" in locals() and hasattr(broker, "close"):
+                broker.close()
+    else:
+        fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
+        try:
+            crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
+            print(
+                f"  ✓ Crypto bars API (no keys); BTC/USD last close "
+                f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
+            )
+        except BrokerError as exc:
+            print(f"  ✗ Crypto bars check failed: {exc}")
+            return 1
+        finally:
+            fetcher.close()
+        if not cfg.has_brokerage_creds:
+            print(
+                "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
+                "(crypto already works)."
+            )
+            print("  · Skipping broker account and stock-bar checks until keys are set.")
+            return 0
+        try:
+            broker = build_broker(cfg)
+            acct = broker.get_account()
+            print(f"  ✓ Broker reachable ({broker.name}); equity ${acct.equity:,.2f}.")
+            latest = broker.verify_stock_bars("SPY", limit=1)
+            feed = cfg.alpaca_data_feed or "default"
+            print(
+                f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
+                f"({latest.timestamp.date()}, feed={feed}, "
+                f"adjustment={cfg.alpaca_bar_adjustment})."
+            )
+        except BrokerError as exc:
+            print(f"  ✗ Broker check failed: {exc}")
+            return 1
     try:
         llm = build_llm(cfg)
         print("  ✓ LLM client initialized.")

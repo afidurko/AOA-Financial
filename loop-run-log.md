@@ -20,3 +20,8 @@
 | 2026-07-04 19:30 | maintenance | — | integrated | aoa tasks CLI + loop-prompts.yaml shortkeys; tier1/tier2-check/verify run. 316 tests passed. tokens_estimate=3000 |
 | 2026-07-04 19:26 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-04 19:27 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-05 00:04 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-05 00:04 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-05 00:04 | fable-repair | L2 | report-only | gate blocked: L2 automation not enabled (L1 report-only). tokens_estimate=500 |
+| 2026-07-05 00:04 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-05 00:27 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |

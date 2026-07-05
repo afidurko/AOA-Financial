@@ -1,6 +1,6 @@
 """Abstract broker interface.
 
-Any brokerage (Alpaca today; IBKR/Tradier tomorrow) implements this contract.
+Any brokerage (Alpaca, Moomoo, IBKR tomorrow) implements this contract.
 The swarm only ever talks to this interface, so swapping brokers does not touch
 agent or orchestration code.
 """

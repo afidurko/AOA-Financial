@@ -30,7 +30,8 @@ tradingagents-bedrock = [
 torch = ["torch>=2.0.0"]
 # FinancePy quant context for Andrea's options/hedge analysis (GPL-3.0 optional).
 financepy = ["financepy>=1.0.0"]
-all = ["aoa-financial[dev,web,tradingagents,torch,financepy]"]
+moomoo = ["moomoo-api>=10.0.0"]
+all = ["aoa-financial[dev,web,tradingagents,torch,financepy,moomoo]"]
 
 [project.scripts]
 aoa = "aoa.cli:main"
