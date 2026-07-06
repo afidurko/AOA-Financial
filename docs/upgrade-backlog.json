@@ -1,0 +1,155 @@
+{
+  "updated_at": "2026-07-06T03:12:00+00:00",
+  "run_id": "upgrade-discovery-0747",
+  "scope": "full-program-upgrade",
+  "trading_mode": "paper-dry (experimental, not live money)",
+  "baseline": {
+    "version": "0.3.0",
+    "tests": "337 passed, 6 skipped",
+    "ruff": "pass",
+    "code_audit": "pass",
+    "verify_full": "pass",
+    "l2_gate": "blocked (L1 report-only)",
+    "model_default": "claude-sonnet-4-6"
+  },
+  "constraints": [
+    {
+      "rule": "L2 automation disabled",
+      "why": "docs/loop-l2-checklist.md not complete; gate returns l1-only",
+      "workaround": "Complete L2 checklist + human sign-off, then run `aoa tasks run tier2-check` and enable L2 in STATE.md"
+    },
+    {
+      "rule": "Cannot edit .env or rotate API keys",
+      "why": "loop-constraints.md denylist; secrets must stay local",
+      "workaround": "You rotate keys in Anthropic + Alpaca consoles, update `.env` locally; mark item ceabf69f resolved in STATE.md"
+    },
+    {
+      "rule": "One fix per Fable 5 run",
+      "why": "loop-constraints.md Code section",
+      "workaround": "Use `aoa workloop loop` for multi-item batches with Aaron approval, or queue items in this backlog"
+    },
+    {
+      "rule": "No live orders / no ALPACA_LIVE=true",
+      "why": "Trading constraints; experimental paper only",
+      "workaround": "Keep AOA_ENV=paper-dry or paper; use profiles/paper*.env"
+    },
+    {
+      "rule": "Cannot push without telling you",
+      "why": "loop-constraints.md Push & Merge",
+      "workaround": "Agent drafts PR; you review and approve push/merge"
+    }
+  ],
+  "items": [
+    {
+      "id": "upg-001",
+      "priority": 1,
+      "title": "Default paper profiles to Alpaca broker",
+      "severity": "high",
+      "fixable": true,
+      "skill": "minimal-fix",
+      "detail": "Default AOA_BROKER=moomoo hangs `aoa doctor` and `aoa team health` when OpenD is not running (ECONNREFUSED loop). STATE notes Alpaca paper is working. Set AOA_BROKER=alpaca in profiles/paper-dry.env and profiles/paper.env.",
+      "files": ["profiles/paper-dry.env", "profiles/paper.env"],
+      "verify": ["python3 -m pytest -q tests/test_config.py", "aoa doctor"]
+    },
+    {
+      "id": "upg-002",
+      "priority": 1,
+      "title": "Rotate exposed API keys",
+      "severity": "critical",
+      "fixable": false,
+      "skill": "human",
+      "detail": "Anthropic and Alpaca paper keys were pasted in chat. Revoke in each console; update .env locally.",
+      "repair_queue_id": "ceabf69f"
+    },
+    {
+      "id": "upg-003",
+      "priority": 2,
+      "title": "Promote L2 repair automation",
+      "severity": "medium",
+      "fixable": false,
+      "skill": "human",
+      "detail": "Complete docs/loop-l2-checklist.md. After one successful L2 dry-run with loop-verifier, enable L2 in STATE.md so Fable 5 can auto-fix queued items.",
+      "repair_queue_id": "4e88807c"
+    },
+    {
+      "id": "upg-004",
+      "priority": 2,
+      "title": "Moomoo broker fast-fail when OpenD down",
+      "severity": "medium",
+      "fixable": true,
+      "skill": "coding-engineer",
+      "detail": "moomoo-api OpenQuoteContext retries ~6s per attempt with no upper bound in doctor path. Wrap broker init with connection timeout or skip quote probe when AOA_BROKER=moomoo and TCP connect fails.",
+      "files": ["src/aoa/brokerage/moomoo.py", "src/aoa/team/bob.py"]
+    },
+    {
+      "id": "upg-005",
+      "priority": 3,
+      "title": "Upgrade LLM default to claude-opus-4-8",
+      "severity": "low",
+      "fixable": true,
+      "skill": "minimal-fix",
+      "detail": "README cites claude-opus-4-8 for swarm reasoning; config defaults claude-sonnet-4-6. Align AOA_MODEL default and .env.example with README or document intentional cost/speed tradeoff.",
+      "files": ["src/aoa/config.py", ".env.example", "README.md"]
+    },
+    {
+      "id": "upg-006",
+      "priority": 3,
+      "title": "Resolve FastAPI/Starlette deprecation warnings",
+      "severity": "low",
+      "fixable": true,
+      "skill": "minimal-fix",
+      "detail": "pytest warns: websockets.legacy deprecated; starlette.testclient wants httpx2. Pin or upgrade test deps when httpx2 is stable.",
+      "files": ["pyproject.toml"]
+    },
+    {
+      "id": "upg-007",
+      "priority": 3,
+      "title": "TradingAgents upstream v0.3.0 integration audit",
+      "severity": "low",
+      "fixable": true,
+      "skill": "coding-engineer",
+      "detail": "Optional extra tradingagents@v0.3.0 adds provider registry, FRED/Polymarket vendors, save_reports(). Audit AOA_TRADING_AGENTS_ENABLED path vs upstream; document which features are wired.",
+      "files": ["src/aoa/swarm/", "requirements-tradingagents.txt", "docs/tradingagents/CHANGELOG.md"]
+    },
+    {
+      "id": "upg-008",
+      "priority": 4,
+      "title": "Rebase and evaluate PR #35 (Moomoo broker)",
+      "severity": "watch",
+      "fixable": false,
+      "skill": "human",
+      "detail": "Moomoo via OpenD held while Alpaca paper works. Re-run CI after rebase if switching brokers.",
+      "repair_queue_id": "53fedf60"
+    },
+    {
+      "id": "upg-009",
+      "priority": 4,
+      "title": "Workloop discover→upgrade→verify pipeline",
+      "severity": "medium",
+      "fixable": true,
+      "skill": "fable-repair",
+      "detail": "aoa workloop run already has UpgradeStage (pip install -e .[dev,web] --upgrade). Schedule periodic dependency upgrades with Aaron approval gate; log results to workloop store.",
+      "files": ["src/aoa/workloop/upgrade.py", "src/aoa/workloop/stages.py"]
+    },
+    {
+      "id": "upg-010",
+      "priority": 4,
+      "title": "iPhone alerts + OpenStock + aoa serve",
+      "severity": "medium",
+      "fixable": false,
+      "skill": "human",
+      "detail": "Per STATE next actions: configure ntfy/Pushover/custom webhook, optional OpenStock clone, run aoa serve for dashboard.",
+      "docs": ["docs/how-to/openstock-integration.md", "SETUP-AWAITING-YOU.md"]
+    }
+  ],
+  "recommended_fable5_sequence": [
+    "upg-002",
+    "upg-001",
+    "upg-003",
+    "upg-004",
+    "upg-005",
+    "upg-006",
+    "upg-007",
+    "upg-009"
+  ]
+}

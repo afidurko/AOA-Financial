@@ -21,3 +21,4 @@
 | 2026-07-04 20:06 | fable-repair | L2 | triage | Repair triage c8d1ca69d058; STATE refreshed. |
 | 2026-07-04 20:10 | loose-ends | — | merged | PR #37: model default + Alpaca bar feed; `aoa doctor` green. |
 | 2026-07-04 23:11 | pr-review | — | merged | PR #37 merged; PR #36 rebased; #35 held; option 3 setup started. |
+| 2026-07-06 03:12 | fable-repair | L1 | discovery+fix | Full upgrade discovery: backlog at docs/upgrade-backlog.json. upg-001: paper profiles → AOA_BROKER=alpaca. 337 tests pass. L2 gate blocked. tokens_estimate=12000 |
