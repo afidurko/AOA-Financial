@@ -21,3 +21,4 @@
 | 2026-07-04 20:06 | fable-repair | L2 | triage | Repair triage c8d1ca69d058; STATE refreshed. |
 | 2026-07-04 20:10 | loose-ends | — | merged | PR #37: model default + Alpaca bar feed; `aoa doctor` green. |
 | 2026-07-04 23:11 | pr-review | — | merged | PR #37 merged; PR #36 rebased; #35 held; option 3 setup started. |
+| 2026-07-06 03:19 | daily-triage | L1 | report-only | Status assessment; repair triage f65cba3dc172; refreshed STATE (PR #35 merged, #39 stale). tokens_estimate=3000 |
