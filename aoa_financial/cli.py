@@ -86,7 +86,9 @@ def cmd_forecast(args, config: Config) -> int:
     with _store(config) as store:
         _ensure_ingested(store, args.ticker, args.live)
         closes = store.closes(args.ticker)
-        f = FC.forecast(closes, horizon_days=args.horizon)
+        f = FC.forecast(
+            closes, horizon_days=args.horizon, weights=config.forecast_weights
+        )
         print(json.dumps(f.to_dict(), indent=2) if args.json else _fmt_forecast(args.ticker, f))
     return 0
 
@@ -250,6 +252,48 @@ def cmd_backtest(args, config: Config) -> int:
     return 0
 
 
+def cmd_tune(args, config: Config) -> int:
+    from pathlib import Path
+
+    from .tune import save_tuned_weights, tune_swarm_weights
+
+    tickers = args.tickers or config.default_universe[:5]
+    with _store(config) as store:
+        for t in tickers:
+            _ensure_ingested(store, t, args.live)
+        result = tune_swarm_weights(
+            store,
+            tickers,
+            horizon=args.horizon,
+            step=args.step,
+            config=config,
+            metric=args.metric,
+        )
+    if args.save:
+        save_tuned_weights(Path(args.save), result)
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2))
+        return 0
+    best = result.best
+    print(f"\nSwarm weight tune (metric={result.metric}, tickers={best.tickers_scored})")
+    print("=" * 64)
+    print("Best weights:")
+    for agent, weight in sorted(best.weights.items()):
+        print(f"  {agent:12s} {weight:.3f}")
+    print(
+        f"\nScores: excess {best.mean_excess:+.2%} | sharpe {best.mean_sharpe:.2f} "
+        f"| hit {best.mean_hit_rate:.0%}"
+    )
+    if args.save:
+        print(f"\nSaved to {args.save}")
+    print(
+        "\nApply via env, e.g.:\n"
+        "  export AOA_SWARM_WEIGHTS="
+        + ",".join(f"{k}:{v}" for k, v in sorted(best.weights.items()))
+    )
+    return 0
+
+
 def cmd_demo(args, config: Config) -> int:
     tickers = args.tickers or ["AAPL", "XOM", "JPM"]
     print("AOA-Financial demonstration")
@@ -380,6 +424,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true")
     add_common(sub.add_parser("demo", help="end-to-end demonstration"),
                tickers=True)
+
+    sp = sub.add_parser("tune", help="search swarm_weights via walk-forward backtest")
+    sp.add_argument("tickers", nargs="*")
+    sp.add_argument("--horizon", type=int, default=21)
+    sp.add_argument("--step", type=int, default=None)
+    sp.add_argument(
+        "--metric",
+        choices=["excess_return", "sharpe", "hit_rate"],
+        default="excess_return",
+    )
+    sp.add_argument("--save", help="write best weights JSON to this path")
+    sp.add_argument("--json", action="store_true")
+    sp.add_argument("--live", action="store_true", help="ingest live Stooq history")
     return p
 
 
@@ -387,7 +444,7 @@ _HANDLERS = {
     "init": cmd_init, "ingest": cmd_ingest, "analyze": cmd_analyze,
     "forecast": cmd_forecast, "regime": cmd_regime, "reverse": cmd_reverse,
     "fundamentals": cmd_fundamentals, "frame": cmd_frame, "corr": cmd_corr,
-    "swarm": cmd_swarm, "backtest": cmd_backtest, "demo": cmd_demo,
+    "swarm": cmd_swarm, "backtest": cmd_backtest, "tune": cmd_tune, "demo": cmd_demo,
 }
 
 

@@ -95,7 +95,8 @@ def _monte_carlo(closes: Sequence[float], horizon: int, sims: int = 2000,
             "mean": S.mean(finals), "mu": mu, "sigma": sigma}
 
 
-def forecast(closes: Sequence[float], horizon_days: int = 21) -> Forecast:
+def forecast(closes: Sequence[float], horizon_days: int = 21,
+             *, weights: Dict[str, float] | None = None) -> Forecast:
     if len(closes) < 30:
         last = closes[-1] if closes else 0.0
         return Forecast(horizon_days, last, last, 0.0, "flat", 0.2,
@@ -111,9 +112,13 @@ def forecast(closes: Sequence[float], horizon_days: int = 21) -> Forecast:
     ewma_pred = last + (anchor - last) * revert_speed
 
     models = {"monte_carlo": mc["mean"], "trend": trend, "ewma": ewma_pred}
-    # Ensemble weights: lean on Monte Carlo (probabilistic) and trend.
-    w = {"monte_carlo": 0.45, "trend": 0.35, "ewma": 0.20}
-    expected = sum(models[k] * w[k] for k in models)
+    default_w = {"monte_carlo": 0.45, "trend": 0.35, "ewma": 0.20}
+    w = weights or default_w
+    total = sum(w.get(k, default_w.get(k, 0.0)) for k in models)
+    if total <= 0:
+        w = default_w
+        total = sum(w.values())
+    expected = sum(models[k] * w.get(k, 0.0) / total for k in models)
     exp_ret = expected / last - 1.0
 
     # Confidence: high when models agree and the MC cone is tight relative to

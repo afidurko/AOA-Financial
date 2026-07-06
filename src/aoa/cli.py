@@ -96,6 +96,7 @@ def build_signal_adapter(cfg: Config) -> SignalAdapter | None:
         rank=cfg.adapt_rank,
         alpha=cfg.adapt_alpha,
         lr=cfg.adapt_lr,
+        return_scale=cfg.adapt_return_scale,
     )
 
 

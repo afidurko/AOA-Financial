@@ -312,6 +312,7 @@ class Config:
     adapt_rank: int = 4
     adapt_alpha: float = 8.0
     adapt_lr: float = 0.05
+    adapt_return_scale: float = 0.05
 
     @property
     def has_brokerage_creds(self) -> bool:
@@ -442,6 +443,7 @@ class Config:
             adapt_rank=_int("AOA_ADAPT_RANK", 4),
             adapt_alpha=_float("AOA_ADAPT_ALPHA", 8.0),
             adapt_lr=_float("AOA_ADAPT_LR", 0.05),
+            adapt_return_scale=_float("AOA_ADAPT_RETURN_SCALE", 0.05),
             workloop_enabled=_bool("AOA_WORKLOOP_ENABLED", True),
             workloop_approver=os.environ.get("AOA_WORKLOOP_APPROVER", "Aaron").strip() or "Aaron",
             workloop_user_approver=os.environ.get("AOA_WORKLOOP_USER_APPROVER", "user").strip() or "user",
