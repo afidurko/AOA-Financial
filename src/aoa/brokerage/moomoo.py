@@ -7,6 +7,7 @@ and options use ``OpenSecTradeContext`` with ``TrdMarket.US``.
 from __future__ import annotations
 
 import re
+import socket
 from datetime import datetime, timezone
 from typing import Any
 
@@ -42,6 +43,21 @@ _TIMEFRAME_MAP = {
     "12Month": "K_YEAR",
 }
 _OCC_TAIL_RE = re.compile(r"^(\d{6})([CP])(\d{8})$")
+_DEFAULT_OPEND_CONNECT_TIMEOUT = 2.0
+
+
+def opend_reachable(
+    host: str,
+    port: int,
+    *,
+    timeout: float = _DEFAULT_OPEND_CONNECT_TIMEOUT,
+) -> bool:
+    """Return True when the OpenD TCP port accepts a connection."""
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 def _require_sdk() -> Any:
@@ -179,6 +195,11 @@ class MoomooBroker(Broker):
             sdk.SecurityFirm, security_firm.upper(), sdk.SecurityFirm.FUTUINC
         )
         self._trd_market = getattr(sdk.TrdMarket, self._market, sdk.TrdMarket.US)
+        if not opend_reachable(self._host, self._port):
+            raise BrokerError(
+                f"Moomoo OpenD not reachable at {self._host}:{self._port}. "
+                "Start OpenD locally or set AOA_BROKER=alpaca."
+            )
         self._quote_ctx = sdk.OpenQuoteContext(host=self._host, port=self._port)
         self._trade_ctx = sdk.OpenSecTradeContext(
             filter_trdmarket=self._trd_market,
