@@ -249,3 +249,9 @@ journal/*.jsonl
 
 # OpenStock sibling clone (AGPL upstream — not vendored)
 OpenStock/
+
+# obsidian-second-brain skill + AOA vault (sibling clones — not vendored)
+obsidian-second-brain/
+AOA-Vault/
+.cursor/mcp.json
+.cursor/skills/obsidian-second-brain
