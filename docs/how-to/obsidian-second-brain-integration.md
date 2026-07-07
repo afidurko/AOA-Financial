@@ -9,6 +9,10 @@ notes, and research can compound in one vault while the swarm runs separately.
 feature docs under `AOA-Financial/`. Run `./scripts/knowledge-stack-setup.sh` for the
 full stack, or see [spine-integration.md](spine-integration.md).
 
+**obsidian-skills:** [obsidian-skills](https://github.com/afidurko/obsidian-skills) teaches
+Obsidian format syntax (markdown, bases, canvas). obsidian-second-brain learns from it via
+`./scripts/integrate-obsidian-skills.sh`. See [obsidian-skills-integration.md](obsidian-skills-integration.md).
+
 ## Architecture
 
 ```

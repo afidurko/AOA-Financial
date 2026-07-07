@@ -106,3 +106,14 @@ export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
 
 See [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md) and
 [spine-integration.md](spine-integration.md).
+
+## 8. obsidian-skills (optional)
+
+Teach obsidian-second-brain Obsidian format syntax:
+
+```bash
+./scripts/obsidian-skills-setup.sh
+./scripts/integrate-obsidian-skills.sh
+```
+
+See [obsidian-skills-integration.md](obsidian-skills-integration.md).
