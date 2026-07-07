@@ -253,5 +253,12 @@ OpenStock/
 # obsidian-second-brain skill + AOA vault (sibling clones — not vendored)
 obsidian-second-brain/
 AOA-Vault/
+spine/
 .cursor/mcp.json
 .cursor/skills/obsidian-second-brain
+.cursor/skills/spine-init
+.cursor/skills/spine-capture
+.cursor/skills/spine-health
+.cursor/skills/spine-scan
+.cursor/skills/spine-update
+.cursor/skills/spine-recall

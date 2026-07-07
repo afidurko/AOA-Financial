@@ -86,10 +86,17 @@ export AOA_OPENSTOCK_URL=http://localhost:3000
 
 See [openstock-integration.md](openstock-integration.md) for Docker and env details.
 
-## 7. Obsidian second brain (optional)
+## 7. Obsidian second brain + Spine (optional)
 
-Wire [obsidian-second-brain](https://github.com/afidurko/obsidian-second-brain) beside
-the repo for an AI-first knowledge vault (decisions, research, architecture docs):
+Full knowledge stack (obsidian-second-brain + Spine + shared vault):
+
+```bash
+./scripts/knowledge-stack-setup.sh
+export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
+export AOA_SPINE_ENABLED=true
+```
+
+Or obsidian-second-brain only:
 
 ```bash
 ./scripts/obsidian-second-brain-setup.sh
@@ -97,4 +104,5 @@ the repo for an AI-first knowledge vault (decisions, research, architecture docs
 export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
 ```
 
-See [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md) for vault setup, MCP, and `/obsidian-architect`.
+See [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md) and
+[spine-integration.md](spine-integration.md).

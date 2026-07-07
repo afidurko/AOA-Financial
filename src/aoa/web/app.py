@@ -86,6 +86,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "opportunity_sweep_seconds": cfg.opportunity_sweep_seconds,
             "openstock_url": cfg.openstock_url,
             "obsidian_vault_path": cfg.obsidian_vault_path,
+            "spine_enabled": cfg.spine_enabled,
         }
 
     @app.get("/api/status")

@@ -5,6 +5,10 @@ cross-CLI skill that turns an Obsidian vault into a living AI-first second brain
 AOA Financial keeps it as a **sibling clone** so trading decisions, architecture
 notes, and research can compound in one vault while the swarm runs separately.
 
+**Spine integration:** The same vault can host [Spine](https://github.com/afidurko/spine)
+feature docs under `AOA-Financial/`. Run `./scripts/knowledge-stack-setup.sh` for the
+full stack, or see [spine-integration.md](spine-integration.md).
+
 ## Architecture
 
 ```
@@ -19,6 +23,8 @@ notes, and research can compound in one vault while the swarm runs separately.
                                            └─────────────────────┘
          obsidian-second-brain skill ◀─────── Cursor / Claude Code
          (44 commands, MCP server)
+         Spine skill ◀────────────────────── commit-driven feature docs
+         (integrations/spine/ bridge)
 ```
 
 - **AOA** — autonomous trading swarm, risk guardrails, team dashboard.
