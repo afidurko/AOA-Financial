@@ -6,7 +6,10 @@ Run the helper anytime:
 
 ```bash
 bash scripts/setup_moomoo_auth.sh
+python3 scripts/moomoo_setup_stage.py a   # Stage A checklist (beginner walkthrough)
 ```
+
+**Visual step-by-step:** [docs/how-to/moomoo-setup-walkthrough.md](docs/how-to/moomoo-setup-walkthrough.md)
 
 For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
 
