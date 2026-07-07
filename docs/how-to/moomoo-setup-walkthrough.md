@@ -176,3 +176,18 @@ bash scripts/setup_moomoo_auth.sh      # connectivity checklist
 python3 -m aoa.cli doctor --offline    # config only, no OpenD needed
 python3 scripts/moomoo_setup_stage.py a   # Stage A checklist
 ```
+
+### No Terminal? (Mac Finder double-click)
+
+In Finder, open `scripts/mac/` and double-click:
+
+| File | When |
+|------|------|
+| `aoa-setup.command` | Once — creates `.venv` and installs AOA |
+| `open-env.command` | Edit `ANTHROPIC_API_KEY` in TextEdit |
+| `aoa-doctor.command` | Check OpenD + broker + API key |
+| `aoa-run.command` | One analysis cycle (paper-dry, no orders) |
+
+First time: right-click a `.command` file → **Open** (macOS security prompt).
+
+Keep **Moomoo OpenD** running in the background before doctor/run.
