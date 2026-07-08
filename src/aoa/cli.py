@@ -3,7 +3,7 @@
 Commands:
   aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
-  aoa setup      One-time broker setup (moomoo, …).
+  aoa setup      One-time setup (mac, moomoo, …).
   aoa status     Show account, positions, and market clock.
   aoa run        Run a single analysis→decision→execution cycle.
   aoa loop       Run cycles continuously on the configured cadence.
@@ -1241,6 +1241,17 @@ def cmd_setup_moomoo(cfg: Config) -> int:
     return int(result.returncode)
 
 
+def cmd_setup_mac(_cfg: Config) -> int:
+    """Run the macOS bootstrap script (Python 3.10+, venv, pip install)."""
+    script = _repo_root() / "scripts" / "setup_mac.sh"
+    if not script.is_file():
+        print(f"Setup script not found: {script}", file=sys.stderr)
+        return 1
+    print("Running macOS bootstrap (Python 3.10+, venv, pip install)…")
+    result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
+    return int(result.returncode)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1255,6 +1266,10 @@ def main(argv: list[str] | None = None) -> int:
     setup_sub.add_parser(
         "moomoo",
         help="Install checks for Moomoo OpenD + moomoo-api (runs scripts/setup_moomoo_auth.sh).",
+    )
+    setup_sub.add_parser(
+        "mac",
+        help="macOS bootstrap: Python 3.10+, venv, pip install (runs scripts/setup_mac.sh).",
     )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
@@ -1461,6 +1476,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "setup":
             if args.setup_command == "moomoo":
                 return cmd_setup_moomoo(cfg)
+            if args.setup_command == "mac":
+                return cmd_setup_mac(cfg)
         if args.command == "status":
             return cmd_status(cfg)
         if args.command == "run":

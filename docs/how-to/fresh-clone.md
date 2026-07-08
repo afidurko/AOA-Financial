@@ -2,7 +2,17 @@
 
 Use this checklist after cloning AOA-Financial for the first time.
 
-## 1. Environment file
+## 1. Environment file (automated on macOS)
+
+**macOS one-liner** (Python 3.10+, venv, install — no `aoa` required yet):
+
+```bash
+git clone https://github.com/afidurko/AOA-Financial.git
+cd AOA-Financial
+bash scripts/setup_mac.sh --moomoo
+```
+
+Or manually:
 
 ```bash
 cp .env.example .env
