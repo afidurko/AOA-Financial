@@ -280,6 +280,27 @@ def run_task(
             steps_run.append(f"vault-sync={'dry-run' if dry else 'write'}")
             continue
 
+        if step == "workloop-upgrade":
+
+            from aoa.workloop.upgrade import run_upgrade_pipeline
+
+            dry = os.environ.get("AOA_WORKLOOP_UPGRADE_DRY_RUN", "true").lower() in {
+                "1",
+                "true",
+                "yes",
+            }
+            result = run_upgrade_pipeline(root, dry_run=dry)
+            steps_run.append(f"workloop-upgrade={'dry-run' if dry else 'run'}")
+            if not result.get("ok"):
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    message=f"Workloop upgrade pipeline failed at {result.get('phase')}",
+                    exit_code=1,
+                )
+            continue
+
         if step == "chain-bootstrap":
             from aoa.config import Config
             from aoa.loop.task_chain import bootstrap_chain_from_state

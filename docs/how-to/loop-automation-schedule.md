@@ -158,6 +158,8 @@ aoa tasks run tier2-chain                            # gate + bootstrap + repair
 - Exit code **3** from `chain advance` = alert you; automation must stop.
 - L2 prompt (`aoa tasks show L2`) includes step 7: chain advance after draft PR.
 
+**Dependency upgrades:** `docs/how-to/workloop-upgrade.md` · `aoa workloop upgrade` · `aoa tasks run workloop-upgrade` (dry-run default).
+
 To roll back: remove the line or set `loop-pause-all` under High Priority.
 
 ---
