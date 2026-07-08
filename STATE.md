@@ -1,11 +1,10 @@
 # Loop State — AOA-Financial
 
-Last run: 2026-07-08 02:32 UTC (Fable 5 repair triage, run a55d2e06afa3)
+Last run: 2026-07-08 02:45 UTC (L2 fix upg-009 — workloop upgrade pipeline)
 
 ## High Priority (loop is acting or waiting on human)
 
-- **Workloop discover→upgrade→verify pipeline** — Document and schedule periodic dependency upgrades via workloop UpgradeStage.  
-  Source: `state` | Skill: `fable-repair` | id: `9106dccc`
+_(none — upg-009 in PR; run chain advance after merge)_
 
 ## Watch List
 

@@ -890,6 +890,27 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     return 0
 
 
+def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
+    from pathlib import Path
+
+    from aoa.workloop.upgrade import run_upgrade_pipeline
+
+    result = run_upgrade_pipeline(Path.cwd(), dry_run=dry_run)
+    flag = "OK" if result.get("ok") else "FAIL"
+    mode = "dry-run" if dry_run else "upgrade"
+    print(f"Workloop upgrade pipeline [{mode}]: {flag}")
+    print(f"phase: {result.get('phase', '')}")
+    if not result.get("ok"):
+        upgrade = result.get("upgrade") or {}
+        if upgrade.get("output"):
+            print(upgrade["output"][-500:])
+        reverify = result.get("reverify") or {}
+        if reverify and not reverify.get("passed"):
+            print("Reverify failed after upgrade.")
+        return 1
+    return 0
+
+
 def _print_repair_result(result) -> None:
     run = result.run
     print(f"\n=== Fable 5 repair triage ({run.run_id}) ===")
@@ -1374,6 +1395,15 @@ def main(argv: list[str] | None = None) -> int:
     wl_approve.add_argument("--note", default="", help="Optional approval note.")
     wl_log = wl_sub.add_parser("log", help="Tail the work-loop audit log.")
     wl_log.add_argument("-n", type=int, default=20, help="Number of entries to show.")
+    wl_upgrade = wl_sub.add_parser(
+        "upgrade",
+        help="Run verify → pip upgrade → reverify (dependency refresh).",
+    )
+    wl_upgrade.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Verify only; skip pip install --upgrade.",
+    )
 
     rp = sub.add_parser(
         "repair",
@@ -1522,6 +1552,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_workloop_approve(cfg, approver=approver, note=args.note)
             if args.workloop_command == "log":
                 return cmd_workloop_log(cfg, args.n)
+            if args.workloop_command == "upgrade":
+                return cmd_workloop_upgrade(cfg, dry_run=getattr(args, "dry_run", False))
         if args.command == "repair":
             if args.repair_command == "triage":
                 return cmd_repair_triage(cfg, no_sync=getattr(args, "no_sync", False))

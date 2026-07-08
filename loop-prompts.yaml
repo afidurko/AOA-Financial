@@ -142,6 +142,13 @@ tasks:
     on_skip: log
     on_pause: exit
 
+  workloop-upgrade:
+    title: Workloop dependency upgrade pipeline (dry-run default)
+    steps:
+      - workloop-upgrade
+    on_skip: log
+    on_pause: exit
+
   verify:
     title: Local verify only
     steps:
