@@ -1022,6 +1022,13 @@ def cmd_tasks_list() -> int:
     return 0
 
 
+def cmd_tasks_automations() -> int:
+    from aoa.loop.prompts import format_automations
+
+    print(format_automations())
+    return 0
+
+
 def cmd_tasks_show(shortkey: str) -> int:
     from aoa.loop.prompts import get_prompt
 
@@ -1371,6 +1378,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     tk_sub = tk.add_subparsers(dest="tasks_command", required=True)
     tk_sub.add_parser("list", help="List prompt shortkeys and task loops.")
+    tk_sub.add_parser(
+        "automations",
+        help="Print ready-to-create Cursor automation specs (A/B/C).",
+    )
     tk_show = tk_sub.add_parser("show", help="Print a copy-paste prompt by shortkey.")
     tk_show.add_argument(
         "shortkey",
@@ -1473,6 +1484,8 @@ def main(argv: list[str] | None = None) -> int:
             if args.repair_command == "worktree":
                 return cmd_repair_worktree(cfg, item_id=getattr(args, "item_id", ""))
         if args.command == "tasks":
+            if args.tasks_command == "automations":
+                return cmd_tasks_automations()
             if args.tasks_command == "list":
                 return cmd_tasks_list()
             if args.tasks_command == "show":

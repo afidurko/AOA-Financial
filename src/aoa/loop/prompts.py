@@ -21,6 +21,7 @@ class LoopPrompt:
     tier: str = ""
     automation: str = ""
     cadence: str = ""
+    branch: str = "main"
 
 
 @dataclass(frozen=True)
@@ -71,6 +72,7 @@ def load_prompts(repo_root: Path | None = None) -> dict[str, LoopPrompt]:
             tier=str(block.get("tier", "")),
             automation=str(block.get("automation", "")),
             cadence=str(block.get("cadence", "")),
+            branch=str(block.get("branch", "main")),
         )
     return out
 
@@ -290,6 +292,44 @@ def run_task(
         message=f"Task {spec.key} completed",
         exit_code=0,
     )
+
+
+def list_automation_prompts(*, repo_root: Path | None = None) -> list[LoopPrompt]:
+    """Prompts that define a scheduled Cursor automation (have an automation name)."""
+    prompts = load_prompts(repo_root)
+    autos = [p for p in prompts.values() if p.automation]
+    return sorted(autos, key=lambda p: p.key)
+
+
+def format_automations(repo_root: Path | None = None) -> str:
+    """Render ready-to-create specs for each scheduled Cursor automation."""
+    autos = list_automation_prompts(repo_root=repo_root)
+    if not autos:
+        return "No scheduled automations defined in loop-prompts.yaml."
+    lines = [
+        "Cursor Cloud automations to create (Dashboard → Agents → Automations → New):",
+        "",
+    ]
+    for prompt in autos:
+        lines.extend(
+            [
+                f"### {prompt.automation}  (shortkey {prompt.key})",
+                "- Repository: AOA-Financial",
+                f"- Branch: {prompt.branch}",
+                f"- Schedule: {prompt.cadence or 'choose a daily time'}",
+                "- Prompt:",
+                "",
+                prompt.body,
+                "",
+                "---",
+                "",
+            ]
+        )
+    lines.append(
+        "No API exists to register these automatically; paste each block into a new "
+        "automation. Copy one prompt at a time with: aoa tasks show <shortkey>."
+    )
+    return "\n".join(lines)
 
 
 def format_prompt_list(repo_root: Path | None = None) -> str:

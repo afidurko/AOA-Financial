@@ -9,6 +9,7 @@ prompts:
     tier: "1"
     automation: "AOA daily triage"
     cadence: "Daily 14:00 UTC"
+    branch: main
     body: |
       Run loop-constraints, then loop-budget, then loop-triage on AOA-Financial.
 
@@ -30,6 +31,7 @@ prompts:
     tier: "2"
     automation: "AOA fable repair L2"
     cadence: "Daily 15:00 UTC (after L2 enabled in STATE.md)"
+    branch: main
     body: |
       Run the fable-repair skill on AOA-Financial.
       Read loop-constraints.md, docs/safety.md, LOOP.md.
@@ -55,6 +57,7 @@ prompts:
     tier: "1"
     automation: "AOA user brief"
     cadence: "Daily 14:30 UTC (after triage)"
+    branch: main
     body: |
       Run loop-constraints, then loop-budget, then loop-triage on AOA-Financial.
 

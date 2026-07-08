@@ -32,6 +32,7 @@ Source of truth: `loop-prompts.yaml`
 
 ```bash
 aoa tasks list              # all shortkeys + task loops
+aoa tasks automations       # full A/B/C specs (name, branch, schedule, prompt)
 aoa tasks show L1           # Automation A prompt → paste into Cursor
 aoa tasks show L2           # Automation B prompt
 aoa tasks show BRIEF        # Automation C — daily user brief
