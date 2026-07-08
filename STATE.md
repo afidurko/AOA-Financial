@@ -4,7 +4,8 @@ Last run: 2026-07-08 02:45 UTC (L2 fix upg-009 — workloop upgrade pipeline)
 
 ## High Priority (loop is acting or waiting on human)
 
-_(none — upg-009 in PR; run chain advance after merge)_
+- **Default paper profiles to Alpaca broker** — Set AOA_BROKER=alpaca in profiles/paper-dry.env and profiles/paper.env.  
+  Source: `upgrade-backlog` | Skill: `minimal-fix` | id: `upg-001`
 
 ## Watch List
 
