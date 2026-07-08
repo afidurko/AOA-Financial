@@ -1,83 +1,64 @@
-# Setup — waiting on you
+# Setup — log into Moomoo, run one command
 
-AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Complete the steps below in order.
+AOA defaults to **Moomoo** + a **local Ollama** model (no cloud API keys).
 
-Run the helper anytime:
+## Quick start (any platform)
 
-```bash
-bash scripts/setup_moomoo_auth.sh
-```
-
-For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
-
----
-
-## Step 1 — Anthropic API key (agents need this to think)
-
-- [ ] Open [console.anthropic.com](https://console.anthropic.com/) → **API Keys** → create a key
-- [ ] Edit `.env` in the project root:
+1. **Install Moomoo OpenD** from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/)
+2. **Log in** with your Moomoo account (OpenD must stay running on this machine)
+3. **Install Python deps** (once):
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-api03-...
+pip install -e ".[dev,web,openai]"
 ```
 
----
-
-## Step 2 — Moomoo OpenD (default broker)
-
-OpenD must run on the **same machine** as AOA.
-
-- [ ] Download **Moomoo OpenD** from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/)
-- [ ] Install, launch, and log in with your **Moomoo account**
-- [ ] Confirm it listens on `127.0.0.1:11111` (default)
-
----
-
-## Step 3 — Install Python deps
+4. **Activate everything**:
 
 ```bash
-pip install -e ".[dev,web]"
+aoa activate
+# or: bash scripts/activate.sh
 ```
 
-(`moomoo-api` is included by default; add `[alpaca]` only if using Alpaca.)
+`activate` waits for OpenD, starts Ollama if installed, runs `doctor`, and prints next steps.
 
----
-
-## Step 4 — Verify
-
-With OpenD running:
+Optional first cycle or dashboard:
 
 ```bash
-python3 -m aoa.cli doctor
+aoa activate --run      # one dry-run cycle after verify
+aoa activate --serve    # web dashboard at http://127.0.0.1:8080
 ```
 
-You should see:
-
-- `✓ Broker: moomoo`
-- `✓ Moomoo OpenD target: 127.0.0.1:11111 (US, simulate)`
-- `✓ Broker reachable (moomoo-paper); equity $...`
-- `✓ LLM reachable (model=...)`
+Paper dry-run by default — no orders submitted until you change `AOA_ENV`.
 
 ---
 
-## Step 5 — First dry run
+## What `activate` turns on
+
+| System | How |
+|--------|-----|
+| **Broker** | Moomoo OpenD at `127.0.0.1:11111` (waits until you log in) |
+| **Reasoning** | Local Ollama (`llama3.1`) — no Anthropic/OpenAI key |
+| **Trading mode** | `paper-dry` — analyze and journal only |
+| **Verify** | Full `aoa doctor` (broker + LLM ping) |
+
+Profile: `profiles/moomoo.env` (auto-selected by `activate`).
+
+---
+
+## Optional — cloud LLM instead of Ollama
+
+Edit `.env`:
 
 ```bash
-python3 -m aoa.cli run
+AOA_LLM_PROVIDER=anthropic
+ANTHROPIC_API_KEY=sk-ant-...
 ```
-
-`AOA_ENV=paper-dry` keeps orders from being submitted even when the broker connects.
 
 ---
 
-## Optional — Alpaca paper instead of Moomoo
+## Optional — Alpaca instead of Moomoo
 
-1. Set in `.env`: `AOA_BROKER=alpaca`
-2. Run: `pip install -e ".[alpaca]"`
-3. Either `alpaca profile login` **or** set `ALPACA_API_KEY_ID` + `ALPACA_API_SECRET_KEY` (`PK...` keys)
-4. Keep `ALPACA_LIVE=false`
-
-See `bash scripts/setup_alpaca_auth.sh` for the full Alpaca checklist.
+Set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
 
 ---
 
@@ -98,12 +79,10 @@ MOOMOO_UNLOCK_PASSWORD=your-trading-password
 
 | Symptom | Fix |
 |---------|-----|
-| `Connect fail` / OpenD unreachable | Start OpenD; check `MOOMOO_OPEND_HOST` / `MOOMOO_OPEND_PORT` |
+| `Connect fail` / OpenD unreachable | Start OpenD; log in; check `MOOMOO_OPEND_HOST` / `MOOMOO_OPEND_PORT` |
+| Ollama not running | `ollama pull llama3.1 && ollama serve` — or use Anthropic (above) |
 | `unlock_trade` error | Set `MOOMOO_UNLOCK_PASSWORD` for live accounts |
 | Empty bars / no data | Log into OpenD; confirm US market data subscription |
-| `401 unauthorized` (Alpaca) | Re-run `alpaca profile login` or regenerate API keys |
-| `ANTHROPIC_API_KEY is not set` | Complete Step 1 |
-| `Alpaca credentials missing` | Complete optional Alpaca section or switch back to Moomoo |
 
 ---
 
@@ -112,4 +91,4 @@ MOOMOO_UNLOCK_PASSWORD=your-trading-password
 - Never commit `.env` (already gitignored)
 - Regenerate keys if you pasted secrets in chat or Slack
 - `MOOMOO_UNLOCK_PASSWORD` is sensitive — treat like a trading PIN
-- Stay on `AOA_ENV=paper-dry` until you deliberately move to live trading
+- Stay on `paper-dry` until you deliberately move to live trading

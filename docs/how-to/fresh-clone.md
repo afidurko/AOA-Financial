@@ -10,10 +10,15 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-- `ANTHROPIC_API_KEY` — Claude API access for agent reasoning
 - **Moomoo OpenD** — install from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/), log in, keep running on `127.0.0.1:11111`
 
-See `SETUP-AWAITING-YOU.md` and run `bash scripts/setup_moomoo_auth.sh`.
+Then activate everything in one step:
+
+```bash
+aoa activate
+```
+
+See `SETUP-AWAITING-YOU.md` and run `bash scripts/activate.sh`.
 
 **Optional Alpaca:** set `AOA_BROKER=alpaca`, `pip install -e ".[alpaca]"`, and run `bash scripts/setup_alpaca_auth.sh`.
 

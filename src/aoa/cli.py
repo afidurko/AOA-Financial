@@ -1,6 +1,7 @@
 """Command-line interface for the AOA Financial swarm.
 
 Commands:
+  aoa activate   Log into Moomoo OpenD → wait, start local LLM, verify all systems.
   aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
   aoa status     Show account, positions, and market clock.
@@ -27,6 +28,15 @@ import sys
 import time
 from pathlib import Path
 
+from aoa.activate import (
+    ensure_profile,
+    ollama_reachable,
+    opend_reachable,
+    print_activation_banner,
+    start_ollama_serve,
+    wait_for_opend,
+    wait_message,
+)
 from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.alpaca_bars import (
@@ -317,6 +327,63 @@ def _print_bars_table(symbol: str, bars: list, *, asset: str) -> None:
             f"{bar.close:>12,.2f}"
             f"{bar.volume:>14,.2f}"
         )
+
+
+def cmd_activate(
+    cfg: Config,
+    *,
+    wait_sec: float,
+    skip_wait: bool,
+    run: bool,
+    serve: bool,
+) -> int:
+    print_activation_banner()
+    if cfg.broker != "moomoo":
+        print(f"Note: broker is {cfg.broker!r}; activate is tuned for Moomoo OpenD.")
+
+    host, port = cfg.moomoo_opend_host, cfg.moomoo_opend_port
+    if skip_wait:
+        if not opend_reachable(host, port):
+            print(f"OpenD not reachable at {host}:{port}.", file=sys.stderr)
+            return 1
+        print(f"  ✓ Moomoo OpenD at {host}:{port}")
+    else:
+        print(f"Step 1 — Moomoo OpenD at {host}:{port}")
+        if not wait_for_opend(host, port, timeout_sec=wait_sec, on_wait=lambda: wait_message(host, port)):
+            print(f"Timed out after {wait_sec:.0f}s waiting for OpenD.", file=sys.stderr)
+            return 1
+        print("  ✓ OpenD connected")
+
+    if cfg.llm_provider == "ollama":
+        print("Step 2 — local Ollama LLM (no API key)")
+        if ollama_reachable():
+            print("  ✓ Ollama already running")
+        elif start_ollama_serve():
+            print("  ✓ Started ollama serve")
+        else:
+            print(
+                "  · Ollama not running — install from https://ollama.com/download\n"
+                "    then: ollama pull llama3.1 && ollama serve\n"
+                "    (or set AOA_LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY in .env)",
+                file=sys.stderr,
+            )
+    else:
+        print(f"Step 2 — LLM provider: {cfg.llm_provider}")
+
+    print("Step 3 — verify all systems")
+    rc = cmd_doctor(cfg)
+    if rc != 0:
+        return rc
+
+    print("\n=== All systems ready ===")
+    print("  aoa run       — one analysis cycle (dry-run; no orders)")
+    print("  aoa loop      — continuous cycles")
+    print("  aoa serve     — web dashboard at http://127.0.0.1:8080")
+    if run:
+        return cmd_run(cfg)
+    if serve:
+        return cmd_serve(cfg)
+    return 0
 
 
 def cmd_bars(
@@ -1128,6 +1195,31 @@ def cmd_burnin(cfg: Config, *, cycles: int, pause: int) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    act = sub.add_parser(
+        "activate",
+        help="Wait for Moomoo OpenD login and verify all systems.",
+    )
+    act.add_argument(
+        "--wait",
+        type=float,
+        default=300.0,
+        help="Seconds to wait for OpenD (default 300).",
+    )
+    act.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="Fail immediately if OpenD is not reachable.",
+    )
+    act.add_argument(
+        "--run",
+        action="store_true",
+        help="Run one swarm cycle after activation.",
+    )
+    act.add_argument(
+        "--serve",
+        action="store_true",
+        help="Start the web dashboard after activation.",
+    )
     doctor = sub.add_parser("doctor", help="Validate configuration & connectivity.")
     doctor.add_argument(
         "--offline",
@@ -1302,6 +1394,17 @@ def main(argv: list[str] | None = None) -> int:
     cfg = Config.from_env()
 
     try:
+        if args.command == "activate":
+            _ensure_env_template()
+            ensure_profile()
+            cfg = Config.from_env(load_dotenv=False)
+            return cmd_activate(
+                cfg,
+                wait_sec=args.wait,
+                skip_wait=args.no_wait,
+                run=args.run,
+                serve=args.serve,
+            )
         if args.command == "bars":
             return cmd_bars(cfg, args.symbols, timeframe=args.timeframe, limit=args.limit)
         if args.command == "doctor":
