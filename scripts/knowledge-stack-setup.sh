@@ -7,6 +7,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 echo "== Knowledge stack setup (obsidian-second-brain + Spine + AOA) =="
 echo ""
 
+"$ROOT/scripts/ensure-knowledge-stack-env.sh"
+echo ""
+
 "$ROOT/scripts/obsidian-second-brain-setup.sh"
 echo ""
 "$ROOT/scripts/spine-setup.sh"
@@ -18,16 +21,27 @@ echo ""
 "$ROOT/scripts/integrate-obsidian-skills.sh"
 
 VAULT_DIR="${AOA_OBSIDIAN_VAULT_PATH:-$ROOT/AOA-Vault}"
+if [[ -f "$ROOT/.env" ]]; then
+  val="$(grep -E '^AOA_OBSIDIAN_VAULT_PATH=' "$ROOT/.env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+  if [[ -n "$val" ]]; then
+    if [[ "$val" = /* ]]; then VAULT_DIR="$val"; else VAULT_DIR="$ROOT/$val"; fi
+  fi
+fi
+
+echo ""
+"$ROOT/scripts/verify-knowledge-stack.sh" || true
+echo ""
+"$ROOT/scripts/open-obsidian-vault.sh" || true
 echo ""
 echo "== Knowledge stack ready =="
 echo ""
-echo "Add to .env:"
-echo "  AOA_OBSIDIAN_VAULT_PATH=$VAULT_DIR"
+echo ".env updated with:"
+echo "  AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault"
 echo "  AOA_SPINE_ENABLED=true"
 echo ""
-echo "Workflow:"
-echo "  1. Open $VAULT_DIR in Obsidian"
-echo "  2. /obsidian-init  — obsidian-second-brain vault manual (uses obsidian-skills for format)"
-echo "  3. /obsidian-architect — document AOA codebase (OSB)"
-echo "  4. /spine-capture — after commits, draft feature docs (Spine)"
-echo "  5. aoa serve — trading dashboard with Second Brain link"
+echo "Automated: clones, .env lines, vault, bridges, verification, open Obsidian (macOS)"
+echo ""
+echo "Manual (cannot automate):"
+echo "  1. Restart Cursor (loads MCP + skills)"
+echo "  2. /obsidian-init and /obsidian-architect in Cursor chat"
+echo "  3. aoa serve (needs API keys in .env — see SETUP-AWAITING-YOU.md)"
