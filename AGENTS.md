@@ -1,5 +1,12 @@
 # AGENTS.md — AOA-Financial
 
+## Cursor Cloud specific instructions
+
+Cloud agents boot from [.cursor/environment.json](.cursor/environment.json),
+which runs `pip install -e ".[dev,web]"` so the trading CLI, web dashboard, and
+full test suite are ready without manual setup. If you add a heavyweight system
+dependency, update that `install` command so future agents inherit it.
+
 ## Test commands
 
 ```bash

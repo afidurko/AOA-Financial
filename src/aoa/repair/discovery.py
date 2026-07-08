@@ -7,6 +7,7 @@ import uuid
 from pathlib import Path
 
 from aoa.repair.models import RepairItem
+from aoa.repair.schedule_gate import requires_escalation_text
 from aoa.team.code_engineering import run_code_quality_audit
 from aoa.team.models import HealthStatus
 from aoa.workloop.verify import run_verify
@@ -34,6 +35,7 @@ def discover_repairs(
                 fixable=finding.area not in {"imports"},
                 detail=finding.detail,
                 suggested_skill="coding-engineer" if finding.area != "ruff" else "minimal-fix",
+                requires_escalation=False,
             )
         )
 
@@ -51,6 +53,7 @@ def discover_repairs(
                         fixable=True,
                         detail=str(block.get("output", block.get("cmd", "")))[:500],
                         suggested_skill="minimal-fix",
+                        requires_escalation=False,
                     )
                 )
 
@@ -82,6 +85,10 @@ def _items_from_state(state_path: Path) -> list[RepairItem]:
         title, detail = match.group(1), match.group(2)
         if title.startswith("_") or "none" in title.lower():
             continue
+        # High Priority items are, by definition, where the loop is acting or
+        # waiting on a human, so they always need escalation. Watch items only
+        # escalate when their text signals secrets, live trading, or approvals.
+        needs_escalation = section == "high" or requires_escalation_text(title, detail)
         items.append(
             RepairItem(
                 item_id=_new_id(),
@@ -91,6 +98,7 @@ def _items_from_state(state_path: Path) -> list[RepairItem]:
                 fixable=section == "high",
                 detail=detail,
                 suggested_skill="fable-repair",
+                requires_escalation=needs_escalation,
             )
         )
     return items

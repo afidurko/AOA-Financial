@@ -79,3 +79,17 @@ patterns:
     cli: aoa loop
     human_gates: [live-ack, risk-guards]
     level: prod
+
+  - id: user-response-loop
+    name: User Response Loop
+    file: src/aoa/loop/user_brief.py
+    goal: Auto-brief user on loop state; route inbound responses to approvals
+    cadence: 1d-on-demand
+    risk: low
+    tools: [cursor]
+    skills: [loop-triage, coding-engineer]
+    state: STATE.md
+    cli: aoa loop brief
+    prompt_shortkey: BRIEF
+    human_gates: [denylist-paths, draft-only-sensitive]
+    level: L1

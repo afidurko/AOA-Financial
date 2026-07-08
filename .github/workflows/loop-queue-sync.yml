@@ -1,0 +1,84 @@
+name: Loop queue sync
+
+# Deterministic, no-LLM refresh of the Fable 5 repair queue.
+# Runs `aoa repair triage --no-sync` (writes data/<env>/repair/queue.json, which
+# is gitignored), exports a timestamp-free snapshot to the tracked
+# loop-state/repair-queue.json, and commits any change to a dedicated automation
+# branch as a single rolling pull request. STATE.md is left untouched so
+# human-edited sections never churn. No LLM, no secrets beyond GITHUB_TOKEN.
+
+on:
+  schedule:
+    # Daily 13:50 UTC — just before the preflight heartbeat.
+    - cron: "50 13 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  queue-sync:
+    runs-on: ubuntu-latest
+    env:
+      SYNC_BRANCH: automation/loop-queue-sync
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,web]"
+
+      - name: Refresh repair queue (no STATE.md rewrite)
+        run: python3 -m aoa.cli repair triage --no-sync
+
+      - name: Export tracked queue snapshot
+        run: |
+          python3 - <<'PY'
+          import glob, json, os
+
+          files = sorted(glob.glob("data/*/repair/queue.json"))
+          items = []
+          if files:
+              items = json.load(open(files[0])).get("items", [])
+          os.makedirs("loop-state", exist_ok=True)
+          # Drop the volatile updated_at so the snapshot changes only when the
+          # discovered items actually change.
+          with open("loop-state/repair-queue.json", "w") as fh:
+              json.dump({"items": items}, fh, indent=2, sort_keys=True)
+              fh.write("\n")
+          print(f"Exported {len(items)} repair item(s).")
+          PY
+
+      - name: Commit snapshot to automation branch
+        run: |
+          set -euo pipefail
+          git config user.name "aoa-loop-bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$SYNC_BRANCH"
+          git add loop-state/repair-queue.json
+          if git diff --cached --quiet; then
+            echo "No repair-queue changes to commit."
+            exit 0
+          fi
+          git commit -m "chore(loop): refresh repair queue snapshot [skip ci]"
+          git push -f origin "$SYNC_BRANCH"
+          if gh pr view "$SYNC_BRANCH" >/dev/null 2>&1; then
+            echo "Rolling PR already open for $SYNC_BRANCH."
+          else
+            gh pr create \
+              --base main \
+              --head "$SYNC_BRANCH" \
+              --title "Loop: refresh repair queue snapshot" \
+              --body "Automated deterministic repair-queue refresh (no LLM). Review the queue; the L2 automation will act only on auto-fixable (non-escalation) items."
+          fi

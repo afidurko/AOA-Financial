@@ -7,11 +7,15 @@ from pathlib import Path
 
 from aoa.repair.schedule_gate import (
     GateAction,
+    auto_fixable_queue_titles,
     count_runs_by_loop,
+    escalation_queue_titles,
     evaluate_gate,
     fixable_queue_titles,
     is_paused,
+    item_requires_escalation,
     l2_enabled_in_state,
+    requires_escalation_text,
 )
 
 
@@ -86,3 +90,81 @@ def test_evaluate_gate_triage_ok(tmp_path: Path):
     )
     result = evaluate_gate(repo_root=tmp_path, mode="triage")
     assert result.action is GateAction.TRIAGE_OK
+
+
+def test_requires_escalation_text():
+    assert requires_escalation_text("Rotate exposed API keys", "revoke") is True
+    assert requires_escalation_text("Enable live trading") is True
+    assert requires_escalation_text("Code audit: ruff", "unused import") is False
+
+
+def test_item_requires_escalation_fallback():
+    assert item_requires_escalation({"requires_escalation": True}) is True
+    assert item_requires_escalation({"requires_escalation": False}) is False
+    # No explicit flag -> keyword fallback.
+    assert item_requires_escalation({"title": "Rotate .env secret"}) is True
+    assert item_requires_escalation({"title": "Verify failed: pytest"}) is False
+
+
+def _queue_dir(tmp_path: Path, items: str) -> Path:
+    queue_dir = tmp_path / "data" / "paper-dry" / "repair"
+    queue_dir.mkdir(parents=True)
+    (queue_dir / "queue.json").write_text('{"items": [' + items + "]}", encoding="utf-8")
+    return queue_dir / "queue.json"
+
+
+def test_auto_fixable_excludes_escalation(tmp_path: Path):
+    qp = _queue_dir(
+        tmp_path,
+        '{"title": "Code audit: ruff", "fixable": true, "status": "queued",'
+        ' "requires_escalation": false},'
+        '{"title": "Rotate API keys", "fixable": true, "status": "queued",'
+        ' "requires_escalation": true}',
+    )
+    assert auto_fixable_queue_titles(qp) == ("Code audit: ruff",)
+    assert escalation_queue_titles(qp) == ("Rotate API keys",)
+    assert set(fixable_queue_titles(qp)) == {"Code audit: ruff", "Rotate API keys"}
+
+
+def test_evaluate_gate_l2_allowed_scoped(tmp_path: Path):
+    (tmp_path / "STATE.md").write_text(
+        "# Loop State\n\n## Loop automation\n\n- L2: enabled — scoped\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "loop-run-log.md").write_text(
+        "| Timestamp (UTC) | Loop | Level | Outcome | Notes |\n"
+        "|-----------------|------|-------|---------|-------|\n",
+        encoding="utf-8",
+    )
+    _queue_dir(
+        tmp_path,
+        '{"title": "Code audit: ruff", "fixable": true, "status": "queued",'
+        ' "requires_escalation": false},'
+        '{"title": "Rotate API keys", "fixable": true, "status": "queued",'
+        ' "requires_escalation": true}',
+    )
+    result = evaluate_gate(repo_root=tmp_path, mode="repair")
+    assert result.action is GateAction.L2_ALLOWED
+    assert result.fixable_items == ("Code audit: ruff",)
+    assert result.escalated_items == ("Rotate API keys",)
+
+
+def test_evaluate_gate_l1_only_when_all_escalation(tmp_path: Path):
+    (tmp_path / "STATE.md").write_text(
+        "# Loop State\n\n## Loop automation\n\n- L2: enabled\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "loop-run-log.md").write_text(
+        "| Timestamp (UTC) | Loop | Level | Outcome | Notes |\n"
+        "|-----------------|------|-------|---------|-------|\n",
+        encoding="utf-8",
+    )
+    _queue_dir(
+        tmp_path,
+        '{"title": "Rotate API keys", "fixable": true, "status": "queued",'
+        ' "requires_escalation": true}',
+    )
+    result = evaluate_gate(repo_root=tmp_path, mode="repair")
+    assert result.action is GateAction.L1_ONLY
+    assert "no auto-fixable items" in result.reason.lower()
+    assert result.escalated_items == ("Rotate API keys",)

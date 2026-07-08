@@ -25,6 +25,12 @@
 - Never refactor unrelated code — one fix per run
 - Max 3 fix attempts per item; escalate after
 
+## L2 autonomy scope
+- L2 auto-fix is enabled ONLY for auto-fixable code-health items (code audit, ruff, verify failures)
+- Never auto-fix an item that needs CEO (Aaron) approval, higher escalation, or a manual user notification — leave it in STATE.md High Priority for a human
+- Items touching secrets, `.env`, credentials, live trading, payments, or denylist paths always require escalation (never auto-fixed)
+- The repair gate marks these `requires_escalation` and excludes them from the L2-actionable set
+
 ## Communication
 - Always tell me what you're about to do before doing it
 - Never close an issue or PR without my approval

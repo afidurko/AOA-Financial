@@ -29,6 +29,53 @@ DEFAULT_CAPS: dict[str, LoopCaps] = {
     "fable-repair": LoopCaps(max_runs_per_day=4, max_tokens_per_day=200_000),
 }
 
+# Keywords that mark a repair item as needing CEO (Aaron) approval, higher
+# escalation, or a manual user notification. These are never auto-fixed by L2.
+_ESCALATION_KEYWORDS = (
+    "secret",
+    "credential",
+    "api key",
+    "api_key",
+    "apikey",
+    ".env",
+    "rotate",
+    "rotation",
+    "oauth",
+    "live order",
+    "live trading",
+    "go live",
+    "enable live",
+    "payment",
+    "ceo",
+    "escalat",
+    "approval",
+    "approve",
+    "manual",
+    "verification",
+    "confirm",
+    "notify the user",
+    "user notification",
+    "notification",
+    "denylist",
+    "risk guard",
+)
+
+
+def requires_escalation_text(*parts: str) -> bool:
+    """True when any text fragment signals a CEO/user escalation is required."""
+    blob = " ".join(p.lower() for p in parts if p)
+    return any(keyword in blob for keyword in _ESCALATION_KEYWORDS)
+
+
+def item_requires_escalation(item: dict) -> bool:
+    """Read an item's escalation flag, falling back to keyword detection."""
+    if "requires_escalation" in item:
+        return bool(item["requires_escalation"])
+    return requires_escalation_text(
+        str(item.get("title", "")), str(item.get("detail", ""))
+    )
+
+
 _LOG_ROW = re.compile(
     r"^\|\s*(?P<ts>[^|]+)\|\s*(?P<loop>[^|]+)\|\s*(?P<level>[^|]+)\|\s*(?P<outcome>[^|]+)\|\s*(?P<notes>[^|]*)\|\s*$"
 )
@@ -44,6 +91,7 @@ class GateResult:
     fixable_items: tuple[str, ...]
     runs_24h: dict[str, int]
     tokens_24h: dict[str, int]
+    escalated_items: tuple[str, ...] = ()
 
     def to_dict(self) -> dict:
         return {
@@ -52,6 +100,7 @@ class GateResult:
             "paused": self.paused,
             "l2_automation_enabled": self.l2_automation_enabled,
             "fixable_items": list(self.fixable_items),
+            "escalated_items": list(self.escalated_items),
             "runs_24h": self.runs_24h,
             "tokens_24h": self.tokens_24h,
         }
@@ -75,7 +124,10 @@ def evaluate_gate(
 
     runs_24h = count_runs_by_loop(log_path, now=now)
     tokens_24h = sum_tokens_by_loop(log_path, now=now)
-    fixable = fixable_queue_titles(queue_path)
+    # L2 only acts on items that need no CEO approval, escalation, or user
+    # notification; escalated items stay visible but are never auto-fixed.
+    fixable = auto_fixable_queue_titles(queue_path)
+    escalated = escalation_queue_titles(queue_path)
 
     if paused:
         return GateResult(
@@ -86,6 +138,7 @@ def evaluate_gate(
             fixable_items=fixable,
             runs_24h=runs_24h,
             tokens_24h=tokens_24h,
+            escalated_items=escalated,
         )
 
     triage_caps = DEFAULT_CAPS["daily-triage"]
@@ -105,6 +158,7 @@ def evaluate_gate(
                 fixable_items=fixable,
                 runs_24h=runs_24h,
                 tokens_24h=tokens_24h,
+                escalated_items=escalated,
             )
         if triage_tokens >= int(triage_caps.max_tokens_per_day * 0.8):
             return GateResult(
@@ -115,6 +169,7 @@ def evaluate_gate(
                 fixable_items=fixable,
                 runs_24h=runs_24h,
                 tokens_24h=tokens_24h,
+                escalated_items=escalated,
             )
 
     if mode == "triage":
@@ -126,6 +181,7 @@ def evaluate_gate(
             fixable_items=fixable,
             runs_24h=runs_24h,
             tokens_24h=tokens_24h,
+            escalated_items=escalated,
         )
 
     if mode in {"full", "repair"}:
@@ -138,17 +194,25 @@ def evaluate_gate(
                 fixable_items=fixable,
                 runs_24h=runs_24h,
                 tokens_24h=tokens_24h,
+                escalated_items=escalated,
             )
 
         if not fixable:
+            reason = "no auto-fixable items in repair queue"
+            if escalated:
+                reason += (
+                    f" ({len(escalated)} item(s) need CEO approval / user"
+                    " notification — left for a human)"
+                )
             return GateResult(
                 action=GateAction.L1_ONLY,
-                reason="no fixable items in repair queue",
+                reason=reason,
                 paused=False,
                 l2_automation_enabled=True,
                 fixable_items=fixable,
                 runs_24h=runs_24h,
                 tokens_24h=tokens_24h,
+                escalated_items=escalated,
             )
 
         if repair_runs >= repair_caps.max_runs_per_day:
@@ -160,6 +224,7 @@ def evaluate_gate(
                 fixable_items=fixable,
                 runs_24h=runs_24h,
                 tokens_24h=tokens_24h,
+                escalated_items=escalated,
             )
         if repair_tokens >= int(repair_caps.max_tokens_per_day * 0.8):
             return GateResult(
@@ -170,16 +235,21 @@ def evaluate_gate(
                 fixable_items=fixable,
                 runs_24h=runs_24h,
                 tokens_24h=tokens_24h,
+                escalated_items=escalated,
             )
 
+        reason = f"auto-fixable queue items: {', '.join(fixable[:3])}"
+        if escalated:
+            reason += f" · {len(escalated)} escalated item(s) left for a human"
         return GateResult(
             action=GateAction.L2_ALLOWED,
-            reason=f"fixable queue items: {', '.join(fixable[:3])}",
+            reason=reason,
             paused=False,
             l2_automation_enabled=True,
             fixable_items=fixable,
             runs_24h=runs_24h,
             tokens_24h=tokens_24h,
+            escalated_items=escalated,
         )
 
     return GateResult(
@@ -190,6 +260,7 @@ def evaluate_gate(
         fixable_items=fixable,
         runs_24h=runs_24h,
         tokens_24h=tokens_24h,
+        escalated_items=escalated,
     )
 
 
@@ -247,14 +318,14 @@ def sum_tokens_by_loop(log_path: Path, *, now: datetime | None = None) -> dict[s
     return totals
 
 
-def fixable_queue_titles(queue_path: Path) -> tuple[str, ...]:
+def _iter_actionable_items(queue_path: Path):
+    """Yield fixable, still-open queue items."""
     if not queue_path.is_file():
-        return ()
+        return
     try:
         data = json.loads(queue_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return ()
-    titles: list[str] = []
+        return
     for item in data.get("items", []):
         if not item.get("fixable"):
             continue
@@ -262,8 +333,30 @@ def fixable_queue_titles(queue_path: Path) -> tuple[str, ...]:
             continue
         title = str(item.get("title", "")).strip()
         if title:
-            titles.append(title)
-    return tuple(titles)
+            yield item, title
+
+
+def fixable_queue_titles(queue_path: Path) -> tuple[str, ...]:
+    """All fixable, open items regardless of escalation status."""
+    return tuple(title for _item, title in _iter_actionable_items(queue_path))
+
+
+def auto_fixable_queue_titles(queue_path: Path) -> tuple[str, ...]:
+    """Fixable items the L2 loop may resolve autonomously (no CEO/user gate)."""
+    return tuple(
+        title
+        for item, title in _iter_actionable_items(queue_path)
+        if not item_requires_escalation(item)
+    )
+
+
+def escalation_queue_titles(queue_path: Path) -> tuple[str, ...]:
+    """Fixable items that need CEO approval, escalation, or a user notification."""
+    return tuple(
+        title
+        for item, title in _iter_actionable_items(queue_path)
+        if item_requires_escalation(item)
+    )
 
 
 def _default_queue_path(repo_root: Path) -> Path:

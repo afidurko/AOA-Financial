@@ -139,6 +139,46 @@ def test_api_assistant_brief(client):
     assert "must_do" in r.json()["brief"]
 
 
+def test_api_loop_brief(client):
+    r = client.get("/api/loop/brief")
+    assert r.status_code == 200
+    brief = r.json()["brief"]
+    assert "must_do" in brief
+    assert "repair_queue" in brief
+    assert "suggested_replies" in brief
+
+
+def test_api_alerts_pending_and_respond(client):
+    store = client.app.state.analytics_store
+    approval_id = store.add_approval(
+        kind="workloop", title="Approve run", summary="Confirm"
+    )
+    nid = store.log_notification(
+        kind="escalation",
+        title="Approve run",
+        message="Confirm",
+        payload={"approval_id": approval_id, "reason": "needs_verification"},
+    )
+    store.mark_awaiting_response(nid)
+
+    pending = client.get("/api/alerts/pending").json()["items"]
+    assert [p["id"] for p in pending] == [nid]
+
+    r = client.post(f"/api/alerts/{nid}/respond", json={"action": "approve"})
+    assert r.status_code == 200
+    assert r.json()["routed_to"] == "approval_inbox"
+    assert r.json()["applied"] is True
+    assert client.get("/api/alerts/pending").json()["items"] == []
+
+
+def test_api_alert_respond_invalid_action(client):
+    store = client.app.state.analytics_store
+    nid = store.log_notification(kind="alert", title="X", message="y")
+    store.mark_awaiting_response(nid)
+    r = client.post(f"/api/alerts/{nid}/respond", json={"action": "delete"})
+    assert r.status_code == 400
+
+
 def test_api_team_expansions_propose_and_resolve(client):
     r = client.post("/api/team/expansions/propose")
     assert r.status_code == 200

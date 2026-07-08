@@ -32,8 +32,10 @@ Source of truth: `loop-prompts.yaml`
 
 ```bash
 aoa tasks list              # all shortkeys + task loops
+aoa tasks automations       # full A/B/C specs (name, branch, schedule, prompt)
 aoa tasks show L1           # Automation A prompt → paste into Cursor
 aoa tasks show L2           # Automation B prompt
+aoa tasks show BRIEF        # Automation C — daily user brief
 aoa tasks show GATE-A       # preflight only
 aoa tasks show SETUP        # Max 5× first-time setup
 aoa tasks show REVIEW       # weekly human review
@@ -43,6 +45,7 @@ aoa tasks show REVIEW       # weekly human review
 |----------|-----|
 | **L1** | Cursor Automation A — daily triage |
 | **L2** | Cursor Automation B — one fix + draft PR |
+| **BRIEF** | Cursor Automation C — daily user brief + response routing |
 | **GATE-A** / **GATE-B** | Preflight only |
 | **SETUP** | Max 5× env + first `aoa run` |
 | **REVIEW** | Weekly STATE / PR review |
@@ -67,9 +70,9 @@ Example cron: `bash scripts/install_loop_cron.example.sh --print`
 
 ---
 
-## Cursor Cloud Agent — two automations
+## Cursor Cloud Agent — three automations
 
-Create **two** scheduled automations in Cursor (repo: AOA-Financial, branch: `main`).
+Create scheduled automations in Cursor (repo: AOA-Financial, branch: `main`).
 
 ### Automation A — Daily sense (always on)
 
@@ -127,6 +130,42 @@ Respect denylist: src/aoa/risk/guards.py, .env*, profiles/live.env
 Max 3 fix attempts per item; escalate in STATE.md after that.
 ```
 
+### Automation C — Daily user brief (always on)
+
+Alex combines trading priorities, `STATE.md` High Priority / Watch List, and the
+Fable 5 repair queue into one brief and delivers it to the user's iPhone when a
+channel is configured. Replies flow back through the response router (see below).
+
+| Setting | Value |
+|---------|-------|
+| **Name** | `AOA user brief` |
+| **Cadence** | Daily, 14:30 UTC (30 min after triage) |
+| **Branch** | `main` |
+
+**Prompt:** `aoa tasks show BRIEF`
+
+```text
+Run loop-constraints, then loop-budget, then loop-triage on AOA-Financial.
+
+Read STATE.md, LOOP.md, loop-constraints.md first.
+Run: python3 -m aoa.cli repair gate --for triage
+If gate action is "pause", update STATE.md High Priority with loop-pause-all note and exit.
+
+Always:
+1. python3 -m aoa.cli loop brief --push
+2. Note "user brief delivered" in STATE.md Post-Run Critique.
+
+Do NOT change application code. L1 report-only.
+Never auto-merge. Never edit .env or live trading paths.
+```
+
+**Inbound responses (closing the loop):** Aaron's alerts carry
+`requires_response` plus a `notification_id`. When the user replies, POST to
+`/api/alerts/{id}/respond` with `{"action": "approve"|"reject"|"ack"}`. The
+response router (`src/aoa/notify/response_router.py`) applies approve/reject only
+when the alert is linked to a pending approval; everything else is recorded for
+human follow-up. It never edits `.env`, enables live trading, or merges.
+
 ---
 
 ## Enable L2 automation (human gate)
@@ -169,9 +208,15 @@ To roll back: remove the line or set `loop-pause-all` under High Priority.
 | `loop-pause-all` | **pause** | **pause** |
 | daily-triage cap (24h) | **skip** | ignored |
 | L2 not enabled | ignored | **l1-only** |
-| No fixable queue items | ignored | **l1-only** |
+| No auto-fixable items (all remaining need CEO/user escalation) | ignored | **l1-only** |
 | fable-repair cap (24h) | ignored | **l1-only** |
 | Else | **triage-ok** | **l2-allowed** |
+
+**L2 scope:** `l2-allowed` only lists items with `requires_escalation=false`
+(code-health, ruff, verify). Items needing CEO approval, higher escalation, or a
+manual user notification are marked `requires_escalation=true`, reported under
+`escalated_items`, and left in STATE.md High Priority for a human — never
+auto-fixed.
 
 Caps from `loop-budget.md`: daily-triage 2 runs / 100k tokens; fable-repair 4 runs / 200k tokens.
 
@@ -198,6 +243,23 @@ Do **not** cron an unattended L2 fix without the gate and draft-PR workflow.
 
 ---
 
+## GitHub Actions backstop (deterministic, no LLM)
+
+Two scheduled workflows run the no-LLM parts of the loop on GitHub's runners,
+independent of Cursor and your laptop. They complement — never replace — the
+Cursor automations, which do the LLM reasoning, fixes, and user brief.
+
+| Workflow | File | Cadence | What it does |
+|----------|------|---------|--------------|
+| Loop preflight | `.github/workflows/loop-preflight.yml` | Daily 13:55 UTC | `aoa tasks run tier1` (gate → repair triage → ruff + pytest); uploads gate decisions, `queue.json`, `loop-run-log.md`, `STATE.md` as artifacts. No secrets, no commits. A red run means lint/tests broke. |
+| Loop queue sync | `.github/workflows/loop-queue-sync.yml` | Daily 13:50 UTC | `aoa repair triage --no-sync`, then commits a timestamp-free snapshot to `loop-state/repair-queue.json` on the `automation/loop-queue-sync` branch as a single rolling PR (uses the built-in `GITHUB_TOKEN`). |
+
+Both also expose **Run workflow** (workflow_dispatch) for on-demand runs. They do
+**not** perform LLM triage, `fable-repair` fixes, or `aoa loop brief` — those
+require an agent runtime (Cursor Cloud automations A/B/C).
+
+---
+
 ## Weekly human rhythm (Max 5×)
 
 | Day | You (Claude Code) | Automations |
@@ -221,6 +283,9 @@ Do **not** cron an unattended L2 fix without the gate and draft-PR workflow.
 ```
 Every day (Automation A):
   constraints → budget → repair gate → triage → repair triage → STATE + run-log
+
+Every day (Automation C):
+  constraints → budget → repair gate → aoa loop brief --push → STATE Post-Run Critique
 
 If gate = l2-allowed (Automation B):
   fable-repair → worktree → minimal-fix → loop-verifier → draft PR
