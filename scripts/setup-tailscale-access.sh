@@ -5,6 +5,10 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AOA_ENV_FILE="${AOA_ENV_FILE:-$ROOT/.env}"
+LAUNCHAGENT_PLIST="$HOME/Library/LaunchAgents/com.aoa.serve.plist"
+
+# shellcheck source=scripts/lib/env-file.sh
+source "$ROOT/scripts/lib/env-file.sh"
 
 usage() {
   cat <<EOF
@@ -15,36 +19,17 @@ Install Tailscale on each device that should reach the dashboard (Mac, iPhone, i
 EOF
 }
 
-read_env_val() {
-  local key="$1"
-  local file="$2"
-  if [[ -f "$file" ]]; then
-    grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- || true
-  fi
-}
-
-write_env_val() {
-  local key="$1"
-  local value="$2"
-  local file="$3"
-  mkdir -p "$(dirname "$file")"
-  if [[ ! -f "$file" ]]; then
-    cp "$ROOT/.env.example" "$file" 2>/dev/null || touch "$file"
-  fi
-  key="$key" value="$value" awk -v key="$key" -v val="$value" '
-    BEGIN { done = 0 }
-    $0 ~ "^" key "=" { print key "=" val; done = 1; next }
-    { print }
-    END { if (!done) print key "=" val }
-  ' "$file" >"$file.tmp" && mv "$file.tmp" "$file"
-}
-
 ensure_web_bind() {
   local host
-  host="$(read_env_val AOA_WEB_HOST "$AOA_ENV_FILE")"
+  host="$(env_read AOA_WEB_HOST "$AOA_ENV_FILE")"
   if [[ -z "$host" || "$host" == "127.0.0.1" || "$host" == "localhost" ]]; then
-    write_env_val AOA_WEB_HOST "0.0.0.0" "$AOA_ENV_FILE"
+    [[ -f "$AOA_ENV_FILE" ]] || cp "$ROOT/.env.example" "$AOA_ENV_FILE" 2>/dev/null || true
+    env_upsert AOA_WEB_HOST "0.0.0.0" "$AOA_ENV_FILE"
     echo "Set AOA_WEB_HOST=0.0.0.0 in $AOA_ENV_FILE (required for tailnet access)."
+    # A running dashboard keeps the old bind address until reloaded.
+    if [[ -f "$LAUNCHAGENT_PLIST" ]]; then
+      "$ROOT/scripts/install-aoa-launchagent.sh" --reload 2>/dev/null || true
+    fi
   else
     echo "AOA_WEB_HOST=${host} (OK for tailnet access)."
   fi
@@ -84,6 +69,7 @@ ensure_tailscale() {
     Linux) install_tailscale_linux ;;
     *)
       echo "Unsupported OS for auto-install. Install Tailscale manually: https://tailscale.com/download" >&2
+      exit 1
       ;;
   esac
 }
@@ -96,8 +82,8 @@ tailscale_ready() {
 }
 
 print_urls() {
-  local port host ip dns_name
-  port="$(read_env_val AOA_WEB_PORT "$AOA_ENV_FILE")"
+  local port ip dns_name
+  port="$(env_read AOA_WEB_PORT "$AOA_ENV_FILE")"
   port="${port:-8080}"
 
   echo ""
@@ -113,17 +99,8 @@ print_urls() {
     return 0
   fi
 
-  ip="$(tailscale ip -4 2>/dev/null || true)"
-  dns_name="$(tailscale status --json 2>/dev/null | python3 -c "
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    self = d.get('Self', {})
-    dns = self.get('DNSName', '').rstrip('.')
-    print(dns)
-except Exception:
-    pass
-" 2>/dev/null || true)"
+  ip="$(tailscale ip -4 2>/dev/null | head -1 || true)"
+  dns_name="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin).get("Self",{}).get("DNSName","").rstrip("."))' 2>/dev/null || true)"
 
   echo ""
   if [[ -n "$ip" ]]; then

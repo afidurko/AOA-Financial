@@ -15,6 +15,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+# Shared shell helpers live under scripts/lib/ — keep them tracked.
+!scripts/lib/
+!scripts/lib/**
 lib64/
 parts/
 sdist/

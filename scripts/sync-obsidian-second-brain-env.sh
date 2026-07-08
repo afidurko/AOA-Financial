@@ -9,42 +9,22 @@ OSB_ENV="${OBSIDIAN_SECONDBRAIN_ENV:-$OSB_CONFIG_DIR/.env}"
 TEMPLATE="${OBSIDIAN_SECONDBRAIN_TEMPLATE:-$ROOT/obsidian-second-brain.env.example}"
 VAULT_DIR="${AOA_OBSIDIAN_VAULT_PATH:-$ROOT/AOA-Vault}"
 
-# shellcheck disable=SC1090
-read_env() {
-  local key="$1"
-  local file="$2"
-  if [[ -f "$file" ]]; then
-    grep -E "^${key}=" "$file" 2>/dev/null | head -1 | cut -d= -f2- || true
-  fi
-}
-
-write_env() {
-  local key="$1"
-  local value="$2"
-  if [[ -z "$value" ]]; then
-    return
-  fi
-  # awk is portable on macOS (BSD sed -i requires a backup extension).
-  key="$key" value="$value" awk -v key="$key" -v val="$value" '
-    BEGIN { done = 0 }
-    $0 ~ "^" key "=" { print key "=" val; done = 1; next }
-    { print }
-    END { if (!done) print key "=" val }
-  ' "$OSB_ENV" >"$OSB_ENV.tmp" && mv "$OSB_ENV.tmp" "$OSB_ENV"
-}
+# shellcheck source=scripts/lib/env-file.sh
+source "$ROOT/scripts/lib/env-file.sh"
 
 mkdir -p "$OSB_CONFIG_DIR"
 cp "$TEMPLATE" "$OSB_ENV"
 chmod 600 "$OSB_ENV"
 
-write_env OBSIDIAN_VAULT_PATH "$VAULT_DIR"
+env_upsert OBSIDIAN_VAULT_PATH "$VAULT_DIR" "$OSB_ENV"
 
 for key in GEMINI_API_KEY PERPLEXITY_API_KEY XAI_API_KEY YOUTUBE_API_KEY; do
-  val="$(read_env "$key" "$AOA_ENV_FILE")"
-  write_env "$key" "$val"
+  val="$(env_read "$key" "$AOA_ENV_FILE")"
+  [[ -n "$val" ]] && env_upsert "$key" "$val" "$OSB_ENV"
 done
 
+chmod 600 "$OSB_ENV"
 echo "Wrote $OSB_ENV"
-if [[ -z "$(read_env OBSIDIAN_VAULT_PATH "$OSB_ENV")" ]]; then
+if [[ -z "$(env_read OBSIDIAN_VAULT_PATH "$OSB_ENV")" ]]; then
   echo "Note: set AOA_OBSIDIAN_VAULT_PATH in $AOA_ENV_FILE or OBSIDIAN_VAULT_PATH in $OSB_ENV"
 fi

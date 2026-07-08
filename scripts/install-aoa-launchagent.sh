@@ -14,6 +14,9 @@ LOG_DIR="$HOME/Library/Logs"
 OUT_LOG="$LOG_DIR/aoa-serve.log"
 ERR_LOG="$LOG_DIR/aoa-serve.err.log"
 
+# shellcheck source=scripts/lib/env-file.sh
+source "$ROOT/scripts/lib/env-file.sh"
+
 usage() {
   cat <<EOF
 Usage: ./scripts/install-aoa-launchagent.sh [--status|--uninstall|--reload]
@@ -28,15 +31,52 @@ EOF
 }
 
 read_web_port() {
-  local port="8080"
-  if [[ -f "$ROOT/.env" ]]; then
-    local val
-    val="$(grep -E '^AOA_WEB_PORT=' "$ROOT/.env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-    if [[ -n "$val" ]]; then
-      port="$val"
-    fi
-  fi
-  echo "$port"
+  local port
+  port="$(env_read AOA_WEB_PORT "$ROOT/.env")"
+  echo "${port:-8080}"
+}
+
+xml_escape() {
+  local s="$1"
+  s="${s//&/&amp;}"
+  s="${s//</&lt;}"
+  s="${s//>/&gt;}"
+  printf '%s' "$s"
+}
+
+write_plist() {
+  mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
+  chmod +x "$DAEMON"
+  cat >"$PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$(xml_escape "$DAEMON")</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>$(xml_escape "$ROOT")</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$(xml_escape "$OUT_LOG")</string>
+  <key>StandardErrorPath</key>
+  <string>$(xml_escape "$ERR_LOG")</string>
+</dict>
+</plist>
+EOF
+}
+
+load_agent() {
+  launchctl bootstrap "gui/$(id -u)" "$PLIST"
+  launchctl enable "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+  launchctl kickstart -k "gui/$(id -u)/${LABEL}" 2>/dev/null || true
 }
 
 ensure_macos() {
@@ -71,7 +111,7 @@ EOF
 }
 
 unload_agent() {
-  if launchctl list "$LABEL" >/dev/null 2>&1; then
+  if launchctl print "gui/$(id -u)/${LABEL}" >/dev/null 2>&1; then
     launchctl bootout "gui/$(id -u)" "$PLIST" 2>/dev/null || launchctl unload "$PLIST" 2>/dev/null || true
   fi
 }
@@ -79,38 +119,9 @@ unload_agent() {
 install_agent() {
   ensure_macos
   ensure_prereqs
-  mkdir -p "$HOME/Library/LaunchAgents" "$LOG_DIR"
-  chmod +x "$DAEMON"
-
-  cat >"$PLIST" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key>
-  <string>${LABEL}</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>${DAEMON}</string>
-  </array>
-  <key>WorkingDirectory</key>
-  <string>${ROOT}</string>
-  <key>RunAtLoad</key>
-  <true/>
-  <key>KeepAlive</key>
-  <true/>
-  <key>StandardOutPath</key>
-  <string>${OUT_LOG}</string>
-  <key>StandardErrorPath</key>
-  <string>${ERR_LOG}</string>
-</dict>
-</plist>
-EOF
-
+  write_plist
   unload_agent
-  launchctl bootstrap "gui/$(id -u)" "$PLIST"
-  launchctl enable "gui/$(id -u)/${LABEL}" 2>/dev/null || true
-  launchctl kickstart -k "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+  load_agent
 
   local port
   port="$(read_web_port)"
@@ -157,9 +168,9 @@ case "${1:-}" in
   --reload)
     ensure_macos
     ensure_prereqs
+    write_plist
     unload_agent
-    launchctl bootstrap "gui/$(id -u)" "$PLIST"
-    launchctl kickstart -k "gui/$(id -u)/${LABEL}" 2>/dev/null || true
+    load_agent
     echo "Reloaded ${LABEL}"
     ;;
   -h|--help)
