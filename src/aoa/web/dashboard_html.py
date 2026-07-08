@@ -48,6 +48,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div><h1>AOA Financial</h1> <span id="mode-badge" class="badge badge-paper">…</span></div>
     <div style="display:flex;align-items:center;gap:1rem">
       <a id="openstock-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">OpenStock ↗</a>
+      <a id="obsidian-link" href="#" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">Second Brain ↗</a>
       <div id="market-status" class="stat-sm">Market: —</div>
     </div>
   </header>
@@ -158,6 +159,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         osLink.style.display='inline';
       } else {
         osLink.style.display='none';
+      }
+      const obsLink=document.getElementById('obsidian-link');
+      if(config.obsidian_vault_path){
+        const vaultName=config.obsidian_vault_path.replace(/\\/g,'/').split('/').filter(Boolean).pop()||'vault';
+        obsLink.href='obsidian://open?vault='+encodeURIComponent(vaultName);
+        obsLink.style.display='inline';
+      } else {
+        obsLink.style.display='none';
       }
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;

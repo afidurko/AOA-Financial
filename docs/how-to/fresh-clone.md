@@ -85,3 +85,52 @@ export AOA_OPENSTOCK_URL=http://localhost:3000
 ```
 
 See [openstock-integration.md](openstock-integration.md) for Docker and env details.
+
+## 7. Obsidian second brain + Spine (optional)
+
+Full knowledge stack (obsidian-second-brain + Spine + shared vault):
+
+```bash
+./scripts/knowledge-stack-setup.sh
+export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
+export AOA_SPINE_ENABLED=true
+```
+
+Or obsidian-second-brain only:
+
+```bash
+./scripts/obsidian-second-brain-setup.sh
+./scripts/sync-obsidian-second-brain-env.sh
+export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
+```
+
+See [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md) and
+[spine-integration.md](spine-integration.md).
+
+## 8. obsidian-skills (optional)
+
+Teach obsidian-second-brain Obsidian format syntax:
+
+```bash
+./scripts/obsidian-skills-setup.sh
+./scripts/integrate-obsidian-skills.sh
+```
+
+See [obsidian-skills-integration.md](obsidian-skills-integration.md).
+
+## 9. Always-on dashboard + remote access (optional)
+
+Keep `aoa serve` running at login and open the dashboard from your phone via Tailscale:
+
+```bash
+./scripts/setup-always-on.sh
+```
+
+Or step by step:
+
+```bash
+./scripts/install-aoa-launchagent.sh      # auto-start at login (macOS)
+./scripts/setup-tailscale-access.sh       # private tailnet URL
+```
+
+See [always-on-dashboard.md](always-on-dashboard.md).

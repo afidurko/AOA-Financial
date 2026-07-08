@@ -265,6 +265,8 @@ class Config:
     web_port: int = 8080
     web_auto_loop: bool = False
     openstock_url: str = ""
+    obsidian_vault_path: str = ""
+    spine_enabled: bool = False
 
     # Aaron — iPhone push alerts (never email)
     custom_app_webhook_url: str = ""
@@ -427,6 +429,8 @@ class Config:
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),
+            obsidian_vault_path=os.environ.get("AOA_OBSIDIAN_VAULT_PATH", "").strip(),
+            spine_enabled=_bool("AOA_SPINE_ENABLED", False),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
             custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),

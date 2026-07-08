@@ -75,6 +75,8 @@ def test_api_config_team_mode(client):
     data = r.json()
     assert data["team_mode"] is True
     assert "openstock_url" in data
+    assert "obsidian_vault_path" in data
+    assert "spine_enabled" in data
 
 
 def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
@@ -99,6 +101,57 @@ def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
     with TestClient(create_app(cfg)) as tc:
         r = tc.get("/api/config")
     assert r.json()["openstock_url"] == "http://localhost:3000"
+
+
+def test_api_config_obsidian_vault_path(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        obsidian_vault_path="/home/user/AOA-Vault",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    assert r.json()["obsidian_vault_path"] == "/home/user/AOA-Vault"
+
+
+def test_api_config_spine_enabled(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        spine_enabled=True,
+        obsidian_vault_path="/home/user/AOA-Vault",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    data = r.json()
+    assert data["spine_enabled"] is True
+    assert data["obsidian_vault_path"] == "/home/user/AOA-Vault"
 
 
 def test_api_journal(client):
