@@ -227,6 +227,23 @@ Do **not** cron an unattended L2 fix without the gate and draft-PR workflow.
 
 ---
 
+## GitHub Actions backstop (deterministic, no LLM)
+
+Two scheduled workflows run the no-LLM parts of the loop on GitHub's runners,
+independent of Cursor and your laptop. They complement — never replace — the
+Cursor automations, which do the LLM reasoning, fixes, and user brief.
+
+| Workflow | File | Cadence | What it does |
+|----------|------|---------|--------------|
+| Loop preflight | `.github/workflows/loop-preflight.yml` | Daily 13:55 UTC | `aoa tasks run tier1` (gate → repair triage → ruff + pytest); uploads gate decisions, `queue.json`, `loop-run-log.md`, `STATE.md` as artifacts. No secrets, no commits. A red run means lint/tests broke. |
+| Loop queue sync | `.github/workflows/loop-queue-sync.yml` | Daily 13:50 UTC | `aoa repair triage --no-sync`, then commits a timestamp-free snapshot to `loop-state/repair-queue.json` on the `automation/loop-queue-sync` branch as a single rolling PR (uses the built-in `GITHUB_TOKEN`). |
+
+Both also expose **Run workflow** (workflow_dispatch) for on-demand runs. They do
+**not** perform LLM triage, `fable-repair` fixes, or `aoa loop brief` — those
+require an agent runtime (Cursor Cloud automations A/B/C).
+
+---
+
 ## Weekly human rhythm (Max 5×)
 
 | Day | You (Claude Code) | Automations |
