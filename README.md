@@ -123,6 +123,9 @@ When `AOA_TRADING_AGENTS_ENABLED=true` (default), the analyze stage adds a
 The portfolio manager receives `analyst_reports` and `research_debate` per symbol
 and sizes trades accordingly. Disable with `AOA_TRADING_AGENTS_ENABLED=false`.
 
+See [docs/tradingagents/INTEGRATION.md](docs/tradingagents/INTEGRATION.md) for how the
+built-in swarm relates to the optional upstream `tradingagents` v0.3.0 package.
+
 ### Cash-account safety invariants (always enforced, deterministically)
 
 - **No equity shorting** — a sell is only allowed to close an existing long.
