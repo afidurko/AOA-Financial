@@ -135,6 +135,8 @@ class TeamOrchestrator:
             push_opportunities=config.notify_push_opportunities,
             push_halts=config.notify_push_halts,
             min_conviction=config.notify_min_conviction,
+            dry_run=config.dry_run,
+            notify_dry_run=config.notify_dry_run,
         )
 
     def run_health_check(self) -> HealthReport:

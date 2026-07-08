@@ -46,7 +46,7 @@ For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"
 | **Trading mode** | `paper-dry` — analyze and journal only |
 | **Verify** | Full `aoa doctor` (broker + LLM ping) |
 
-Profile: `profiles/moomoo.env` (auto-selected by `activate`). For simulate orders via OpenD, use `AOA_PROFILE=moomoo-paper` instead.
+Profile: `profiles/paper-dry.env` (auto-selected via `ensure_profile`). Alias: `AOA_PROFILE=moomoo`. For simulate orders via OpenD, use `AOA_PROFILE=moomoo-paper` instead.
 
 ---
 

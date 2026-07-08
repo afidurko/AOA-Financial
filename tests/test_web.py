@@ -23,6 +23,7 @@ def client(fake_broker, fake_llm, monkeypatch, tmp_path):
         dry_run=True,
         news_enabled=False,
         web_auto_loop=False,
+        auto_activate=False,
         analytics_enabled=True,
         analytics_db_path=tmp_path / "analytics.sqlite",
         journal_path=tmp_path / "j.jsonl",

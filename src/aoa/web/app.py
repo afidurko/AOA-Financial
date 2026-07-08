@@ -38,24 +38,26 @@ class TeamExpansionUpdateBody(BaseModel):
 
 def create_app(cfg: Config | None = None) -> FastAPI:
     cfg = cfg or Config.from_env()
-    team = build_team(cfg)
-    runner = LoopRunner(team, cfg.cycle_seconds)
-    analytics_store = team.analytics.store if team.analytics else None
+    from aoa.version import package_version
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        from aoa.activate import auto_activate
+        from aoa.activate import auto_activate, ensure_profile
 
+        ensure_profile()
         app.state.cfg = cfg
-        app.state.team = team
-        app.state.runner = runner
-        app.state.analytics_store = analytics_store
         if auto_activate(cfg, run_doctor=False, verbose=False) != 0:
             import logging
 
             logging.getLogger("aoa.web").warning(
                 "Auto-activate did not complete — dashboard up; retry when OpenD is ready"
             )
+        team = build_team(cfg)
+        runner = LoopRunner(team, cfg.cycle_seconds)
+        analytics_store = team.analytics.store if team.analytics else None
+        app.state.team = team
+        app.state.runner = runner
+        app.state.analytics_store = analytics_store
         if cfg.web_auto_loop:
             runner.start()
         yield
@@ -63,7 +65,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     app = FastAPI(
         title="AOA Financial",
-        version="0.2.0",
+        version=package_version(),
         docs_url="/api/docs",
         lifespan=lifespan,
     )

@@ -5,9 +5,9 @@ AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Stock quotes and orders flow t
 ## Quick start
 
 ```bash
-pip install -e ".[dev,web]"    # includes moomoo-api
-cp .env.example .env           # set ANTHROPIC_API_KEY
-aoa setup moomoo               # guided checks
+pip install -e ".[dev,web,openai]"    # includes moomoo-api + OpenAI SDK for Ollama
+cp .env.example .env                  # paper-dry: Ollama, no cloud API key
+aoa setup moomoo                      # guided checks
 ```
 
 With OpenD running:

@@ -2,10 +2,12 @@
 
 An autonomous, multi-agent swarm that analyzes the US stock market for
 opportunities and executes **stock and options** trades in a **cash account**
-through a live brokerage. The brokerage ([Alpaca](https://alpaca.markets)) is
-both the **information source** (quotes, bars, option chains, account, positions)
-and the **order executor**. Every agent reasons through a pluggable LLM — **Claude**
-by default, or an OpenAI-compatible endpoint or a local, key-free **Ollama** model
+through a live brokerage. The default broker is **[Moomoo](https://www.moomoo.com/download/OpenAPI/)**
+(via local OpenD); **[Alpaca](https://alpaca.markets)** is optional
+(`AOA_BROKER=alpaca`). The broker is both the **information source** (quotes,
+bars, option chains, account, positions) and the **order executor**. Every agent
+reasons through a pluggable LLM — **local Ollama** by default in the paper-dry
+profile (no cloud API key), or **Claude** / an OpenAI-compatible endpoint
 (`AOA_LLM_PROVIDER=anthropic|openai|ollama`; see
 [docs/how-to/ollama-local-llm.md](docs/how-to/ollama-local-llm.md)).
 
@@ -23,7 +25,7 @@ This repo contains **two complementary packages** that can be used independently
 
 | Package | Role | Entry point |
 |---------|------|-------------|
-| **`src/aoa/`** | Live **autonomous trading swarm** — Alpaca brokerage, options, cash-account guardrails, web dashboard | `aoa` |
+| **`src/aoa/`** | Live **autonomous trading swarm** — Moomoo (default) or Alpaca brokerage, options, cash-account guardrails, web dashboard | `aoa` |
 | **`aoa_financial/`** | Optional **deep analysis & forecasting engine** — SQLite history (back to 1960), factor/regime models, walk-forward backtest. **Does not place orders.** | `python -m aoa_financial` |
 
 The sections below document the trading swarm (`src/aoa/`). For the optional research engine, see [Optional: Deep analysis engine (`aoa_financial/`)](#optional-deep-analysis-engine-aoa_financial).
@@ -51,7 +53,7 @@ Per-symbol analysis runs **in parallel** when `AOA_PARALLEL_WORKERS > 1`
 (technical + fundamental concurrently per symbol, symbols analyzed concurrently).
 
 ```
- broker (Alpaca)
+ broker (Moomoo OpenD or Alpaca)
    │  account, positions, quotes, multi-TF bars, news, option chains
    ▼
 ┌──────────────┐   shortlist    ┌──────────────┐   signals    ┌────────────────┐

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import socket
 import subprocess
 import sys
@@ -9,9 +10,14 @@ import time
 import urllib.error
 import urllib.request
 from shutil import which
+from typing import TYPE_CHECKING
 
-DEFAULT_PROFILE = "moomoo"
+if TYPE_CHECKING:
+    from aoa.config import Config
+
+DEFAULT_PROFILE = "paper-dry"
 _OLLAMA_VERSION_URL = "http://127.0.0.1:11434/api/version"
+_OLLAMA_TAGS_URL = "http://127.0.0.1:11434/api/tags"
 
 
 def opend_reachable(host: str, port: int, *, timeout: float = 2.0) -> bool:
@@ -70,14 +76,49 @@ def start_ollama_serve() -> bool:
     return False
 
 
+def ollama_has_model(model: str, *, tags_url: str = _OLLAMA_TAGS_URL) -> bool:
+    """Return True when ``model`` (e.g. llama3.1) appears in Ollama's tag list."""
+    try:
+        with urllib.request.urlopen(tags_url, timeout=3.0) as resp:
+            data = json.loads(resp.read().decode())
+    except (urllib.error.URLError, OSError, TimeoutError, json.JSONDecodeError):
+        return False
+    want = model.split(":")[0].lower()
+    for entry in data.get("models", []):
+        name = str(entry.get("name", "")).split(":")[0].lower()
+        if name == want or want in name:
+            return True
+    return False
+
+
+def _openai_sdk_available() -> bool:
+    try:
+        import openai  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+def _verify_moomoo_ready(cfg: Config) -> str | None:
+    """Return an error message if OpenD is up but the broker API is not ready."""
+    try:
+        from aoa.health import verify_broker_ready
+
+        verify_broker_ready(cfg)
+    except Exception as exc:  # noqa: BLE001
+        return str(exc)
+    return None
+
+
 def ensure_profile() -> None:
-    """Default to the moomoo profile when none is selected."""
+    """Default to paper-dry (Moomoo + Ollama) when no profile is selected."""
     import os
 
     from aoa.config import load_env_files
 
-    if not os.environ.get("AOA_PROFILE") and not os.environ.get("AOA_ENV"):
-        os.environ["AOA_PROFILE"] = DEFAULT_PROFILE
+    if not os.environ.get("AOA_PROFILE"):
+        os.environ.setdefault("AOA_PROFILE", DEFAULT_PROFILE)
     load_env_files()
 
 
@@ -99,7 +140,7 @@ def wait_message(host: str, port: int) -> None:
 
 
 def auto_activate(
-    cfg,
+    cfg: Config,
     *,
     wait_sec: float | None = None,
     skip_opend_wait: bool = False,
@@ -107,10 +148,11 @@ def auto_activate(
     verbose: bool = False,
 ) -> int:
     """Wait for OpenD, ensure Ollama, optionally run doctor. Returns 0 on success."""
-    if not getattr(cfg, "auto_activate", True) or getattr(cfg, "is_test", False):
+    if not cfg.auto_activate or cfg.is_test:
         return 0
 
-    timeout = wait_sec if wait_sec is not None else getattr(cfg, "auto_activate_wait_sec", 300.0)
+    strict = cfg.auto_activate_strict
+    timeout = wait_sec if wait_sec is not None else cfg.auto_activate_wait_sec
 
     if verbose:
         print_activation_banner()
@@ -138,10 +180,23 @@ def auto_activate(
             else:
                 print(f"  ✓ OpenD connected at {host}:{port}", flush=True)
 
+        if strict or run_doctor:
+            err = _verify_moomoo_ready(cfg)
+            if err:
+                print(f"  ✗ Moomoo broker not ready: {err}", file=sys.stderr)
+                return 1
+            if verbose:
+                print("  ✓ Moomoo broker API ready (SPY bars)")
+
     if cfg.llm_provider == "ollama":
         if verbose:
             print("Step 2 — local Ollama LLM (no API key)")
-        if ollama_reachable():
+        if not _openai_sdk_available():
+            msg = "openai package missing — pip install -e \".[openai]\""
+            print(f"  ✗ {msg}", file=sys.stderr)
+            if strict:
+                return 1
+        elif ollama_reachable():
             if verbose:
                 print("  ✓ Ollama already running")
         elif start_ollama_serve():
@@ -150,24 +205,36 @@ def auto_activate(
             else:
                 print("  ✓ Ollama started", flush=True)
         else:
+            msg = (
+                "Ollama not running — install from https://ollama.com/download, "
+                "then: ollama pull llama3.1 && ollama serve"
+            )
+            print(f"  ✗ {msg}", file=sys.stderr)
+            if strict:
+                return 1
+        if strict and ollama_reachable() and not ollama_has_model(cfg.model):
             print(
-                "  · Ollama not running — install from https://ollama.com/download\n"
-                "    then: ollama pull llama3.1 && ollama serve\n"
-                "    (or set AOA_LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY in .env)",
+                f"  ✗ Model {cfg.model!r} not found — run: ollama pull {cfg.model}",
                 file=sys.stderr,
             )
+            return 1
+        if strict and ollama_reachable() and ollama_has_model(cfg.model) and verbose:
+            print(f"  ✓ Ollama model {cfg.model} available")
     elif verbose:
         print(f"Step 2 — LLM provider: {cfg.llm_provider}")
 
     if run_doctor:
         if verbose:
             print("Step 3 — verify all systems")
-        from aoa.cli import cmd_doctor
+        from aoa.health import run_connectivity_checks
 
-        rc = cmd_doctor(cfg)
-        if rc != 0:
-            return rc
+        errors = run_connectivity_checks(cfg)
+        for err in errors:
+            print(f"  ✗ {err}", file=sys.stderr)
+        if errors:
+            return 1
         if verbose:
+            print("  ✓ Connectivity checks passed")
             print("\n=== All systems ready ===")
             print("  aoa run       — one analysis cycle (dry-run; no orders)")
             print("  aoa loop      — continuous cycles")

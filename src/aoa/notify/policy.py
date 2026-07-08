@@ -22,11 +22,15 @@ class NotificationPolicy:
         push_halts: bool = True,
         min_conviction: float = 0.65,
         push_routine_cycles: bool = False,
+        dry_run: bool = False,
+        notify_dry_run: bool = False,
     ) -> None:
         self.push_opportunities = push_opportunities
         self.push_halts = push_halts
         self.min_conviction = min_conviction
         self.push_routine_cycles = push_routine_cycles
+        self.dry_run = dry_run
+        self.notify_dry_run = notify_dry_run
 
     def evaluate_cycle(
         self,
@@ -56,11 +60,16 @@ class NotificationPolicy:
                 conviction = _proposal_conviction(ctx, result)
                 if conviction is not None and conviction < self.min_conviction:
                     continue
+                if self.dry_run and not self.notify_dry_run:
+                    continue
                 vol_ratio = _volume_ratio(ctx.get("symbol", ""), result)
+                title = _opp_title(ctx)
+                if self.dry_run and self.notify_dry_run:
+                    title = f"[SIM] {title}"
                 out.append(
                     StructuredNotification(
                         kind=NotificationKind.OPPORTUNITY,
-                        title=_opp_title(ctx),
+                        title=title,
                         message=_proposal_message(ctx, result),
                         symbol=ctx.get("symbol", ""),
                         conviction=conviction,
@@ -84,11 +93,16 @@ class NotificationPolicy:
                 continue
             if not self.push_opportunities:
                 continue
+            if self.dry_run and not self.notify_dry_run:
+                continue
             sym = ctx.get("symbol", "")
+            title = f"{sym} trend · {ctx.get('direction', '—')}"
+            if self.dry_run and self.notify_dry_run:
+                title = f"[SIM] {title}"
             out.append(
                 StructuredNotification(
                     kind=NotificationKind.ANALYSIS,
-                    title=f"{sym} trend · {ctx.get('direction', '—')}",
+                    title=title,
                     message=ctx.get("rationale", "")[:280],
                     symbol=sym,
                     conviction=conf,
@@ -124,6 +138,8 @@ class NotificationPolicy:
         out: list[StructuredNotification] = []
         if not self.push_opportunities:
             return out
+        if self.dry_run and not self.notify_dry_run:
+            return out
 
         for trend in trends:
             ctx = trend.to_context()
@@ -131,10 +147,13 @@ class NotificationPolicy:
             if conf is None or conf < self.min_conviction:
                 continue
             sym = ctx.get("symbol", "")
+            title = f"{sym} · overlooked {ctx.get('direction', '—')} setup"
+            if self.dry_run and self.notify_dry_run:
+                title = f"[SIM] {title}"
             out.append(
                 StructuredNotification(
                     kind=NotificationKind.OPPORTUNITY,
-                    title=f"{sym} · overlooked {ctx.get('direction', '—')} setup",
+                    title=title,
                     message=ctx.get("rationale", "")[:280],
                     symbol=sym,
                     conviction=conf,
@@ -155,10 +174,13 @@ class NotificationPolicy:
                 conf = rec.get("confidence")
                 if not sym or conf is None or conf < self.min_conviction:
                     continue
+                title = f"{sym} · Alan sweep pick"
+                if self.dry_run and self.notify_dry_run:
+                    title = f"[SIM] {title}"
                 out.append(
                     StructuredNotification(
                         kind=NotificationKind.OPPORTUNITY,
-                        title=f"{sym} · Alan sweep pick",
+                        title=title,
                         message=rec.get("rationale", decision.summary)[:280],
                         symbol=sym,
                         conviction=conf,

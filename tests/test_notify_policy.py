@@ -30,3 +30,66 @@ def test_policy_skips_low_conviction_trends():
     )
     notes = policy.evaluate_cycle(result)
     assert notes == []
+
+
+def test_policy_skips_opportunities_in_dry_run_by_default():
+    policy = NotificationPolicy(
+        min_conviction=0.5,
+        push_opportunities=True,
+        dry_run=True,
+        notify_dry_run=False,
+    )
+    result = TeamCycleResult(
+        trends=[
+            TrendReport(
+                symbol="AAPL",
+                direction=TrendDirection.UP,
+                strength=0.8,
+                timeframe="daily",
+                rationale="strong",
+            )
+        ]
+    )
+    notes = policy.evaluate_cycle(result)
+    assert notes == []
+
+
+def test_policy_prefixes_sim_when_dry_run_notify_enabled():
+    policy = NotificationPolicy(
+        min_conviction=0.5,
+        push_opportunities=True,
+        dry_run=True,
+        notify_dry_run=True,
+    )
+    result = TeamCycleResult(
+        trends=[
+            TrendReport(
+                symbol="AAPL",
+                direction=TrendDirection.UP,
+                strength=0.8,
+                timeframe="daily",
+                rationale="strong",
+            )
+        ]
+    )
+    notes = policy.evaluate_cycle(result)
+    assert len(notes) == 1
+    assert notes[0].title.startswith("[SIM]")
+
+
+def test_policy_sweep_skipped_in_dry_run():
+    policy = NotificationPolicy(
+        min_conviction=0.5,
+        push_opportunities=True,
+        dry_run=True,
+        notify_dry_run=False,
+    )
+    trend = TrendReport(
+        symbol="MSFT",
+        direction=TrendDirection.UP,
+        strength=0.9,
+        timeframe="daily",
+        rationale="setup",
+    )
+    notes = policy.evaluate_sweep([trend], None)
+    assert notes == []

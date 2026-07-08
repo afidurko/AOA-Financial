@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command after logging into Moomoo OpenD — activates broker + local LLM + verify.
+# Deprecated wrapper — prefer: aoa activate  (or aoa loop / aoa serve for auto-activate)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
@@ -13,5 +13,5 @@ if ! python3 -c "import aoa" 2>/dev/null; then
   exit 1
 fi
 
-export AOA_PROFILE="${AOA_PROFILE:-moomoo}"
+export AOA_PROFILE="${AOA_PROFILE:-paper-dry}"
 exec python3 -m aoa.cli activate "$@"

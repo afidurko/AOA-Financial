@@ -42,6 +42,7 @@ from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
 from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
+from aoa.health import verify_llm_ready
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
 from aoa.repair.orchestrator import RepairOrchestrator
@@ -53,6 +54,7 @@ from aoa.simulation.trends import analyze_trends
 from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
+from aoa.version import package_version
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
 from aoa.workloop.scheduler import build_scheduler
@@ -327,7 +329,7 @@ def _print_bars_table(symbol: str, bars: list, *, asset: str) -> None:
 def cmd_activate(
     cfg: Config,
     *,
-    wait_sec: float,
+    wait_sec: float | None,
     skip_wait: bool,
     run: bool,
     serve: bool,
@@ -336,7 +338,7 @@ def cmd_activate(
         print(f"Note: broker is {cfg.broker!r}; activate is tuned for Moomoo OpenD.")
     rc = auto_activate(
         cfg,
-        wait_sec=wait_sec,
+        wait_sec=wait_sec if wait_sec is not None else cfg.auto_activate_wait_sec,
         skip_opend_wait=skip_wait,
         run_doctor=True,
         verbose=True,
@@ -354,11 +356,27 @@ def _bootstrap_commands() -> frozenset[str]:
     return frozenset({"activate", "run", "loop", "serve"})
 
 
-def _prepare_cfg(command: str) -> Config:
+def _prepare_cfg(command: str, *, doctor_offline: bool = False) -> Config:
     if command in _bootstrap_commands():
         ensure_profile()
         return Config.from_env(load_dotenv=False)
+    if command == "doctor" and not doctor_offline:
+        ensure_profile()
+        return Config.from_env(load_dotenv=False)
+    if command == "status":
+        ensure_profile()
+        return Config.from_env(load_dotenv=False)
     return Config.from_env()
+
+
+def _maybe_auto_activate_for_command(command: str, cfg: Config, *, doctor_offline: bool = False) -> int:
+    if cfg.broker != "moomoo":
+        return 0
+    if command == "doctor" and doctor_offline:
+        return 0
+    if command in {"doctor", "status"}:
+        return _maybe_auto_activate(cfg)
+    return 0
 
 
 def _maybe_auto_activate(cfg: Config) -> int:
@@ -405,7 +423,7 @@ def cmd_bars(
 
 
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
-    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
+    print(f"AOA Financial v{package_version()} — trading mode: {cfg.trading_mode.upper()}")
     _print_environment(cfg)
     problems = cfg.validate()
     if problems:
@@ -473,9 +491,9 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         print(f"  ✗ Broker check failed: {exc}")
         return 1
     try:
-        llm = build_llm(cfg)
+        build_llm(cfg)
         print("  ✓ LLM client initialized.")
-        llm.ping()
+        verify_llm_ready(cfg)
         print(f"  ✓ LLM reachable (provider={cfg.llm_provider}, model={cfg.model}).")
     except LLMError as exc:
         print(f"  ✗ LLM check failed: {exc}")
@@ -1207,8 +1225,8 @@ def main(argv: list[str] | None = None) -> int:
     act.add_argument(
         "--wait",
         type=float,
-        default=300.0,
-        help="Seconds to wait for OpenD (default 300).",
+        default=None,
+        help="Seconds to wait for OpenD (default: AOA_AUTO_ACTIVATE_WAIT_SEC).",
     )
     act.add_argument(
         "--no-wait",
@@ -1402,7 +1420,13 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     _ensure_env_template()
-    cfg = _prepare_cfg(args.command)
+    doctor_offline = args.command == "doctor" and getattr(args, "offline", False)
+    cfg = _prepare_cfg(args.command, doctor_offline=doctor_offline)
+    auto_rc = _maybe_auto_activate_for_command(
+        args.command, cfg, doctor_offline=doctor_offline
+    )
+    if auto_rc != 0:
+        return auto_rc
 
     try:
         if args.command == "activate":

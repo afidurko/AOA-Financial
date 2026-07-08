@@ -241,6 +241,7 @@ class Config:
     notify_push_opportunities: bool = True
     notify_push_halts: bool = True
     notify_min_conviction: float = 0.65
+    notify_dry_run: bool = False
 
     # Idle opportunity sweep — market analysis when no alerts or opportunity pushes
     opportunity_sweep_enabled: bool = True
@@ -270,6 +271,7 @@ class Config:
     web_auto_loop: bool = False
     auto_activate: bool = True
     auto_activate_wait_sec: float = 300.0
+    auto_activate_strict: bool = True
     openstock_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
@@ -425,6 +427,7 @@ class Config:
             notify_push_opportunities=_bool("AOA_NOTIFY_PUSH_OPPORTUNITIES", True),
             notify_push_halts=_bool("AOA_NOTIFY_PUSH_HALTS", True),
             notify_min_conviction=_float("AOA_NOTIFY_MIN_CONVICTION", 0.65),
+            notify_dry_run=_bool("AOA_NOTIFY_DRY_RUN", False),
             opportunity_sweep_enabled=_bool("AOA_OPPORTUNITY_SWEEP_ENABLED", True),
             opportunity_sweep_seconds=max(60, _int("AOA_OPPORTUNITY_SWEEP_SECONDS", 900)),
             opportunity_sweep_poll_seconds=max(15, _int("AOA_OPPORTUNITY_SWEEP_POLL_SECONDS", 60)),
@@ -447,6 +450,7 @@ class Config:
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             auto_activate=_bool("AOA_AUTO_ACTIVATE", True),
             auto_activate_wait_sec=max(5.0, _float("AOA_AUTO_ACTIVATE_WAIT_SEC", 300.0)),
+            auto_activate_strict=_bool("AOA_AUTO_ACTIVATE_STRICT", True),
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),

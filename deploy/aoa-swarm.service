@@ -8,6 +8,8 @@ Type=simple
 User=aoa
 WorkingDirectory=/opt/aoa-financial
 EnvironmentFile=/opt/aoa-financial/.env
+# Ensure Moomoo + Ollama profile when .env omits AOA_PROFILE:
+Environment=AOA_PROFILE=paper-dry
 Environment=AOA_DATA_DIR=/var/lib/aoa/data
 # Journal path follows AOA_ENV unless AOA_JOURNAL_PATH is set in .env:
 # /var/lib/aoa/data/{AOA_ENV}/journal/aoa.jsonl
