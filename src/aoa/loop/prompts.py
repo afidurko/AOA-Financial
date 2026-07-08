@@ -263,6 +263,22 @@ def run_task(
                 )
             continue
 
+        if step == "vault-sync":
+            from aoa.config import Config
+            from aoa.vault.analyzers import engineering_l2_enabled
+            from aoa.vault.sync import sync_vault_engineering
+
+            cfg = Config.from_env(load_dotenv=False)
+            dry = not engineering_l2_enabled(root)
+            sync_vault_engineering(
+                cfg,
+                repo_root=root,
+                dry_run=dry,
+                run_verify=False,
+            )
+            steps_run.append(f"vault-sync={'dry-run' if dry else 'write'}")
+            continue
+
         if step == "log-triage":
             _append_run_log(
                 root,

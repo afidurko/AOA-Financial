@@ -361,6 +361,31 @@ class PlasticityStage(PipelineStage):
         return True
 
 
+@dataclass
+class VaultSyncStage(PipelineStage):
+    """Sync trading cycle results into the vault knowledge directory."""
+
+    name: str = "vault_sync"
+
+    def should_run(self, ctx: CycleContext) -> bool:
+        return ctx.config.vault_sync_enabled
+
+    def run(self, ctx: CycleContext) -> bool:
+        from aoa.vault.sync import sync_vault_from_cycle
+
+        dry_run = not ctx.config.vault_auto_write
+        result = sync_vault_from_cycle(ctx, dry_run=dry_run)
+        ctx.journal.record(
+            "vault.sync",
+            {
+                "dry_run": result.dry_run,
+                "notes_updated": result.notes_updated,
+                "properties_changed": result.properties_changed,
+            },
+        )
+        return True
+
+
 def default_stages() -> list[PipelineStage]:
     return [
         IntakeStage(),
@@ -373,6 +398,7 @@ def default_stages() -> list[PipelineStage]:
         FundManagerStage(),
         ExecuteStage(),
         PlasticityStage(),
+        VaultSyncStage(),
     ]
 
 

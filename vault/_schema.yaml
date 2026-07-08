@@ -1,0 +1,117 @@
+# Vault note types and auto-updated property contracts.
+# Analyzers are registered in src/aoa/vault/analyzers.py by `source` id.
+
+note_types:
+  loop-engineering:
+  - name: last_run
+    type: string
+    source: loop_engineering
+    refresh: every_run
+  - name: high_priority_count
+    type: integer
+    source: loop_engineering
+    refresh: every_run
+  - name: watch_count
+    type: integer
+    source: loop_engineering
+    refresh: every_run
+  - name: queue_size
+    type: integer
+    source: loop_engineering
+    refresh: every_run
+  - name: l1_enabled
+    type: boolean
+    source: loop_engineering
+    refresh: every_run
+  - name: l2_enabled
+    type: boolean
+    source: loop_engineering
+    refresh: every_run
+
+  cycle-summary:
+  - name: timestamp
+    type: string
+    source: cycle_summary
+    refresh: every_run
+  - name: mode
+    type: string
+    source: cycle_summary
+    refresh: every_run
+  - name: equity
+    type: float
+    source: cycle_summary
+    refresh: every_run
+  - name: n_candidates
+    type: integer
+    source: cycle_summary
+    refresh: every_run
+  - name: n_proposals
+    type: integer
+    source: cycle_summary
+    refresh: every_run
+  - name: n_executed
+    type: integer
+    source: cycle_summary
+    refresh: every_run
+
+  symbol:
+  - name: ticker
+    type: string
+    source: symbol_view
+    refresh: every_run
+  - name: direction
+    type: string
+    source: symbol_view
+    refresh: every_run
+  - name: conviction
+    type: float
+    source: symbol_view
+    refresh: every_run
+  - name: rationale
+    type: string
+    source: symbol_view
+    refresh: every_run
+  - name: corroboration
+    type: string
+    source: symbol_view
+    refresh: every_run
+  - name: last_cycle
+    type: string
+    source: symbol_view
+    refresh: every_run
+
+  workloop-summary:
+  - name: source_count
+    type: integer
+    source: workloop_summary
+    refresh: every_run
+  - name: prior_iterations
+    type: integer
+    source: workloop_summary
+    refresh: every_run
+  - name: plasticity_lessons
+    type: integer
+    source: workloop_summary
+    refresh: every_run
+  - name: last_run
+    type: string
+    source: workloop_summary
+    refresh: every_run
+
+  system-health:
+  - name: ruff_ok
+    type: boolean
+    source: system_health
+    refresh: every_run
+  - name: pytest_ok
+    type: boolean
+    source: system_health
+    refresh: every_run
+  - name: bob_audit_status
+    type: string
+    source: system_health
+    refresh: every_run
+  - name: last_checked
+    type: string
+    source: system_health
+    refresh: every_run

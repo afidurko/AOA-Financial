@@ -9,6 +9,7 @@ STAGE_ORDER = (
     "discover",
     "extract",
     "adapt",
+    "vault_sync",
     "propose",
     "team_review",
     "approval",

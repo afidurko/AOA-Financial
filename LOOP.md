@@ -8,7 +8,7 @@
 Every daily triage run:
 
 ```
-loop-constraints → loop-budget (start) → loop-triage → STATE.md + loop-run-log.md → loop-budget (end)
+loop-constraints → loop-budget (start) → loop-triage → STATE.md + vault sync + loop-run-log.md → loop-budget (end)
 ```
 
 L2 repair (one item per run):
@@ -22,6 +22,7 @@ fable-repair → aoa repair triage → worktree → minimal-fix → loop-verifie
 | Pattern | Cadence | Level | Command / skill |
 |---------|---------|-------|-----------------|
 | Daily triage | 1d | L1 | `loop-triage` skill |
+| **Vault sync** | 1d / per-cycle | L1 | `aoa vault sync` · tier1 `vault-sync` step |
 | **Fable 5 repair** | on-demand / 1d | L2 | `aoa repair triage` + `fable-repair` skill |
 | Trading swarm | `AOA_CYCLE_SECONDS` | prod | `aoa loop` / web `LoopRunner` |
 | Work loop | `AOA_WORKLOOP_INTERVAL_SECONDS` | gated | `aoa workloop loop` |

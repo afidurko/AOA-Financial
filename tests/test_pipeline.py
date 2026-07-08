@@ -39,7 +39,7 @@ def _ctx(fake_broker, fake_llm, tmp_path, *, parallel_workers=1):
     )
 
 
-def test_default_pipeline_has_twelve_stages():
+def test_default_pipeline_has_eleven_stages():
     stages = default_stages()
     names = [s.name for s in stages]
     assert names == [
@@ -53,6 +53,7 @@ def test_default_pipeline_has_twelve_stages():
         "fund_manager",
         "execute",
         "plasticity",
+        "vault_sync",
     ]
 
 
