@@ -4,7 +4,7 @@ An autonomous, multi-agent swarm that analyzes the US stock market for
 opportunities and executes **stock and options** trades in a **cash account**
 through a live brokerage. The brokerage ([Alpaca](https://alpaca.markets)) is
 both the **information source** (quotes, bars, option chains, account, positions)
-and the **order executor**. Every agent reasons with **Claude** (`claude-opus-4-8`).
+and the **order executor**. Every agent reasons with **Claude** (default `claude-sonnet-4-6`; set `AOA_MODEL=claude-opus-4-8` for maximum capability).
 
 > ⚠️ **This software can place real orders with real money.** It defaults to
 > **paper trading** (`ALPACA_LIVE=false`). Set `ALPACA_LIVE=true` only when you
@@ -534,6 +534,7 @@ Configuration loads in this order (lowest → highest priority):
 cp .env.example .env
 export AOA_PROFILE=paper-dry    # recommended starting point
 # Edit .env: set ANTHROPIC_API_KEY and Alpaca paper keys.
+# Default model is claude-sonnet-4-6; override with AOA_MODEL=claude-opus-4-8 if desired.
 # Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
 # Optional market-data tuning:
 #   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
