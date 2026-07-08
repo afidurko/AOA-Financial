@@ -191,9 +191,15 @@ To roll back: remove the line or set `loop-pause-all` under High Priority.
 | `loop-pause-all` | **pause** | **pause** |
 | daily-triage cap (24h) | **skip** | ignored |
 | L2 not enabled | ignored | **l1-only** |
-| No fixable queue items | ignored | **l1-only** |
+| No auto-fixable items (all remaining need CEO/user escalation) | ignored | **l1-only** |
 | fable-repair cap (24h) | ignored | **l1-only** |
 | Else | **triage-ok** | **l2-allowed** |
+
+**L2 scope:** `l2-allowed` only lists items with `requires_escalation=false`
+(code-health, ruff, verify). Items needing CEO approval, higher escalation, or a
+manual user notification are marked `requires_escalation=true`, reported under
+`escalated_items`, and left in STATE.md High Priority for a human — never
+auto-fixed.
 
 Caps from `loop-budget.md`: daily-triage 2 runs / 100k tokens; fable-repair 4 runs / 200k tokens.
 

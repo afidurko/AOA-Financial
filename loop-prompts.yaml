@@ -38,7 +38,10 @@ prompts:
       If action is not "l2-allowed", append one line to loop-run-log.md (outcome: report-only, note gate reason) and exit.
 
       If l2-allowed:
-      1. aoa repair worktree --item-id <first fixable item_id from queue.json>
+      1. Pick the first item whose id is in the gate's "fixable_items" (auto-fixable,
+         requires_escalation=false). NEVER pick an item with requires_escalation=true —
+         those need CEO approval / user notification and stay in STATE.md High Priority.
+         aoa repair worktree --item-id <that item_id from queue.json>
       2. minimal-fix (maker) — ONE item only
       3. loop-verifier (checker) in a NEW agent context — never self-verify
       4. python3 -m ruff check src tests && python3 -m pytest -q

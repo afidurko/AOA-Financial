@@ -19,7 +19,9 @@ Last run: 2026-07-07 23:49 UTC (Fable 5 repair triage, run 86349a58a85e)
 ## Loop automation
 
 - **L1:** enabled (report-only daily triage)
-- **L2:** disabled — complete [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md) before enabling
+- L2: enabled — scoped to auto-fixable code-health items only (draft PR, human merge)
+- L2 scope: never auto-fix items needing CEO approval, higher escalation, or manual user notification (see [loop-constraints.md](loop-constraints.md)); those stay flagged in High Priority for a human
+- Enabled on: 2026-07-08 by Aaron (scoped)
 - Automation A prompt: `aoa tasks show L1`
 - Automation B prompt: `aoa tasks show L2`
 - Automation C prompt: `aoa tasks show BRIEF` (daily user brief + response routing, L1)

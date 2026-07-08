@@ -65,7 +65,7 @@ python3 -m aoa.cli tasks show L1            # copy Cloud Agent prompt
 | Automation | Cadence | Runs when |
 |------------|---------|-----------|
 | **A — Daily sense** | Daily 14:00 UTC | Always (unless `loop-pause-all`) |
-| **B — L2 fix** | Daily 15:00 UTC | Gate action = `l2-allowed` only |
+| **B — L2 fix** | Daily 15:00 UTC | Gate = `l2-allowed`; auto-fixable (non-escalation) items only |
 | **C — User brief** | Daily 14:30 UTC | Always (unless `loop-pause-all`); `aoa loop brief --push` |
 
 Enable L2 automation after checklist sign-off — add `L2: enabled` under `## Loop automation` in `STATE.md`.
