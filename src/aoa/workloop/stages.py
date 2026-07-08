@@ -334,15 +334,17 @@ def default_stages() -> list[WorkloopStage]:
 
 
 def _optional_llm(config):
-    if not config.anthropic_api_key:
+    if not config.llm_api_key:
         return None
     try:
         from aoa.llm.client import LLMClient
 
         return LLMClient(
-            config.anthropic_api_key,
+            config.llm_api_key,
             model=config.model,
             effort=config.effort,
+            provider=config.llm_provider,
+            base_url=config.llm_base_url or None,
         )
     except Exception:  # noqa: BLE001
         return None

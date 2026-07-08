@@ -182,7 +182,7 @@ def _alan_review(
         f"Recommended adaptations:\n{json.dumps(actions, default=str)}\n\n"
         "Recommend approve (routine), reject (unsafe), or escalate_user (user must confirm)."
     )
-    if llm is not None and config.anthropic_api_key:
+    if llm is not None and config.llm_api_key:
         try:
             raw = llm.structured(
                 (
@@ -265,7 +265,7 @@ def _aaron_decide(
         f"{config.workloop_user_approver!r} when the human user must confirm). "
         "Populate user_notifications only when escalating or rejecting."
     )
-    if llm is not None and config.anthropic_api_key:
+    if llm is not None and config.llm_api_key:
         try:
             raw = llm.structured(
                 (

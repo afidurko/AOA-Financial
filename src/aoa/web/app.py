@@ -44,10 +44,18 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        from aoa.activate import auto_activate
+
         app.state.cfg = cfg
         app.state.team = team
         app.state.runner = runner
         app.state.analytics_store = analytics_store
+        if auto_activate(cfg, run_doctor=False, verbose=False) != 0:
+            import logging
+
+            logging.getLogger("aoa.web").warning(
+                "Auto-activate did not complete — dashboard up; retry when OpenD is ready"
+            )
         if cfg.web_auto_loop:
             runner.start()
         yield

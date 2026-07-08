@@ -10,12 +10,20 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-- `ANTHROPIC_API_KEY` — Claude API access for agent reasoning
 - **Moomoo OpenD** — install from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/), log in, keep running on `127.0.0.1:11111`
 
-See `SETUP-AWAITING-YOU.md`, [moomoo-setup.md](moomoo-setup.md), and run `aoa setup moomoo` (or `bash scripts/setup_moomoo_auth.sh`).
+Then run setup and activate:
+
+```bash
+aoa setup moomoo    # first-time OpenD + dependency checks
+aoa activate        # wait for login, start Ollama, verify all systems
+```
+
+See `SETUP-AWAITING-YOU.md`, [moomoo-setup.md](moomoo-setup.md), and [ollama-local-llm.md](ollama-local-llm.md).
 
 **Optional Alpaca:** set `AOA_BROKER=alpaca`, `pip install -e ".[alpaca]"`, and run `bash scripts/setup_alpaca_auth.sh`.
+
+**No Anthropic key?** Run the swarm on a local, key-free model with Ollama — see [ollama-local-llm.md](ollama-local-llm.md). Set `AOA_LLM_PROVIDER=ollama` and `pip install -e ".[openai]"`.
 
 See `.env.example` for workloop, cycle timing, and optional extras.
 

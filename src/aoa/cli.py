@@ -1,6 +1,7 @@
 """Command-line interface for the AOA Financial swarm.
 
 Commands:
+  aoa activate   Log into Moomoo OpenD → wait, start local LLM, verify all systems.
   aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
   aoa setup      One-time broker setup (moomoo, …).
@@ -30,6 +31,7 @@ import sys
 import time
 from pathlib import Path
 
+from aoa.activate import auto_activate, ensure_profile
 from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.alpaca_bars import (
@@ -73,7 +75,13 @@ def build_broker(cfg: Config) -> Broker:
 
 
 def build_llm(cfg: Config) -> LLMClient:
-    return LLMClient(cfg.anthropic_api_key, model=cfg.model, effort=cfg.effort)
+    return LLMClient(
+        cfg.llm_api_key,
+        model=cfg.model,
+        effort=cfg.effort,
+        provider=cfg.llm_provider,
+        base_url=cfg.llm_base_url or None,
+    )
 
 
 def build_news(cfg: Config) -> NewsFeed:
@@ -318,6 +326,47 @@ def _print_bars_table(symbol: str, bars: list, *, asset: str) -> None:
         )
 
 
+def cmd_activate(
+    cfg: Config,
+    *,
+    wait_sec: float,
+    skip_wait: bool,
+    run: bool,
+    serve: bool,
+) -> int:
+    if cfg.broker != "moomoo":
+        print(f"Note: broker is {cfg.broker!r}; activate is tuned for Moomoo OpenD.")
+    rc = auto_activate(
+        cfg,
+        wait_sec=wait_sec,
+        skip_opend_wait=skip_wait,
+        run_doctor=True,
+        verbose=True,
+    )
+    if rc != 0:
+        return rc
+    if run:
+        return cmd_run(cfg, _auto=False)
+    if serve:
+        return cmd_serve(cfg, _auto=False)
+    return 0
+
+
+def _bootstrap_commands() -> frozenset[str]:
+    return frozenset({"activate", "run", "loop", "serve"})
+
+
+def _prepare_cfg(command: str) -> Config:
+    if command in _bootstrap_commands():
+        ensure_profile()
+        return Config.from_env(load_dotenv=False)
+    return Config.from_env()
+
+
+def _maybe_auto_activate(cfg: Config) -> int:
+    return auto_activate(cfg, run_doctor=False, verbose=False)
+
+
 def cmd_bars(
     cfg: Config,
     symbols: list[str],
@@ -369,6 +418,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     tf_keys = ", ".join(t.key for t in cfg.bar_timeframes)
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
+    llm_target = cfg.llm_base_url or ("default endpoint" if cfg.llm_provider != "ollama" else "http://localhost:11434/v1")
+    print(f"  ✓ LLM provider: {cfg.llm_provider} | model: {cfg.model} | {llm_target}")
     print(f"  ✓ Broker: {cfg.broker} | bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
     if cfg.broker == "moomoo":
         print(
@@ -427,7 +478,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         llm = build_llm(cfg)
         print("  ✓ LLM client initialized.")
         llm.ping()
-        print(f"  ✓ LLM reachable (model={cfg.model}).")
+        print(f"  ✓ LLM reachable (provider={cfg.llm_provider}, model={cfg.model}).")
     except LLMError as exc:
         print(f"  ✗ LLM check failed: {exc}")
         return 1
@@ -476,7 +527,9 @@ def cmd_status(cfg: Config) -> int:
     return 0
 
 
-def cmd_run(cfg: Config) -> int:
+def cmd_run(cfg: Config, *, _auto: bool = True) -> int:
+    if _auto and _maybe_auto_activate(cfg) != 0:
+        return 1
     team = build_team(cfg)
     _print_environment(cfg)
     if not team.broker.is_market_open():
@@ -491,7 +544,9 @@ def cmd_run(cfg: Config) -> int:
     return 0
 
 
-def cmd_loop(cfg: Config) -> int:
+def cmd_loop(cfg: Config, *, _auto: bool = True) -> int:
+    if _auto and _maybe_auto_activate(cfg) != 0:
+        return 1
     team = build_team(cfg)
     _print_environment(cfg)
     print(
@@ -1049,7 +1104,9 @@ def cmd_tasks_run(task: str) -> int:
     return result.exit_code
 
 
-def cmd_serve(cfg: Config) -> int:
+def cmd_serve(cfg: Config, *, _auto: bool = True) -> int:
+    if _auto and _maybe_auto_activate(cfg) != 0:
+        return 1
     try:
         import uvicorn
     except ImportError:
@@ -1192,6 +1249,31 @@ def cmd_setup_moomoo(cfg: Config) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
+    act = sub.add_parser(
+        "activate",
+        help="Wait for Moomoo OpenD login and verify all systems.",
+    )
+    act.add_argument(
+        "--wait",
+        type=float,
+        default=300.0,
+        help="Seconds to wait for OpenD (default 300).",
+    )
+    act.add_argument(
+        "--no-wait",
+        action="store_true",
+        help="Fail immediately if OpenD is not reachable.",
+    )
+    act.add_argument(
+        "--run",
+        action="store_true",
+        help="Run one swarm cycle after activation.",
+    )
+    act.add_argument(
+        "--serve",
+        action="store_true",
+        help="Start the web dashboard after activation.",
+    )
     doctor = sub.add_parser("doctor", help="Validate configuration & connectivity.")
     doctor.add_argument(
         "--offline",
@@ -1381,9 +1463,17 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     _ensure_env_template()
-    cfg = Config.from_env()
+    cfg = _prepare_cfg(args.command)
 
     try:
+        if args.command == "activate":
+            return cmd_activate(
+                cfg,
+                wait_sec=args.wait,
+                skip_wait=args.no_wait,
+                run=args.run,
+                serve=args.serve,
+            )
         if args.command == "bars":
             return cmd_bars(cfg, args.symbols, timeframe=args.timeframe, limit=args.limit)
         if args.command == "doctor":

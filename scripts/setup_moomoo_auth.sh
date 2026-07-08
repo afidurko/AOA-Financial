@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Moomoo + AOA setup helper — prints only the human steps.
+# Moomoo + AOA setup helper — prints human steps and runs doctor when OpenD is up.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -20,7 +20,7 @@ else
 fi
 
 if ! python3 -c "import aoa" 2>/dev/null; then
-  need 'Run: pip install -e ".[dev]"'
+  need 'Run: pip install -e ".[dev,web,openai]"'
 else
   ok "Python package aoa importable"
 fi
@@ -31,10 +31,12 @@ else
   need 'Run: pip install moomoo-api  (or pip install -e ".[dev]")'
 fi
 
-if grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
+if grep -qE '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
   ok "ANTHROPIC_API_KEY looks set"
+elif grep -qE '^AOA_LLM_PROVIDER=ollama' .env 2>/dev/null; then
+  ok "Local Ollama configured (no cloud API key)"
 else
-  need "Edit .env — set ANTHROPIC_API_KEY=sk-ant-..."
+  need "Set AOA_LLM_PROVIDER=ollama in .env (key-free), or ANTHROPIC_API_KEY=sk-ant-..."
 fi
 
 HOST="${MOOMOO_OPEND_HOST:-127.0.0.1}"
@@ -74,5 +76,8 @@ else
   echo "Skipping live doctor until OpenD is running."
 fi
 
+echo
+echo "When OpenD is running, activate all systems:"
+echo "  aoa activate"
 echo
 echo "Full checklist: SETUP-AWAITING-YOU.md"
