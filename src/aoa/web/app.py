@@ -17,6 +17,8 @@ from aoa.brokerage.base import BrokerError
 from aoa.cli import build_team
 from aoa.config import Config
 from aoa.llm.client import LLMError
+from aoa.loop.user_brief import build_loop_user_brief, repair_queue_summary
+from aoa.notify.response_router import ResponseError, route_response
 from aoa.research.loop import ResearchLoop
 from aoa.team.orchestrator import TeamCycleResult
 from aoa.web.dashboard_html import DASHBOARD_HTML
@@ -25,6 +27,11 @@ from aoa.web.loop_runner import CycleBusyError, LoopRunner
 
 class ResolveBody(BaseModel):
     status: str
+
+
+class RespondBody(BaseModel):
+    action: str
+    note: str = ""
 
 
 class TeamExpansionUpdateBody(BaseModel):
@@ -238,6 +245,46 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         runner = request.app.state.runner
         brief = team.run_assistant_brief(last_cycle=runner.state.last_result)
         return {"brief": brief.to_context()}
+
+    @app.get("/api/loop/brief")
+    def loop_brief(request: Request) -> dict[str, Any]:
+        cfg: Config = request.app.state.cfg
+        team = request.app.state.team
+        runner = request.app.state.runner
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        assistant = team.run_assistant_brief(last_cycle=runner.state.last_result)
+        pending = store.list_pending_responses() if store is not None else []
+        brief = build_loop_user_brief(
+            assistant_brief=assistant,
+            repair_summary=repair_queue_summary(cfg.repair_path),
+            pending_responses=pending,
+        )
+        return {"brief": brief.to_context()}
+
+    @app.get("/api/alerts/pending")
+    def alerts_pending(request: Request) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            return {"items": []}
+        return {"items": store.list_pending_responses()}
+
+    @app.post("/api/alerts/{alert_id}/respond")
+    def alert_respond(
+        request: Request, alert_id: int, body: RespondBody
+    ) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        try:
+            result = route_response(
+                store,
+                notification_id=alert_id,
+                action=body.action,
+                note=body.note,
+            )
+        except ResponseError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return result.to_context()
 
     @app.get("/api/team/expansions")
     def list_team_expansions(request: Request, status: str | None = None) -> dict[str, Any]:
