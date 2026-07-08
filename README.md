@@ -4,7 +4,10 @@ An autonomous, multi-agent swarm that analyzes the US stock market for
 opportunities and executes **stock and options** trades in a **cash account**
 through a live brokerage. The brokerage ([Alpaca](https://alpaca.markets)) is
 both the **information source** (quotes, bars, option chains, account, positions)
-and the **order executor**. Every agent reasons with **Claude** (`claude-opus-4-8`).
+and the **order executor**. Every agent reasons through a pluggable LLM — **Claude**
+by default, or an OpenAI-compatible endpoint or a local, key-free **Ollama** model
+(`AOA_LLM_PROVIDER=anthropic|openai|ollama`; see
+[docs/how-to/ollama-local-llm.md](docs/how-to/ollama-local-llm.md)).
 
 > ⚠️ **This software can place real orders with real money.** It defaults to
 > **paper trading** (`ALPACA_LIVE=false`). Set `ALPACA_LIVE=true` only when you

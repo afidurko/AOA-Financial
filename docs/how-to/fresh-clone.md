@@ -17,6 +17,8 @@ See `SETUP-AWAITING-YOU.md` and run `bash scripts/setup_moomoo_auth.sh`.
 
 **Optional Alpaca:** set `AOA_BROKER=alpaca`, `pip install -e ".[alpaca]"`, and run `bash scripts/setup_alpaca_auth.sh`.
 
+**No Anthropic key?** Run the swarm on a local, key-free model with Ollama — see [ollama-local-llm.md](ollama-local-llm.md). Set `AOA_LLM_PROVIDER=ollama` and `pip install -e ".[openai]"`.
+
 See `.env.example` for workloop, cycle timing, and optional extras.
 
 ## 2. Install
