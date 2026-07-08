@@ -27,7 +27,29 @@ class AnalyticsStore:
 
     def _init_schema(self) -> None:
         self._conn.executescript(_SCHEMA_PATH.read_text())
+        self._migrate_notification_response_columns()
         self._conn.commit()
+
+    def _migrate_notification_response_columns(self) -> None:
+        """Add response-tracking columns to notification_log on older databases."""
+        existing = {
+            row["name"]
+            for row in self._conn.execute("PRAGMA table_info(notification_log)")
+        }
+        additions = {
+            "response_status": "TEXT NOT NULL DEFAULT 'none'",
+            "response_payload": "TEXT",
+            "responded_at": "TEXT",
+        }
+        for column, ddl in additions.items():
+            if column not in existing:
+                self._conn.execute(
+                    f"ALTER TABLE notification_log ADD COLUMN {column} {ddl}"
+                )
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notification_response "
+            "ON notification_log(response_status)"
+        )
 
     @contextmanager
     def transaction(self) -> Iterator[sqlite3.Connection]:
@@ -170,6 +192,57 @@ class AnalyticsStore:
                 ),
             )
             return int(cur.lastrowid)
+
+    def mark_awaiting_response(self, notification_id: int) -> bool:
+        """Flag a notification as awaiting the user's reply."""
+        with self.transaction() as c:
+            cur = c.execute(
+                """UPDATE notification_log SET response_status='awaiting'
+                   WHERE id=? AND response_status='none'""",
+                (notification_id,),
+            )
+            return cur.rowcount > 0
+
+    def record_response(
+        self,
+        notification_id: int,
+        *,
+        action: str,
+        note: str = "",
+        actor: str = "user",
+    ) -> bool:
+        """Record the user's reply to a notification and mark it resolved."""
+        now = datetime.now(timezone.utc).isoformat()
+        payload = {"action": action, "note": note, "actor": actor, "at": now}
+        with self.transaction() as c:
+            cur = c.execute(
+                """UPDATE notification_log
+                   SET response_status='responded',
+                       response_payload=?,
+                       responded_at=?
+                   WHERE id=? AND response_status IN ('none','awaiting')""",
+                (json.dumps(payload), now, notification_id),
+            )
+            return cur.rowcount > 0
+
+    def get_notification(self, notification_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM notification_log WHERE id=?",
+                (notification_id,),
+            ).fetchone()
+            return _row_to_dict(row) if row else None
+
+    def list_pending_responses(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """Notifications that requested a reply and have not been answered."""
+        with self._lock:
+            rows = self._conn.execute(
+                """SELECT * FROM notification_log
+                   WHERE response_status='awaiting'
+                   ORDER BY created_at DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+            return [_row_to_dict(r) for r in rows]
 
     def add_approval(
         self,
@@ -514,7 +587,7 @@ def _team_expansion_payload(proposal: Any) -> dict[str, Any]:
 
 def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
     out = dict(row)
-    for key in ("payload", "metrics"):
+    for key in ("payload", "metrics", "response_payload"):
         if key in out and isinstance(out[key], str):
             try:
                 out[key] = json.loads(out[key])
