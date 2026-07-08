@@ -514,6 +514,59 @@ def cmd_loop(cfg: Config) -> int:
     return 0
 
 
+def cmd_loop_brief(cfg: Config, *, push: bool, as_json: bool) -> int:
+    from aoa.loop.user_brief import (
+        build_loop_user_brief,
+        deliver_loop_brief,
+        repair_queue_summary,
+    )
+
+    team = build_team(cfg)
+    assistant = team.run_assistant_brief()
+    pending: list[dict] = []
+    if team.analytics is not None:
+        pending = team.analytics.store.list_pending_responses()
+    brief = build_loop_user_brief(
+        assistant_brief=assistant,
+        repair_summary=repair_queue_summary(cfg.repair_path),
+        pending_responses=pending,
+    )
+
+    if as_json:
+        print(json.dumps(brief.to_context(), indent=2, default=str))
+    else:
+        print("\n=== Loop brief — trading + engineering ===")
+        print(f"Focus: {brief.focus}")
+        print(brief.summary)
+        for label, items in (
+            ("MUST DO", brief.must_do),
+            ("SHOULD DO", brief.should_do),
+            ("CAN WAIT", brief.can_wait),
+        ):
+            if items:
+                print(f"\n{label}:")
+                for item in items:
+                    hint = f" → {item['action_hint']}" if item.get("action_hint") else ""
+                    print(f"  • {item['title']}: {item['detail']}{hint}")
+        if brief.suggested_replies:
+            print("\nAWAITING YOUR REPLY:")
+            for reply in brief.suggested_replies:
+                print(f"  • {reply.prompt} (id {reply.target})")
+
+    if push:
+        notifier = team.aaron.notifier
+        if not notifier.configured:
+            print(
+                "\niPhone push not configured — set AOA_CUSTOM_APP_WEBHOOK_URL "
+                "(or Pushover / ntfy) to deliver.",
+                file=sys.stderr,
+            )
+            return 1
+        channels = deliver_loop_brief(brief, notifier)
+        print(f"\nBrief delivered via: {', '.join(channels)}")
+    return 0
+
+
 def cmd_team_health(cfg: Config) -> int:
     team = build_team(cfg)
     health = team.run_health_check()
@@ -1157,7 +1210,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
-    sub.add_parser("loop", help="Run team cycles continuously.")
+    lp = sub.add_parser("loop", help="Run team cycles continuously, or generate a user brief.")
+    lp_sub = lp.add_subparsers(dest="loop_command", required=False)
+    lp_brief = lp_sub.add_parser(
+        "brief",
+        help="Loop-aware user brief (Alex + STATE.md + repair queue).",
+    )
+    lp_brief.add_argument(
+        "--push",
+        action="store_true",
+        help="Deliver the brief to your iPhone if a channel is configured.",
+    )
+    lp_brief.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     sub.add_parser("assistant", help="Alex — prioritized must-do vs should-do brief.")
     team = sub.add_parser("team", help="Team-specific commands.")
     team_sub = team.add_subparsers(dest="team_command", required=True)
@@ -1335,6 +1399,10 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run":
             return cmd_run(cfg)
         if args.command == "loop":
+            if getattr(args, "loop_command", None) == "brief":
+                return cmd_loop_brief(
+                    cfg, push=args.push, as_json=getattr(args, "json", False)
+                )
             return cmd_loop(cfg)
         if args.command == "assistant":
             return cmd_assistant(cfg)

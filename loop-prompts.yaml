@@ -47,6 +47,27 @@ prompts:
       Respect denylist: src/aoa/risk/guards.py, .env*, profiles/live.env
       Max 3 fix attempts per item; escalate in STATE.md after that.
 
+  BRIEF:
+    title: User response brief (Automation C)
+    tier: "1"
+    automation: "AOA user brief"
+    cadence: "Daily 14:30 UTC (after triage)"
+    body: |
+      Run loop-constraints, then loop-budget, then loop-triage on AOA-Financial.
+
+      Read STATE.md, LOOP.md, loop-constraints.md first.
+      Run: python3 -m aoa.cli repair gate --for triage
+      If gate action is "pause", update STATE.md High Priority with loop-pause-all note and exit.
+
+      Always:
+      1. python3 -m aoa.cli loop brief --push
+         (Alex combines trading priorities, STATE.md High Priority/Watch, and the
+          repair queue into one brief; delivers to the user's iPhone if configured.)
+      2. Note "user brief delivered" in STATE.md Post-Run Critique.
+
+      Do NOT change application code. L1 report-only.
+      Never auto-merge. Never edit .env or live trading paths.
+
   GATE-A:
     title: Preflight Automation A only
     tier: check

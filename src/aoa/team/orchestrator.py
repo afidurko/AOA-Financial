@@ -284,11 +284,16 @@ class TeamOrchestrator:
 
     def run_assistant_brief(self, *, last_cycle: TeamCycleResult | None = None) -> AssistantBrief:
         """On-demand prioritization brief for the user (Alex)."""
+        from aoa.loop.prompts import find_repo_root
+
         cycle = last_cycle
+        repo_root = find_repo_root()
         brief = self.alex.prioritize(
             cycle=cycle,
             analytics_store=self.analytics.store if self.analytics else None,
             market_open=self.broker.is_market_open(),
+            loop_state_path=repo_root / "STATE.md",
+            repair_path=self.config.repair_path,
         )
         self.journal.record("team.alex.brief", brief.to_context())
         return brief
