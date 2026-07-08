@@ -69,7 +69,13 @@ def build_broker(cfg: Config) -> Broker:
 
 
 def build_llm(cfg: Config) -> LLMClient:
-    return LLMClient(cfg.anthropic_api_key, model=cfg.model, effort=cfg.effort)
+    return LLMClient(
+        cfg.llm_api_key,
+        model=cfg.model,
+        effort=cfg.effort,
+        provider=cfg.llm_provider,
+        base_url=cfg.llm_base_url or None,
+    )
 
 
 def build_news(cfg: Config) -> NewsFeed:
@@ -364,6 +370,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     tf_keys = ", ".join(t.key for t in cfg.bar_timeframes)
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
+    llm_target = cfg.llm_base_url or ("default endpoint" if cfg.llm_provider != "ollama" else "http://localhost:11434/v1")
+    print(f"  ✓ LLM provider: {cfg.llm_provider} | model: {cfg.model} | {llm_target}")
     print(f"  ✓ Broker: {cfg.broker} | bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
     if cfg.broker == "moomoo":
         print(
@@ -422,7 +430,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         llm = build_llm(cfg)
         print("  ✓ LLM client initialized.")
         llm.ping()
-        print(f"  ✓ LLM reachable (model={cfg.model}).")
+        print(f"  ✓ LLM reachable (provider={cfg.llm_provider}, model={cfg.model}).")
     except LLMError as exc:
         print(f"  ✗ LLM check failed: {exc}")
         return 1

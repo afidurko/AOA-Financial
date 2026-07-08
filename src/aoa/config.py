@@ -24,6 +24,7 @@ from aoa.brokerage.constants import (
 from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timeframes
 
 VALID_BROKERS = frozenset({"moomoo", "alpaca"})
+VALID_LLM_PROVIDERS = frozenset({"anthropic", "openai", "ollama"})
 VALID_ENVS = frozenset({"test", "paper-dry", "paper", "live"})
 _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
     "test": {"dry_run": True, "alpaca_live": False},
@@ -200,7 +201,10 @@ class Config:
     repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
 
     # LLM
+    llm_provider: str = "anthropic"
+    llm_base_url: str = ""
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
     model: str = "claude-sonnet-4-6"
     effort: str = "high"
 
@@ -335,6 +339,15 @@ class Config:
     def is_test(self) -> bool:
         return self.env == "test"
 
+    @property
+    def llm_api_key(self) -> str:
+        """Return the API key for the active LLM provider (Ollama needs none)."""
+        if self.llm_provider == "openai":
+            return self.openai_api_key
+        if self.llm_provider == "ollama":
+            return "ollama"
+        return self.anthropic_api_key
+
     @classmethod
     def from_env(cls, load_dotenv: bool = True) -> Config:
         if load_dotenv:
@@ -373,7 +386,11 @@ class Config:
             workloop_path=workloop_path_for(env),
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
+            llm_provider=os.environ.get("AOA_LLM_PROVIDER", "anthropic").strip().lower()
+            or "anthropic",
+            llm_base_url=os.environ.get("AOA_LLM_BASE_URL", "").strip(),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
+            openai_api_key=os.environ.get("OPENAI_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
             effort=os.environ.get("AOA_EFFORT", "high"),
             broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
@@ -485,9 +502,16 @@ class Config:
             problems.append(
                 f"AOA_BROKER must be one of {sorted(VALID_BROKERS)} (got {self.broker!r})."
             )
+        if self.llm_provider not in VALID_LLM_PROVIDERS:
+            problems.append(
+                f"AOA_LLM_PROVIDER must be one of {sorted(VALID_LLM_PROVIDERS)} "
+                f"(got {self.llm_provider!r})."
+            )
         if self.env != "test":
-            if not self.anthropic_api_key:
+            if self.llm_provider == "anthropic" and not self.anthropic_api_key:
                 problems.append("ANTHROPIC_API_KEY is not set — the agents cannot reason.")
+            if self.llm_provider == "openai" and not self.openai_api_key:
+                problems.append("OPENAI_API_KEY is not set — the agents cannot reason.")
             if self.broker == "alpaca" and not self.has_brokerage_creds:
                 problems.append(
                     "Alpaca credentials missing — set ALPACA_API_KEY_ID and "
