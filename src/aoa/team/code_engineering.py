@@ -215,12 +215,23 @@ def _check_loop_scaffold(root: Path) -> CodeFinding:
     missing_skills = [
         name for name in _LOOP_SKILLS if not (skills_root / name / "SKILL.md").exists()
     ]
-    if missing_files or missing_skills:
-        parts: list[str] = []
-        if missing_files:
-            parts.append("missing files: " + ", ".join(missing_files))
-        if missing_skills:
-            parts.append("missing skills: " + ", ".join(missing_skills))
+    parts: list[str] = []
+    if missing_files:
+        parts.append("missing files: " + ", ".join(missing_files))
+    if missing_skills:
+        parts.append("missing skills: " + ", ".join(missing_skills))
+
+    registry = root / "patterns" / "registry.yaml"
+    registry_text = registry.read_text(encoding="utf-8") if registry.is_file() else ""
+    if "user-response-loop" not in registry_text:
+        parts.append("patterns/registry.yaml missing user-response-loop entry")
+
+    prompts = root / "loop-prompts.yaml"
+    prompts_text = prompts.read_text(encoding="utf-8") if prompts.is_file() else ""
+    if "BRIEF:" not in prompts_text:
+        parts.append("loop-prompts.yaml missing BRIEF shortkey")
+
+    if parts:
         return CodeFinding(
             "loop_scaffold",
             HealthStatus.DEGRADED,
@@ -229,7 +240,7 @@ def _check_loop_scaffold(root: Path) -> CodeFinding:
     return CodeFinding(
         "loop_scaffold",
         HealthStatus.OK,
-        "Loop engineering scaffold files and skills present.",
+        "Loop engineering scaffold files, skills, and response loop present.",
     )
 
 
