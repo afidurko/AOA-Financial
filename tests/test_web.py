@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
+pytest.importorskip("httpx2")
 
-from fastapi.testclient import TestClient  # noqa: E402
+from starlette.testclient import TestClient  # noqa: E402
 
 from aoa.config import Config, RiskLimits  # noqa: E402
 from aoa.web.app import create_app  # noqa: E402
