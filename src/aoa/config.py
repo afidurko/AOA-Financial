@@ -212,6 +212,7 @@ class Config:
     broker: str = "moomoo"
     moomoo_opend_host: str = "127.0.0.1"
     moomoo_opend_port: int = 11111
+    moomoo_connect_timeout: float = 3.0
     moomoo_unlock_password: str = ""
     moomoo_acc_id: int = 0
     moomoo_acc_index: int = 0
@@ -316,6 +317,7 @@ class Config:
     adapt_rank: int = 4
     adapt_alpha: float = 8.0
     adapt_lr: float = 0.05
+    adapt_return_scale: float = 0.05
 
     @property
     def has_brokerage_creds(self) -> bool:
@@ -396,6 +398,7 @@ class Config:
             broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
             moomoo_opend_host=os.environ.get("MOOMOO_OPEND_HOST", "127.0.0.1").strip() or "127.0.0.1",
             moomoo_opend_port=_int("MOOMOO_OPEND_PORT", 11111),
+            moomoo_connect_timeout=_float("AOA_MOOMOO_CONNECT_TIMEOUT", 3.0),
             moomoo_unlock_password=os.environ.get("MOOMOO_UNLOCK_PASSWORD", ""),
             moomoo_acc_id=_int("MOOMOO_ACC_ID", 0),
             moomoo_acc_index=_int("MOOMOO_ACC_INDEX", 0),
@@ -459,6 +462,7 @@ class Config:
             adapt_rank=_int("AOA_ADAPT_RANK", 4),
             adapt_alpha=_float("AOA_ADAPT_ALPHA", 8.0),
             adapt_lr=_float("AOA_ADAPT_LR", 0.05),
+            adapt_return_scale=_float("AOA_ADAPT_RETURN_SCALE", 0.05),
             workloop_enabled=_bool("AOA_WORKLOOP_ENABLED", True),
             workloop_approver=os.environ.get("AOA_WORKLOOP_APPROVER", "Aaron").strip() or "Aaron",
             workloop_user_approver=os.environ.get("AOA_WORKLOOP_USER_APPROVER", "user").strip() or "user",

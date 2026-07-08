@@ -12,13 +12,14 @@ Edit `.env` and set at minimum:
 
 - **Moomoo OpenD** — install from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/), log in, keep running on `127.0.0.1:11111`
 
-Then activate everything in one step:
+Then run setup and activate:
 
 ```bash
-aoa activate
+aoa setup moomoo    # first-time OpenD + dependency checks
+aoa activate        # wait for login, start Ollama, verify all systems
 ```
 
-See `SETUP-AWAITING-YOU.md` and run `bash scripts/activate.sh`.
+See `SETUP-AWAITING-YOU.md`, [moomoo-setup.md](moomoo-setup.md), and [ollama-local-llm.md](ollama-local-llm.md).
 
 **Optional Alpaca:** set `AOA_BROKER=alpaca`, `pip install -e ".[alpaca]"`, and run `bash scripts/setup_alpaca_auth.sh`.
 

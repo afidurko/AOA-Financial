@@ -5,14 +5,31 @@ AOA defaults to **Moomoo** + a **local Ollama** model (no cloud API keys).
 ## Quick start (any platform)
 
 1. **Install Moomoo OpenD** from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/)
+
+| Platform | OpenD install |
+|----------|---------------|
+| macOS | `bash scripts/install_moomoo_opend_macos.sh` |
+| Linux | `bash scripts/install_moomoo_opend_linux.sh` |
+| Docker (unofficial) | `docker-compose.moomoo-opend.example.yml` |
+
+Full guide: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md)
+
 2. **Log in** with your Moomoo account (OpenD must stay running on this machine)
+
 3. **Install Python deps** (once):
 
 ```bash
 pip install -e ".[dev,web,openai]"
 ```
 
-4. **Activate everything**:
+4. **First-time checks** (optional):
+
+```bash
+aoa setup moomoo
+# or: bash scripts/setup_moomoo_auth.sh
+```
+
+5. **Activate everything**:
 
 ```bash
 aoa activate
@@ -30,6 +47,8 @@ aoa activate --serve    # web dashboard at http://127.0.0.1:8080
 
 Paper dry-run by default — no orders submitted until you change `AOA_ENV`.
 
+For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
+
 ---
 
 ## What `activate` turns on
@@ -41,7 +60,7 @@ Paper dry-run by default — no orders submitted until you change `AOA_ENV`.
 | **Trading mode** | `paper-dry` — analyze and journal only |
 | **Verify** | Full `aoa doctor` (broker + LLM ping) |
 
-Profile: `profiles/moomoo.env` (auto-selected by `activate`).
+Profile: `profiles/moomoo.env` (auto-selected by `activate`). For simulate orders via OpenD, use `AOA_PROFILE=moomoo-paper` instead.
 
 ---
 

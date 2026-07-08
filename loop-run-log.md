@@ -21,3 +21,9 @@
 | 2026-07-04 20:06 | fable-repair | L2 | triage | Repair triage c8d1ca69d058; STATE refreshed. |
 | 2026-07-04 20:10 | loose-ends | — | merged | PR #37: model default + Alpaca bar feed; `aoa doctor` green. |
 | 2026-07-04 23:11 | pr-review | — | merged | PR #37 merged; PR #36 rebased; #35 held; option 3 setup started. |
+| 2026-07-06 03:06 | daily-triage | L1 | report-only | aoa tasks run tier1: repair triage + verify ok. tokens_estimate=2000 |
+| 2026-07-06 03:22 | daily-triage | L1 | report-only | User-requested run: 337 tests passed, ruff ok, Bob audit OK. Moomoo OpenD offline. tokens_estimate=5000 |
+| 2026-07-06 04:32 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-06 04:32 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-06 23:40 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
+| 2026-07-07 23:47 | fable-repair | L2 | fix-proposed | OpenD fail-fast probe; doctor ~3s not 30s+. 344 tests passed. tokens_estimate=6000 |

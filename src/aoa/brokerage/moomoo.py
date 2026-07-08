@@ -7,6 +7,7 @@ and options use ``OpenSecTradeContext`` with ``TrdMarket.US``.
 from __future__ import annotations
 
 import re
+import socket
 from datetime import datetime, timezone
 from typing import Any
 
@@ -148,6 +149,18 @@ def _parse_moomoo_option(code: str, underlying: str) -> tuple[OptionType, float,
     return _parse_option_tail(bare[len(root) :])
 
 
+def probe_opend(host: str, port: int, *, timeout: float = 3.0) -> None:
+    """Fail fast when OpenD is not accepting TCP connections."""
+    try:
+        with socket.create_connection((host, int(port)), timeout=timeout):
+            return
+    except OSError as exc:
+        raise BrokerError(
+            f"Moomoo OpenD unreachable at {host}:{port} ({exc}). "
+            "Start OpenD locally or set AOA_BROKER=alpaca for paper trading."
+        ) from exc
+
+
 class MoomooBroker(Broker):
     """US securities broker through Moomoo OpenD."""
 
@@ -163,6 +176,7 @@ class MoomooBroker(Broker):
         acc_index: int = 0,
         unlock_password: str = "",
         bar_feed: str = "iex",
+        connect_timeout: float = 3.0,
     ) -> None:
         sdk = _require_sdk()
         del bar_feed  # Moomoo feed is tied to OpenD subscription
@@ -171,6 +185,7 @@ class MoomooBroker(Broker):
         self._market = market.upper()
         self._host = host
         self._port = int(port)
+        probe_opend(self._host, self._port, timeout=connect_timeout)
         self._acc_id = int(acc_id)
         self._acc_index = int(acc_index)
         self._unlock_password = unlock_password.strip()
@@ -200,6 +215,7 @@ class MoomooBroker(Broker):
             acc_index=cfg.moomoo_acc_index,
             unlock_password=cfg.moomoo_unlock_password,
             bar_feed=cfg.bar_feed,
+            connect_timeout=cfg.moomoo_connect_timeout,
         )
 
     def _ensure_unlocked(self) -> None:
