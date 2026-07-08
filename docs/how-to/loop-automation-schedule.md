@@ -181,6 +181,22 @@ After [docs/loop-l2-checklist.md](../loop-l2-checklist.md) is complete, add to `
 
 Until this section exists, `aoa repair gate` returns **`l1-only`** even when fixable items exist.
 
+### Task chain (automatic next L2 item)
+
+Source of truth: `docs/upgrade-backlog.json` · runtime: `data/{AOA_ENV}/loop/task-chain.json`
+
+```bash
+aoa tasks chain bootstrap                              # first run / after clone
+aoa tasks chain status                               # current + completed
+aoa tasks chain advance --complete upg-007           # after L2 PR ships
+AOA_CHAIN_COMPLETED=upg-007 aoa tasks run chain-advance
+aoa tasks run tier2-chain                            # gate + bootstrap + repair triage
+```
+
+- Human-only items (`skill: human`) are **skipped automatically**.
+- Exit code **3** from `chain advance` = alert you; automation must stop.
+- L2 prompt (`aoa tasks show L2`) includes step 7: chain advance after draft PR.
+
 To roll back: remove the line or set `loop-pause-all` under High Priority.
 
 ---

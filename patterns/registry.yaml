@@ -39,6 +39,27 @@ patterns:
     prompts: loop-prompts.yaml
     level: L1
 
+  - id: vault-sync
+    name: Vault Property Sync
+    file: vault/_schema.yaml
+    goal: Analyze and update every property in the vault knowledge directory
+    cadence: 1d
+    risk: low
+    skills: [loop-triage, loop-constraints]
+    state: vault/
+    cli: aoa vault sync
+    level: L1
+
+  - id: loop-task-chain
+    name: Loop Task Chain
+    file: docs/upgrade-backlog.json
+    goal: Auto-queue next L2 item from upgrade backlog after each completion
+    cadence: on-complete
+    risk: low
+    cli: aoa tasks chain advance
+    state: data/{AOA_ENV}/loop/task-chain.json
+    level: L2
+
   - id: workloop
     name: AOA Work Loop
     file: src/aoa/workloop/

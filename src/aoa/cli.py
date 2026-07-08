@@ -3,7 +3,7 @@
 Commands:
   aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
-  aoa setup      One-time broker setup (moomoo, …).
+  aoa setup      One-time setup (mac, moomoo, …).
   aoa status     Show account, positions, and market clock.
   aoa run        Run a single analysis→decision→execution cycle.
   aoa loop       Run cycles continuously on the configured cadence.
@@ -16,6 +16,7 @@ Commands:
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
+  aoa vault      Sync schema-driven vault property notes.
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
@@ -51,6 +52,7 @@ from aoa.simulation.trends import analyze_trends
 from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
+from aoa.vault.sync import sync_vault_engineering, vault_status
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
 from aoa.workloop.scheduler import build_scheduler
@@ -1015,6 +1017,53 @@ def cmd_repair_worktree(cfg: Config, *, item_id: str) -> int:
     return 0
 
 
+def cmd_vault_sync(cfg: Config, *, dry_run: bool, as_json: bool) -> int:
+    if not cfg.vault_sync_enabled:
+        print("Vault sync is disabled (AOA_VAULT_SYNC_ENABLED=false).")
+        return 0
+    repo_root = Path.cwd()
+    for parent in [repo_root, *repo_root.parents]:
+        if (parent / "pyproject.toml").is_file() and (parent / "src" / "aoa").is_dir():
+            repo_root = parent
+            break
+    effective_dry: bool | None = True if dry_run else None
+    result = sync_vault_engineering(cfg, repo_root=repo_root, dry_run=effective_dry)
+    if as_json:
+        print(json.dumps(result.to_context(), indent=2))
+    else:
+        mode = "dry-run" if result.dry_run else "write"
+        print(
+            f"Vault sync ({mode}): scanned={result.notes_scanned} "
+            f"updated={result.notes_updated} properties_changed={result.properties_changed}"
+        )
+        for note in result.note_results:
+            if note.changed:
+                keys = ", ".join(note.changed)
+                print(f"  {note.path}: {keys}")
+        for err in result.errors:
+            print(f"  error: {err}", file=sys.stderr)
+    return 0
+
+
+def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
+    repo_root = Path.cwd()
+    for parent in [repo_root, *repo_root.parents]:
+        if (parent / "pyproject.toml").is_file() and (parent / "src" / "aoa").is_dir():
+            repo_root = parent
+            break
+    report = vault_status(cfg, repo_root=repo_root)
+    if as_json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Vault: {report['vault_root']}")
+        print(f"Notes scanned: {report['notes_scanned']}")
+        print(f"Stale notes: {report['stale_count']}")
+        for row in report.get("stale_notes", []):
+            keys = ", ".join(row.get("would_change", []))
+            print(f"  {row['path']}: {keys}")
+    return 0
+
+
 def cmd_tasks_list() -> int:
     from aoa.loop.prompts import format_prompt_list
 
@@ -1057,6 +1106,58 @@ def cmd_tasks_run(task: str) -> int:
         print(f"Gate: {result.gate_action}")
     print(f"Steps: {', '.join(result.steps_run) or '(none)'}")
     print(result.message)
+    return result.exit_code
+
+
+def cmd_tasks_chain_status(*, as_json: bool = False) -> int:
+    import json
+
+    from aoa.config import Config
+    from aoa.loop.task_chain import chain_status
+
+    cfg = Config.from_env(load_dotenv=False)
+    report = chain_status(env=cfg.env)
+    if as_json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Backlog: {report['backlog']}")
+        print(f"Chain state: {report['chain_state']}")
+        print(f"Completed: {', '.join(report['completed']) or '(none)'}")
+        print(f"Current: {report['current'] or '(none)'} — {report['current_title'] or ''}")
+        if report["skipped_human"]:
+            print(f"Skipped (human): {', '.join(report['skipped_human'])}")
+        if report["alerts"]:
+            print("Alerts:")
+            for line in report["alerts"]:
+                print(f"  - {line}")
+    return 0
+
+
+def cmd_tasks_chain_bootstrap() -> int:
+    from aoa.config import Config
+    from aoa.loop.task_chain import bootstrap_chain_from_state, chain_status
+
+    cfg = Config.from_env(load_dotenv=False)
+    bootstrap_chain_from_state(env=cfg.env)
+    report = chain_status(env=cfg.env)
+    print(f"Bootstrapped task chain for env={cfg.env}")
+    print(f"Current: {report['current']} — {report['current_title']}")
+    return 0
+
+
+def cmd_tasks_chain_advance(*, completed: str) -> int:
+    from aoa.config import Config
+    from aoa.loop.task_chain import advance_chain, format_advance_result
+
+    cfg = Config.from_env(load_dotenv=False)
+    try:
+        result = advance_chain(completed.strip(), env=cfg.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(format_advance_result(result))
+    if result.action.value == "alert_human":
+        print("\n*** HUMAN ACTION REQUIRED — automation paused ***", file=sys.stderr)
     return result.exit_code
 
 
@@ -1200,6 +1301,17 @@ def cmd_setup_moomoo(cfg: Config) -> int:
     return int(result.returncode)
 
 
+def cmd_setup_mac(_cfg: Config) -> int:
+    """Run the macOS bootstrap script (Python 3.10+, venv, pip install)."""
+    script = _repo_root() / "scripts" / "setup_mac.sh"
+    if not script.is_file():
+        print(f"Setup script not found: {script}", file=sys.stderr)
+        return 1
+    print("Running macOS bootstrap (Python 3.10+, venv, pip install)…")
+    result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
+    return int(result.returncode)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1214,6 +1326,10 @@ def main(argv: list[str] | None = None) -> int:
     setup_sub.add_parser(
         "moomoo",
         help="Install checks for Moomoo OpenD + moomoo-api (runs scripts/setup_moomoo_auth.sh).",
+    )
+    setup_sub.add_parser(
+        "mac",
+        help="macOS bootstrap: Python 3.10+, venv, pip install (runs scripts/setup_mac.sh).",
     )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
@@ -1372,6 +1488,18 @@ def main(argv: list[str] | None = None) -> int:
     rp_wt = rp_sub.add_parser("worktree", help="Create an isolated git worktree for a fix.")
     rp_wt.add_argument("--item-id", default="", help="Repair item id (optional).")
 
+    vp = sub.add_parser("vault", help="Schema-driven vault property sync.")
+    vp_sub = vp.add_subparsers(dest="vault_command", required=True)
+    vp_sync = vp_sub.add_parser("sync", help="Analyze and update all vault properties.")
+    vp_sync.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report changes without writing (also forced when L1-only).",
+    )
+    vp_sync.add_argument("--json", action="store_true", help="Emit JSON result.")
+    vp_status = vp_sub.add_parser("status", help="Report stale vault properties.")
+    vp_status.add_argument("--json", action="store_true", help="Emit JSON report.")
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
@@ -1392,6 +1520,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Run a deterministic task loop (tier1, tier1-check, tier2-check, verify).",
     )
     tk_run.add_argument("task", help="Task name from loop-prompts.yaml.")
+    tk_chain = tk_sub.add_parser(
+        "chain",
+        help="Upgrade backlog task chain — auto-queue next L2 item.",
+    )
+    tk_chain_sub = tk_chain.add_subparsers(dest="chain_command", required=True)
+    tk_chain_status = tk_chain_sub.add_parser("status", help="Show chain state.")
+    tk_chain_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    tk_chain_sub.add_parser("bootstrap", help="Seed chain from docs/upgrade-backlog.json.")
+    tk_chain_adv = tk_chain_sub.add_parser(
+        "advance",
+        help="Mark item complete and queue next automatable task in STATE.md.",
+    )
+    tk_chain_adv.add_argument(
+        "--complete",
+        required=True,
+        metavar="ID",
+        help="Backlog item id, e.g. upg-007",
+    )
 
     args = parser.parse_args(argv)
     _ensure_env_template()
@@ -1405,6 +1551,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "setup":
             if args.setup_command == "moomoo":
                 return cmd_setup_moomoo(cfg)
+            if args.setup_command == "mac":
+                return cmd_setup_mac(cfg)
         if args.command == "status":
             return cmd_status(cfg)
         if args.command == "run":
@@ -1483,6 +1631,15 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.repair_command == "worktree":
                 return cmd_repair_worktree(cfg, item_id=getattr(args, "item_id", ""))
+        if args.command == "vault":
+            if args.vault_command == "sync":
+                return cmd_vault_sync(
+                    cfg,
+                    dry_run=getattr(args, "dry_run", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.vault_command == "status":
+                return cmd_vault_status(cfg, as_json=getattr(args, "json", False))
         if args.command == "tasks":
             if args.tasks_command == "automations":
                 return cmd_tasks_automations()
@@ -1492,6 +1649,13 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_tasks_show(args.shortkey)
             if args.tasks_command == "run":
                 return cmd_tasks_run(args.task)
+            if args.tasks_command == "chain":
+                if args.chain_command == "status":
+                    return cmd_tasks_chain_status(as_json=getattr(args, "json", False))
+                if args.chain_command == "bootstrap":
+                    return cmd_tasks_chain_bootstrap()
+                if args.chain_command == "advance":
+                    return cmd_tasks_chain_advance(completed=args.complete)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

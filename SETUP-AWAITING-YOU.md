@@ -2,7 +2,16 @@
 
 AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Complete the steps below in order.
 
-Run the helper anytime:
+**macOS automated bootstrap** (fixes Python 3.9 → 3.12, venv, `pip install`):
+
+```bash
+cd ~/AOA-Financial
+bash scripts/setup_mac.sh --moomoo
+```
+
+Then edit `.env` for `ANTHROPIC_API_KEY` if the script flagged it.
+
+Manual helper:
 
 ```bash
 aoa setup moomoo
