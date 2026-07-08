@@ -96,3 +96,81 @@ def wait_message(host: str, port: int) -> None:
         file=sys.stderr,
         flush=True,
     )
+
+
+def auto_activate(
+    cfg,
+    *,
+    wait_sec: float | None = None,
+    skip_opend_wait: bool = False,
+    run_doctor: bool = False,
+    verbose: bool = False,
+) -> int:
+    """Wait for OpenD, ensure Ollama, optionally run doctor. Returns 0 on success."""
+    if not getattr(cfg, "auto_activate", True) or getattr(cfg, "is_test", False):
+        return 0
+
+    timeout = wait_sec if wait_sec is not None else getattr(cfg, "auto_activate_wait_sec", 300.0)
+
+    if verbose:
+        print_activation_banner()
+    elif cfg.broker == "moomoo":
+        print("Auto-activating (waiting for Moomoo OpenD)…", flush=True)
+
+    if cfg.broker == "moomoo":
+        host, port = cfg.moomoo_opend_host, cfg.moomoo_opend_port
+        if skip_opend_wait:
+            if not opend_reachable(host, port):
+                print(f"OpenD not reachable at {host}:{port}.", file=sys.stderr)
+                return 1
+            if verbose:
+                print(f"  ✓ Moomoo OpenD at {host}:{port}")
+        else:
+            if verbose:
+                print(f"Step 1 — Moomoo OpenD at {host}:{port}")
+            if not wait_for_opend(
+                host, port, timeout_sec=timeout, on_wait=lambda: wait_message(host, port)
+            ):
+                print(f"Timed out after {timeout:.0f}s waiting for OpenD.", file=sys.stderr)
+                return 1
+            if verbose:
+                print("  ✓ OpenD connected")
+            else:
+                print(f"  ✓ OpenD connected at {host}:{port}", flush=True)
+
+    if cfg.llm_provider == "ollama":
+        if verbose:
+            print("Step 2 — local Ollama LLM (no API key)")
+        if ollama_reachable():
+            if verbose:
+                print("  ✓ Ollama already running")
+        elif start_ollama_serve():
+            if verbose:
+                print("  ✓ Started ollama serve")
+            else:
+                print("  ✓ Ollama started", flush=True)
+        else:
+            print(
+                "  · Ollama not running — install from https://ollama.com/download\n"
+                "    then: ollama pull llama3.1 && ollama serve\n"
+                "    (or set AOA_LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY in .env)",
+                file=sys.stderr,
+            )
+    elif verbose:
+        print(f"Step 2 — LLM provider: {cfg.llm_provider}")
+
+    if run_doctor:
+        if verbose:
+            print("Step 3 — verify all systems")
+        from aoa.cli import cmd_doctor
+
+        rc = cmd_doctor(cfg)
+        if rc != 0:
+            return rc
+        if verbose:
+            print("\n=== All systems ready ===")
+            print("  aoa run       — one analysis cycle (dry-run; no orders)")
+            print("  aoa loop      — continuous cycles")
+            print("  aoa serve     — web dashboard at http://127.0.0.1:8080")
+
+    return 0

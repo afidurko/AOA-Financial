@@ -65,20 +65,28 @@ def test_ensure_profile_defaults_to_moomoo(monkeypatch, tmp_path):
 
 
 def test_cmd_activate_no_wait_fails_without_opend(monkeypatch):
-    from aoa.cli import cmd_activate
+    from aoa.activate import auto_activate
     from aoa.config import Config
 
-    monkeypatch.setattr("aoa.cli.opend_reachable", lambda *a, **k: False)
+    monkeypatch.setattr("aoa.activate.opend_reachable", lambda *a, **k: False)
     cfg = Config(env="paper-dry", broker="moomoo", llm_provider="ollama")
-    assert cmd_activate(cfg, wait_sec=1, skip_wait=True, run=False, serve=False) == 1
+    assert auto_activate(cfg, skip_opend_wait=True, verbose=False) == 1
 
 
 def test_cmd_activate_skip_wait_ok(monkeypatch):
-    from aoa.cli import cmd_activate
+    from aoa.activate import auto_activate
     from aoa.config import Config
 
-    monkeypatch.setattr("aoa.cli.opend_reachable", lambda *a, **k: True)
-    monkeypatch.setattr("aoa.cli.ollama_reachable", lambda: True)
-    monkeypatch.setattr("aoa.cli.cmd_doctor", lambda cfg: 0)
-    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="ollama")
-    assert cmd_activate(cfg, wait_sec=1, skip_wait=True, run=False, serve=False) == 0
+    monkeypatch.setattr("aoa.activate.opend_reachable", lambda *a, **k: True)
+    monkeypatch.setattr("aoa.activate.ollama_reachable", lambda: True)
+    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="ollama", auto_activate=True)
+    assert auto_activate(cfg, skip_opend_wait=True, verbose=False) == 0
+
+
+def test_auto_activate_disabled_skips(monkeypatch):
+    from aoa.activate import auto_activate
+    from aoa.config import Config
+
+    monkeypatch.setattr("aoa.activate.opend_reachable", lambda *a, **k: False)
+    cfg = Config(env="paper-dry", broker="moomoo", auto_activate=False)
+    assert auto_activate(cfg) == 0

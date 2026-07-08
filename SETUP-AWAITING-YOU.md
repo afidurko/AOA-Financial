@@ -22,28 +22,14 @@ Full guide: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md)
 pip install -e ".[dev,web,openai]"
 ```
 
-4. **First-time checks** (optional):
+4. **Start the swarm** (auto-activates — waits for OpenD, starts Ollama):
 
 ```bash
-aoa setup moomoo
-# or: bash scripts/setup_moomoo_auth.sh
+aoa loop
+# or: aoa serve
 ```
 
-5. **Activate everything**:
-
-```bash
-aoa activate
-# or: bash scripts/activate.sh
-```
-
-`activate` waits for OpenD, starts Ollama if installed, runs `doctor`, and prints next steps.
-
-Optional first cycle or dashboard:
-
-```bash
-aoa activate --run      # one dry-run cycle after verify
-aoa activate --serve    # web dashboard at http://127.0.0.1:8080
-```
+Optional explicit verify first: `aoa activate` (same checks + full `doctor`).
 
 Paper dry-run by default — no orders submitted until you change `AOA_ENV`.
 

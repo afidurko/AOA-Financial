@@ -268,6 +268,8 @@ class Config:
     web_host: str = "0.0.0.0"
     web_port: int = 8080
     web_auto_loop: bool = False
+    auto_activate: bool = True
+    auto_activate_wait_sec: float = 300.0
     openstock_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
@@ -443,6 +445,8 @@ class Config:
             web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
+            auto_activate=_bool("AOA_AUTO_ACTIVATE", True),
+            auto_activate_wait_sec=max(5.0, _float("AOA_AUTO_ACTIVATE_WAIT_SEC", 300.0)),
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),

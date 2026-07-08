@@ -30,15 +30,7 @@ import sys
 import time
 from pathlib import Path
 
-from aoa.activate import (
-    ensure_profile,
-    ollama_reachable,
-    opend_reachable,
-    print_activation_banner,
-    start_ollama_serve,
-    wait_for_opend,
-    wait_message,
-)
+from aoa.activate import auto_activate, ensure_profile
 from aoa.adapt.signal_adapter import SignalAdapter
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.alpaca_bars import (
@@ -340,53 +332,37 @@ def cmd_activate(
     run: bool,
     serve: bool,
 ) -> int:
-    print_activation_banner()
     if cfg.broker != "moomoo":
         print(f"Note: broker is {cfg.broker!r}; activate is tuned for Moomoo OpenD.")
-
-    host, port = cfg.moomoo_opend_host, cfg.moomoo_opend_port
-    if skip_wait:
-        if not opend_reachable(host, port):
-            print(f"OpenD not reachable at {host}:{port}.", file=sys.stderr)
-            return 1
-        print(f"  ✓ Moomoo OpenD at {host}:{port}")
-    else:
-        print(f"Step 1 — Moomoo OpenD at {host}:{port}")
-        if not wait_for_opend(host, port, timeout_sec=wait_sec, on_wait=lambda: wait_message(host, port)):
-            print(f"Timed out after {wait_sec:.0f}s waiting for OpenD.", file=sys.stderr)
-            return 1
-        print("  ✓ OpenD connected")
-
-    if cfg.llm_provider == "ollama":
-        print("Step 2 — local Ollama LLM (no API key)")
-        if ollama_reachable():
-            print("  ✓ Ollama already running")
-        elif start_ollama_serve():
-            print("  ✓ Started ollama serve")
-        else:
-            print(
-                "  · Ollama not running — install from https://ollama.com/download\n"
-                "    then: ollama pull llama3.1 && ollama serve\n"
-                "    (or set AOA_LLM_PROVIDER=anthropic and ANTHROPIC_API_KEY in .env)",
-                file=sys.stderr,
-            )
-    else:
-        print(f"Step 2 — LLM provider: {cfg.llm_provider}")
-
-    print("Step 3 — verify all systems")
-    rc = cmd_doctor(cfg)
+    rc = auto_activate(
+        cfg,
+        wait_sec=wait_sec,
+        skip_opend_wait=skip_wait,
+        run_doctor=True,
+        verbose=True,
+    )
     if rc != 0:
         return rc
-
-    print("\n=== All systems ready ===")
-    print("  aoa run       — one analysis cycle (dry-run; no orders)")
-    print("  aoa loop      — continuous cycles")
-    print("  aoa serve     — web dashboard at http://127.0.0.1:8080")
     if run:
-        return cmd_run(cfg)
+        return cmd_run(cfg, _auto=False)
     if serve:
-        return cmd_serve(cfg)
+        return cmd_serve(cfg, _auto=False)
     return 0
+
+
+def _bootstrap_commands() -> frozenset[str]:
+    return frozenset({"activate", "run", "loop", "serve"})
+
+
+def _prepare_cfg(command: str) -> Config:
+    if command in _bootstrap_commands():
+        ensure_profile()
+        return Config.from_env(load_dotenv=False)
+    return Config.from_env()
+
+
+def _maybe_auto_activate(cfg: Config) -> int:
+    return auto_activate(cfg, run_doctor=False, verbose=False)
 
 
 def cmd_bars(
@@ -549,7 +525,9 @@ def cmd_status(cfg: Config) -> int:
     return 0
 
 
-def cmd_run(cfg: Config) -> int:
+def cmd_run(cfg: Config, *, _auto: bool = True) -> int:
+    if _auto and _maybe_auto_activate(cfg) != 0:
+        return 1
     team = build_team(cfg)
     _print_environment(cfg)
     if not team.broker.is_market_open():
@@ -564,7 +542,9 @@ def cmd_run(cfg: Config) -> int:
     return 0
 
 
-def cmd_loop(cfg: Config) -> int:
+def cmd_loop(cfg: Config, *, _auto: bool = True) -> int:
+    if _auto and _maybe_auto_activate(cfg) != 0:
+        return 1
     team = build_team(cfg)
     _print_environment(cfg)
     print(
@@ -1075,7 +1055,9 @@ def cmd_tasks_run(task: str) -> int:
     return result.exit_code
 
 
-def cmd_serve(cfg: Config) -> int:
+def cmd_serve(cfg: Config, *, _auto: bool = True) -> int:
+    if _auto and _maybe_auto_activate(cfg) != 0:
+        return 1
     try:
         import uvicorn
     except ImportError:
@@ -1420,13 +1402,10 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     _ensure_env_template()
-    cfg = Config.from_env()
+    cfg = _prepare_cfg(args.command)
 
     try:
         if args.command == "activate":
-            _ensure_env_template()
-            ensure_profile()
-            cfg = Config.from_env(load_dotenv=False)
             return cmd_activate(
                 cfg,
                 wait_sec=args.wait,
