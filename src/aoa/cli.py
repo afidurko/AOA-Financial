@@ -1049,6 +1049,58 @@ def cmd_tasks_run(task: str) -> int:
     return result.exit_code
 
 
+def cmd_tasks_chain_status(*, as_json: bool = False) -> int:
+    import json
+
+    from aoa.config import Config
+    from aoa.loop.task_chain import chain_status
+
+    cfg = Config.from_env(load_dotenv=False)
+    report = chain_status(env=cfg.env)
+    if as_json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Backlog: {report['backlog']}")
+        print(f"Chain state: {report['chain_state']}")
+        print(f"Completed: {', '.join(report['completed']) or '(none)'}")
+        print(f"Current: {report['current'] or '(none)'} — {report['current_title'] or ''}")
+        if report["skipped_human"]:
+            print(f"Skipped (human): {', '.join(report['skipped_human'])}")
+        if report["alerts"]:
+            print("Alerts:")
+            for line in report["alerts"]:
+                print(f"  - {line}")
+    return 0
+
+
+def cmd_tasks_chain_bootstrap() -> int:
+    from aoa.config import Config
+    from aoa.loop.task_chain import bootstrap_chain_from_state, chain_status
+
+    cfg = Config.from_env(load_dotenv=False)
+    bootstrap_chain_from_state(env=cfg.env)
+    report = chain_status(env=cfg.env)
+    print(f"Bootstrapped task chain for env={cfg.env}")
+    print(f"Current: {report['current']} — {report['current_title']}")
+    return 0
+
+
+def cmd_tasks_chain_advance(*, completed: str) -> int:
+    from aoa.config import Config
+    from aoa.loop.task_chain import advance_chain, format_advance_result
+
+    cfg = Config.from_env(load_dotenv=False)
+    try:
+        result = advance_chain(completed.strip(), env=cfg.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(format_advance_result(result))
+    if result.action.value == "alert_human":
+        print("\n*** HUMAN ACTION REQUIRED — automation paused ***", file=sys.stderr)
+    return result.exit_code
+
+
 def cmd_serve(cfg: Config) -> int:
     try:
         import uvicorn
@@ -1378,6 +1430,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Run a deterministic task loop (tier1, tier1-check, tier2-check, verify).",
     )
     tk_run.add_argument("task", help="Task name from loop-prompts.yaml.")
+    tk_chain = tk_sub.add_parser(
+        "chain",
+        help="Upgrade backlog task chain — auto-queue next L2 item.",
+    )
+    tk_chain_sub = tk_chain.add_subparsers(dest="chain_command", required=True)
+    tk_chain_status = tk_chain_sub.add_parser("status", help="Show chain state.")
+    tk_chain_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    tk_chain_sub.add_parser("bootstrap", help="Seed chain from docs/upgrade-backlog.json.")
+    tk_chain_adv = tk_chain_sub.add_parser(
+        "advance",
+        help="Mark item complete and queue next automatable task in STATE.md.",
+    )
+    tk_chain_adv.add_argument(
+        "--complete",
+        required=True,
+        metavar="ID",
+        help="Backlog item id, e.g. upg-007",
+    )
 
     args = parser.parse_args(argv)
     _ensure_env_template()
@@ -1481,6 +1551,13 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_tasks_show(args.shortkey)
             if args.tasks_command == "run":
                 return cmd_tasks_run(args.task)
+            if args.tasks_command == "chain":
+                if args.chain_command == "status":
+                    return cmd_tasks_chain_status(as_json=getattr(args, "json", False))
+                if args.chain_command == "bootstrap":
+                    return cmd_tasks_chain_bootstrap()
+                if args.chain_command == "advance":
+                    return cmd_tasks_chain_advance(completed=args.complete)
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

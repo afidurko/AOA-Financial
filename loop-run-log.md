@@ -26,4 +26,4 @@
 | 2026-07-06 04:32 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-06 04:32 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-06 23:40 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
-| 2026-07-07 23:47 | fable-repair | L2 | fix-proposed | OpenD fail-fast probe; doctor ~3s not 30s+. 344 tests passed. tokens_estimate=6000 |
+| 2026-07-08 02:32 | maintenance | — | integrated | Task chain automation: docs/upgrade-backlog.json + aoa tasks chain. Bootstrapped upg-009. 359 tests pass. tokens_estimate=9000 |

@@ -38,11 +38,14 @@ prompts:
       If action is not "l2-allowed", append one line to loop-run-log.md (outcome: report-only, note gate reason) and exit.
 
       If l2-allowed:
-      1. aoa repair worktree --item-id <first fixable item_id from queue.json>
-      2. minimal-fix (maker) — ONE item only
-      3. loop-verifier (checker) in a NEW agent context — never self-verify
-      4. python3 -m ruff check src tests && python3 -m pytest -q
-      5. Draft PR only; never auto-merge; never push without draft PR
+      1. aoa tasks chain status          # read current backlog id (upgrade-backlog)
+      2. aoa repair worktree --item-id <id from STATE.md High Priority>
+      3. minimal-fix (maker) — ONE item only
+      4. loop-verifier (checker) in a NEW agent context — never self-verify
+      5. python3 -m ruff check src tests && python3 -m pytest -q
+      6. Draft PR only; never auto-merge
+      7. aoa tasks chain advance --complete <id>   # queues NEXT task automatically
+         Exit 3 = alert human only (do not continue unattended)
 
       Respect denylist: src/aoa/risk/guards.py, .env*, profiles/live.env
       Max 3 fix attempts per item; escalate in STATE.md after that.
@@ -120,6 +123,22 @@ tasks:
     title: Tier 2 preflight (no LLM)
     steps:
       - gate-repair
+    on_skip: log
+    on_pause: exit
+
+  tier2-chain:
+    title: Tier 2 chain bootstrap (no LLM)
+    steps:
+      - gate-repair
+      - chain-bootstrap
+      - repair-triage
+    on_skip: log
+    on_pause: exit
+
+  chain-advance:
+    title: Complete task and queue next (no LLM)
+    steps:
+      - chain-advance
     on_skip: log
     on_pause: exit
 

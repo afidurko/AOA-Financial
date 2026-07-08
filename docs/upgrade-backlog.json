@@ -1,0 +1,83 @@
+{
+  "updated_at": "2026-07-08T02:30:00+00:00",
+  "version": 1,
+  "recommended_sequence": [
+    "upg-002",
+    "upg-001",
+    "upg-003",
+    "upg-004",
+    "upg-005",
+    "upg-006",
+    "upg-007",
+    "upg-009"
+  ],
+  "assumed_completed": ["upg-003", "upg-004", "upg-005", "upg-006", "upg-007"],
+  "items": {
+    "upg-001": {
+      "title": "Default paper profiles to Alpaca broker",
+      "skill": "minimal-fix",
+      "automatable": true,
+      "detail": "Set AOA_BROKER=alpaca in profiles/paper-dry.env and profiles/paper.env.",
+      "files": ["profiles/paper-dry.env", "profiles/paper.env"]
+    },
+    "upg-002": {
+      "title": "Rotate exposed API keys",
+      "skill": "human",
+      "automatable": false,
+      "detail": "Revoke Anthropic and Alpaca paper keys in each console; update .env locally."
+    },
+    "upg-003": {
+      "title": "Promote L2 repair automation",
+      "skill": "human",
+      "automatable": false,
+      "detail": "Complete docs/loop-l2-checklist.md and enable L2 in STATE.md."
+    },
+    "upg-004": {
+      "title": "Moomoo broker fast-fail when OpenD down",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "TCP preflight before moomoo-api connect (~2s fail-fast).",
+      "files": ["src/aoa/brokerage/moomoo.py"]
+    },
+    "upg-005": {
+      "title": "Align README with AOA_MODEL default",
+      "skill": "minimal-fix",
+      "automatable": true,
+      "detail": "Document claude-sonnet-4-6 default and AOA_MODEL override in README.",
+      "files": ["README.md"]
+    },
+    "upg-006": {
+      "title": "Resolve FastAPI/Starlette deprecation warnings",
+      "skill": "minimal-fix",
+      "automatable": true,
+      "detail": "Add httpx2 to web deps; filter upstream alpaca websockets.legacy warning.",
+      "files": ["pyproject.toml", "tests/test_web.py"]
+    },
+    "upg-007": {
+      "title": "TradingAgents v0.3.0 integration audit",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Document built-in swarm vs optional upstream package.",
+      "files": ["docs/tradingagents/INTEGRATION.md"]
+    },
+    "upg-008": {
+      "title": "Rebase and evaluate PR #35 (Moomoo broker)",
+      "skill": "human",
+      "automatable": false,
+      "detail": "Human review of Moomoo broker PR; re-run CI after rebase."
+    },
+    "upg-009": {
+      "title": "Workloop discover→upgrade→verify pipeline",
+      "skill": "fable-repair",
+      "automatable": true,
+      "detail": "Document and schedule periodic dependency upgrades via workloop UpgradeStage.",
+      "files": ["src/aoa/workloop/upgrade.py", "loop-prompts.yaml"]
+    },
+    "upg-010": {
+      "title": "iPhone alerts + OpenStock + aoa serve",
+      "skill": "human",
+      "automatable": false,
+      "detail": "Configure ntfy/Pushover webhook, optional OpenStock, run aoa serve."
+    }
+  }
+}
