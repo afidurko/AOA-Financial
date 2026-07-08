@@ -117,3 +117,20 @@ Teach obsidian-second-brain Obsidian format syntax:
 ```
 
 See [obsidian-skills-integration.md](obsidian-skills-integration.md).
+
+## 9. Always-on dashboard + remote access (optional)
+
+Keep `aoa serve` running at login and open the dashboard from your phone via Tailscale:
+
+```bash
+./scripts/setup-always-on.sh
+```
+
+Or step by step:
+
+```bash
+./scripts/install-aoa-launchagent.sh      # auto-start at login (macOS)
+./scripts/setup-tailscale-access.sh       # private tailnet URL
+```
+
+See [always-on-dashboard.md](always-on-dashboard.md).
