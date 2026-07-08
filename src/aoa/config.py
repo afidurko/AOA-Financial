@@ -302,6 +302,11 @@ class Config:
     repair_sync_state: bool = True
     repair_worktrees_dir: str = ".aoa-worktrees"
 
+    # Vault knowledge directory (schema-driven property sync)
+    vault_path: str = "vault"
+    vault_sync_enabled: bool = True
+    vault_auto_write: bool = True
+
     trading_agents_enabled: bool = True
     trading_agents_debate_rounds: int = 1
 
@@ -464,6 +469,9 @@ class Config:
             repair_sync_state=_bool("AOA_REPAIR_SYNC_STATE", True),
             repair_worktrees_dir=os.environ.get("AOA_REPAIR_WORKTREES_DIR", ".aoa-worktrees").strip()
             or ".aoa-worktrees",
+            vault_path=os.environ.get("AOA_VAULT_PATH", "vault").strip() or "vault",
+            vault_sync_enabled=_bool("AOA_VAULT_SYNC_ENABLED", True),
+            vault_auto_write=_bool("AOA_VAULT_AUTO_WRITE", True),
             trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
             trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(

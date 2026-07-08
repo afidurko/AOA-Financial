@@ -110,6 +110,7 @@ tasks:
     steps:
       - gate-triage
       - repair-triage
+      - vault-sync
       - verify-quick
       - log-triage
     on_skip: log

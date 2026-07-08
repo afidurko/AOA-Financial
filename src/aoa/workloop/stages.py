@@ -92,6 +92,39 @@ class AdaptStage(WorkloopStage):
         return True
 
 
+class VaultSyncStage(WorkloopStage):
+    """Refresh loop/system vault notes from workloop insights."""
+
+    name = "vault_sync"
+
+    def run(self, ctx: WorkloopContext) -> bool:
+        from aoa.vault.sync import sync_vault_from_workloop
+
+        if not ctx.config.vault_sync_enabled:
+            ctx.run.notes.append("Vault sync disabled.")
+            return True
+        dry_run = not ctx.config.vault_auto_write
+        result = sync_vault_from_workloop(
+            ctx.config,
+            repo_root=ctx.repo_root,
+            extracted=ctx.run.extracted,
+            dry_run=dry_run,
+        )
+        ctx.store.record(
+            "workloop.vault_sync",
+            {
+                "dry_run": result.dry_run,
+                "notes_updated": result.notes_updated,
+                "properties_changed": result.properties_changed,
+            },
+        )
+        ctx.run.notes.append(
+            f"Vault sync: updated {result.notes_updated} note(s), "
+            f"{result.properties_changed} propert(ies)."
+        )
+        return True
+
+
 class ProposeStage(WorkloopStage):
     name = "propose"
 
@@ -288,6 +321,7 @@ def default_stages() -> list[WorkloopStage]:
         DiscoverStage(),
         ExtractStage(),
         AdaptStage(),
+        VaultSyncStage(),
         ProposeStage(),
         TeamReviewStage(),
         ApprovalStage(),

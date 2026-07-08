@@ -89,6 +89,16 @@ Example kill-switch entry:
 
 Summarize facts to remember for the next run (PR status changes, resolved watch items, audit outcomes). Keep to 2–5 bullets.
 
+## Sync vault properties
+
+After updating `STATE.md`, refresh the vault knowledge directory:
+
+```bash
+python3 -m aoa.cli vault sync
+```
+
+At L1 (report-only), vault sync runs in dry-run mode unless `L2: enabled` appears under `## Loop automation` in `STATE.md`. The command analyzes every property in `vault/` per `vault/_schema.yaml` and writes updates when allowed.
+
 ## Append loop-run-log.md
 
 After updating STATE.md, append one row (see `loop-budget` skill):
