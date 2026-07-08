@@ -3,6 +3,7 @@
 Commands:
   aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
+  aoa setup      One-time broker setup (moomoo, …).
   aoa status     Show account, positions, and market clock.
   aoa run        Run a single analysis→decision→execution cycle.
   aoa loop       Run cycles continuously on the configured cadence.
@@ -23,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -1118,6 +1120,26 @@ def cmd_burnin(cfg: Config, *, cycles: int, pause: int) -> int:
     return 1 if halted or exec_errors else 0
 
 
+def _repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").exists() and (parent / "src" / "aoa").exists():
+            return parent
+    return Path.cwd()
+
+
+def cmd_setup_moomoo(cfg: Config) -> int:
+    """Run the Moomoo OpenD setup helper script."""
+    script = _repo_root() / "scripts" / "setup_moomoo_auth.sh"
+    if not script.is_file():
+        print(f"Setup script not found: {script}", file=sys.stderr)
+        return 1
+    print("Running Moomoo setup helper…")
+    print(f"  Broker: {cfg.broker} | OpenD: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port}")
+    result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
+    return int(result.returncode)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1126,6 +1148,12 @@ def main(argv: list[str] | None = None) -> int:
         "--offline",
         action="store_true",
         help="Validate config only; skip live broker and LLM checks.",
+    )
+    setup = sub.add_parser("setup", help="One-time broker and environment setup helpers.")
+    setup_sub = setup.add_subparsers(dest="setup_command", required=True)
+    setup_sub.add_parser(
+        "moomoo",
+        help="Install checks for Moomoo OpenD + moomoo-api (runs scripts/setup_moomoo_auth.sh).",
     )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
@@ -1299,6 +1327,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_bars(cfg, args.symbols, timeframe=args.timeframe, limit=args.limit)
         if args.command == "doctor":
             return cmd_doctor(cfg, offline=getattr(args, "offline", False))
+        if args.command == "setup":
+            if args.setup_command == "moomoo":
+                return cmd_setup_moomoo(cfg)
         if args.command == "status":
             return cmd_status(cfg)
         if args.command == "run":

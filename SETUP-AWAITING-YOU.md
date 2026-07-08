@@ -5,8 +5,17 @@ AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Complete the steps below in or
 Run the helper anytime:
 
 ```bash
-bash scripts/setup_moomoo_auth.sh
+aoa setup moomoo
+# or: bash scripts/setup_moomoo_auth.sh
 ```
+
+| Platform | OpenD install |
+|----------|---------------|
+| macOS | `bash scripts/install_moomoo_opend_macos.sh` |
+| Linux | `bash scripts/install_moomoo_opend_linux.sh` |
+| Docker (unofficial) | `docker-compose.moomoo-opend.example.yml` |
+
+Full guide: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md)
 
 For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
 
