@@ -24,11 +24,13 @@ write_env() {
   if [[ -z "$value" ]]; then
     return
   fi
-  if grep -q "^${key}=" "$OSB_ENV"; then
-    sed -i "s|^${key}=.*|${key}=${value}|" "$OSB_ENV"
-  else
-    echo "${key}=${value}" >>"$OSB_ENV"
-  fi
+  # awk is portable on macOS (BSD sed -i requires a backup extension).
+  key="$key" value="$value" awk -v key="$key" -v val="$value" '
+    BEGIN { done = 0 }
+    $0 ~ "^" key "=" { print key "=" val; done = 1; next }
+    { print }
+    END { if (!done) print key "=" val }
+  ' "$OSB_ENV" >"$OSB_ENV.tmp" && mv "$OSB_ENV.tmp" "$OSB_ENV"
 }
 
 mkdir -p "$OSB_CONFIG_DIR"
