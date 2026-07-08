@@ -18,7 +18,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0", "pytest-mock>=3.12.0", "ruff>=0.6.0", "alpaca-py>=0.40.0"]
-web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
+web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0", "httpx2>=2.0.0"]
 alpaca = ["alpaca-py>=0.40.0"]
 tradingagents = [
     "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@v0.3.0",
@@ -43,6 +43,10 @@ where = ["src"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--ignore=tests/test_core.py"
+filterwarnings = [
+    # alpaca-py still imports websockets.legacy for streaming (upstream; 0.43.5).
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100
