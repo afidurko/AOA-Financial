@@ -22,6 +22,7 @@ Last run: 2026-07-07 23:49 UTC (Fable 5 repair triage, run 86349a58a85e)
 - **L2:** disabled — complete [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md) before enabling
 - Automation A prompt: `aoa tasks show L1`
 - Automation B prompt: `aoa tasks show L2`
+- Automation C prompt: `aoa tasks show BRIEF` (daily user brief + response routing, L1)
 - Deterministic preflight: `aoa tasks run tier1-check` / `tier2-check`
 
 ## Repair queue

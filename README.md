@@ -667,8 +667,11 @@ Example payload your webhook receives:
 }
 ```
 
-When `reason` is `needs_verification`, set `requires_response` to true in your app
-so the user can confirm before the swarm proceeds.
+When `reason` is `needs_verification`, `requires_response` is true and the payload
+carries a `notification_id`. Your app collects the user's reply and POSTs it to
+`/api/alerts/{notification_id}/respond` with `{"action": "approve"|"reject"|"ack"}`.
+The response router resolves a linked approval automatically and records everything
+else for human follow-up — it never edits `.env`, enables live trading, or merges.
 
 #### Alternatives
 
@@ -700,6 +703,9 @@ Open **http://localhost:8080/** for the dashboard. REST endpoints:
 | `/api/run` | POST | Trigger one team-coordinated swarm cycle |
 | `/api/loop/start` | POST | Start background loop |
 | `/api/loop/stop` | POST | Stop background loop |
+| `/api/loop/brief` | GET | Loop-aware user brief (Alex + STATE.md + repair queue) |
+| `/api/alerts/pending` | GET | Alerts awaiting the user's reply |
+| `/api/alerts/{id}/respond` | POST | Reply to an alert (`approve`/`reject`/`ack`) |
 | `/api/last-cycle` | GET | Most recent cycle result |
 | `/api/docs` | GET | OpenAPI interactive docs |
 
