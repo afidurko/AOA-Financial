@@ -1,6 +1,6 @@
 # Design: Agentic Task-Team Loop (ATTL)
 
-> **Status:** Approved direction (user 2026-07-18) — implementing in priority order  
+> **Status:** Active — constraints + mesh unified (Hard Floor + Auto-12)  
 > **Owner:** Aaron Fidurko  
 > **Cross-repo inputs:** `loop-engineering`, `spine`, `obsidian-second-brain`, `AutoHedge`, AOA vault
 

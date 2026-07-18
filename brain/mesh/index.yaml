@@ -72,3 +72,23 @@ spines:
     owners: [julie, nova]
   - path: spine/Team-Mesh.md
     owners: [nova, aaron]
+
+loops:
+  - id: constraints
+    file: loop-constraints.md
+    tiers: [hard_floor, auto-12]
+  - id: attl-mesh
+    module: aoa.attl.mesh
+    cli: aoa attl run
+  - id: repair
+    module: aoa.repair
+    feeds: [reed, kai]
+  - id: trading-swarm
+    module: aoa.swarm.orchestrator
+    feeds: [tom, julie, alan]
+  - id: workloop
+    module: aoa.workloop
+    feeds: [bob, julie, alan, aaron]
+  - id: vault
+    module: aoa.vault
+    feeds: [nova]

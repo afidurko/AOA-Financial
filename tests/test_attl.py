@@ -67,8 +67,20 @@ def test_brain_workspace_and_algo_context():
 
 
 def test_attl_orchestrator_auto_continue(tmp_path: Path):
-    # Minimal brain skeleton in temp repo
+    # Minimal brain skeleton + STATE so mesh gate can resolve
     _seed_brain(tmp_path)
+    (tmp_path / "STATE.md").write_text(
+        "## Loop automation\n\n- L1: enabled\n- L2: enabled\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "loop-run-log.md").write_text(
+        "| Timestamp (UTC) | Loop | Level | Outcome | Notes |\n|---|---|---|---|---|\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "loop-constraints.md").write_text(
+        Path.cwd().joinpath("loop-constraints.md").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     (tmp_path / "docs").mkdir()
     (tmp_path / "docs" / "upgrade-backlog.json").write_text(
         json.dumps(
@@ -88,14 +100,16 @@ def test_attl_orchestrator_auto_continue(tmp_path: Path):
     orch = AttlOrchestrator(repo_root=tmp_path, data_dir=tmp_path / "data" / "attl")
     init = orch.init_workspace()
     assert len(init["roster"]) == 12
-    result = orch.run(dry_run=True)
+    assert init["constraints"]["mode"] == "auto-12"
+    result = orch.run(dry_run=True, bob_can_proceed=True)
     assert result.outcome == "dry-run"
     assert result.kai["engaged"] is False
     assert result.proposed["count"] >= 1
 
-    reported = orch.run(report=True)
-    assert reported.outcome == "critical-report"
+    reported = orch.run(report=True, bob_can_proceed=True, dry_run=True)
     assert reported.kai["engaged"] is True
+    assert reported.outcome == "critical-report"
+    assert reported.critical.get("report_requested") is True
 
 
 def test_cli_attl_roster(monkeypatch, capsys):

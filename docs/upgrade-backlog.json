@@ -110,16 +110,17 @@
       ]
     },
     "upg-013": {
-      "title": "ATTL P3 — wire Reed maker into repair worktree + draft PR",
+      "title": "ATTL P3 — mesh controller + constraints unify + worktree",
       "skill": "fable-repair",
       "automatable": true,
-      "detail": "Connect attl run to aoa repair worktree + minimal-fix skill handoff when automatable item exists.",
+      "detail": "Landed: aoa.attl.mesh MeshController, aoa.constraints, hard-floor+auto-12 docs/skills, worktree on l2-allowed, TeamOrchestrator Nova/Reed/Kai.",
       "files": [
-        "src/aoa/attl/orchestrator.py",
+        "src/aoa/attl/mesh.py",
+        "src/aoa/constraints.py",
+        "loop-constraints.md",
         ".cursor/skills/fable-repair/SKILL.md",
         "loop-prompts.yaml"
-      ],
-      "blocked_by": ["upg-012"]
+      ]
     },
     "upg-014": {
       "title": "ATTL P4 — deepen algorithm mesh (signal adapter + swarm)",

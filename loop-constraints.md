@@ -1,48 +1,82 @@
-# Loop Constraints
+# Loop Constraints — AOA-Financial (meshed)
 
-> Add rules below with `/constraints <rule>` in your agent.
-> The `loop-constraints` skill reads this file at the start of every run.
-> Constraints here are **binding** — the agent MUST follow them.
+> Source of truth for agents. Loaded by the `loop-constraints` skill **before** any other work.
+> Two tiers only: **Hard Safety Floor** (always) and **ATTL Auto-12 Policy** (default operating mode).
 
-## Push & Merge
-- Don't push before telling me
-- Never auto-merge to main without human approval
-- Always create a draft PR first; let me review before marking ready
+## Hard Safety Floor (never relax)
 
-## Paths
-- Never edit .env, .env.*, auth/, payments/, secrets/, credentials/
-- Never edit infrastructure configs without human approval
-- Never edit `profiles/live.env` or enable `AOA_ENV=live` without explicit human approval
+These apply to every loop, skill, and agent — including ATTL auto-12:
 
-## Trading (AOA-specific)
-- Never submit live orders or set `ALPACA_LIVE=true` in a loop run
-- Never disable risk guards in `src/aoa/risk/guards.py`
-- Workloop merge (`AOA_WORKLOOP_ALLOW_MERGE=true`) requires Aaron approval every run
+1. Honor `loop-pause-all` in `STATE.md` — exit immediately
+2. Never edit `.env`, `.env.*`, `auth/`, `payments/`, `secrets/`, `credentials/`
+3. Never edit `profiles/live.env` or enable `AOA_ENV=live` without explicit human approval
+4. Never disable or weaken `src/aoa/risk/guards.py`
+5. Never submit live orders or set `ALPACA_LIVE=true` from a loop run
+6. Never auto-merge to `main` — draft PRs only until the user merges
+7. Never disable tests to make CI green
+8. Never store API keys or secrets in `brain/`, `vault/`, or captures
 
-## Code
-- Always run tests before proposing a fix
-- Never disable tests to make CI green
-- Never refactor unrelated code — one fix per run
-- Max 3 fix attempts per item; escalate after
+## ATTL Auto-12 Policy (default)
 
-## L2 autonomy scope
-- L2 auto-fix is enabled ONLY for auto-fixable code-health items (code audit, ruff, verify failures)
-- Never auto-fix an item that needs CEO (Aaron) approval, higher escalation, or a manual user notification — leave it in STATE.md High Priority for a human
-- Items touching secrets, `.env`, credentials, live trading, payments, or denylist paths always require escalation (never auto-fixed)
-- The repair gate marks these `requires_escalation` and excludes them from the L2-actionable set
+Meshed control plane: **brain/** + **12-member team** + **repair/task factory** + **algorithms**.
 
-## ATTL (auto-12) — user-supervised
-- ATTL defaults to `auto-12` with **critical-only** review (Kai). Routine process review is not required — user interacts directly and can fix.
-- Hard safety floor still applies: never edit `.env*`, secrets, `profiles/live.env`, or disable `src/aoa/risk/guards.py`; never auto-merge to main; honor `loop-pause-all`.
-- Force a report anytime with `aoa attl report`.
+| Setting | Value |
+|---------|--------|
+| Mode | `auto-12` (`aoa attl status`) |
+| Roster | Tom · Julie · Morgan · Hailey · Alan · Andrea · Bob · Aaron · Alex · **Nova** · **Reed** · **Kai** |
+| Review | **Critical-only** (Kai) — critical flaw, system failure, or `aoa attl report` |
+| Process gates | Relaxed — user interacts directly and can fix; no mandatory pre-ask / activate step |
+| Knowledge | Nova syncs `brain/`; Julie/algorithms read `brain_context_for_algorithms()` |
+| Task creation | Reed auto-proposes from repair queue + upgrade backlog (need-ordered) |
+| Coding path | Reed → worktree → maker; checker only when Kai engages or verify fails critically |
 
-## Communication
-- Always tell me what you're about to do before doing it
-- Never close an issue or PR without my approval
+### What auto-12 may do without asking
+
+- Run `aoa attl run` / propose / brain sync
+- Create repair worktrees for automatable items
+- Open **draft** PRs
+- Advance the task chain after a completed automatable item
+- Capture run notes under `brain/captures/`
+
+### What still stops the loop
+
+- Hard Safety Floor violations
+- Gate action `pause` (`loop-pause-all`)
+- Kai critical report (`outcome: critical-report`) — notify user via BRIEF/capture; do not keep patching blindly
+- Items touching denylist / secrets / live → leave in High Priority (never auto-fix)
+
+### Interactive sessions (Cursor chat with the user)
+
+- Prefer announcing intent before large pushes or closing issues/PRs
+- User can override any auto decision; prefer their instruction over ATTL defaults
+
+## Trading & workloop
+
+- Trading swarm (`aoa loop`) never modifies application code
+- Workloop merge still requires `aoa workloop approve` when merge is enabled
+- Infrastructure config edits outside ATTL coding tasks need human approval
 
 ## Budget
-- If token spend hits 80% of daily cap, switch to report-only
-- If loop-pause-all is active, exit immediately
 
----
-<!-- Add your own rules below. Use plain English. The loop reads this verbatim. -->
+- If token spend hits 80% of daily cap → report-only (no new coding side effects)
+- Caps: `loop-budget.md` (include `attl` / `fable-repair` rows)
+
+## Canonical run order (meshed)
+
+```
+loop-constraints → loop-budget (start)
+  → aoa attl brain sync          # Nova
+  → aoa repair triage            # discover
+  → aoa attl run                 # Reed + critical Kai gate
+  → (if coding) maker → tests → draft PR
+  → brain capture + loop-run-log → loop-budget (end)
+```
+
+Shortcut: `aoa attl run` performs the meshed auto cycle (pause/gate/brain/propose/critical).
+
+## Docs
+
+- Design: `docs/design/agentic-task-team-loop.md`
+- Safety detail: `docs/safety.md`
+- Brain rules: `brain/_CLAUDE.md`
+- Mesh graph: `brain/mesh/index.yaml`

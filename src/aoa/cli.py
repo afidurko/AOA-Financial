@@ -1093,8 +1093,10 @@ def cmd_attl_status(cfg: Config, *, as_json: bool = False) -> int:
     if as_json:
         print(json.dumps(status, indent=2))
         return 0
-    print(f"Mode: {status['mode']}")
+    print(f"Mode: {status['mode']}  meshed={status.get('meshed')}")
     print(f"Review policy: {status['review_policy']}")
+    print(f"Paused: {status.get('paused')}")
+    print(f"Hard floor rules: {status.get('hard_floor_rules')}")
     print(f"Roster size: {status['roster_size']}")
     print(f"Pending tasks: {status['pending_tasks']}")
     brain = status.get("brain") or {}
@@ -1151,17 +1153,31 @@ def cmd_attl_run(
     as_json: bool = False,
 ) -> int:
     orch = _attl_orchestrator(cfg)
-    result = orch.run(dry_run=dry_run, report=report)
+    # None → live Bob audit inside mesh; critical-only Kai
+    result = orch.run(dry_run=dry_run, report=report, bob_can_proceed=None)
     if as_json:
         print(json.dumps(result.to_dict(), indent=2, default=str))
     else:
-        print(f"ATTL run — outcome: {result.outcome}")
+        print(f"ATTL mesh — outcome: {result.outcome}")
         print(f"Mode: {result.mode}  dry_run={result.dry_run}")
+        gate = result.gate or {}
+        print(f"Gate: {gate.get('action')} — {gate.get('reason', '')}")
+        if result.selected_task:
+            print(
+                f"Selected: {result.selected_task.get('id')} — "
+                f"{result.selected_task.get('title')}"
+            )
+        if result.worktree:
+            print(f"Worktree: {result.worktree.get('path')} ok={result.worktree.get('ok')}")
         print(f"Kai: {result.kai.get('verdict')} engaged={result.kai.get('engaged')}")
         for note in result.notes:
             print(f"  · {note}")
         print(f"Capture: {result.capture}")
-    return 0 if result.outcome != "critical-report" else 2
+    if result.outcome == "paused":
+        return 2
+    if result.outcome == "critical-report":
+        return 2
+    return 0
 
 
 def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:

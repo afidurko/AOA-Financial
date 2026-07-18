@@ -84,7 +84,9 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 ### The agents
 
-The swarm is coordinated by a **five-member agent team** before trades are proposed.
+The swarm is coordinated by a **twelve-member meshed agent team** (trading + ATTL:
+Nova/Reed/Kai) before trades are proposed; coding loops use ATTL `auto-12` with
+critical-only review.
 **Bob**, **Julie**, and **Alan** also own code-health duties (shared helpers, lint,
 import integrity, and confidence adjustments when quality is degraded):
 

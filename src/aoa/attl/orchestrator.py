@@ -1,4 +1,4 @@
-"""ATTL auto-12 orchestrator — critical-only review."""
+"""ATTL auto-12 orchestrator — delegates to meshed MeshController."""
 
 from __future__ import annotations
 
@@ -7,12 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from aoa.attl.critical import detect_critical
-from aoa.brain.context import brain_context_for_algorithms
+from aoa.attl.mesh import MeshController, MeshSnapshot
 from aoa.brain.store import BrainStore, ensure_brain_workspace
-from aoa.team.kai import KaiAgent
-from aoa.team.nova import NovaAgent
-from aoa.team.reed import ReedAgent
 from aoa.team.roster import TWELVE_MEMBER_ROSTER, roster_names
 
 
@@ -25,10 +21,14 @@ class AttlRunResult:
     proposed: dict[str, Any] = field(default_factory=dict)
     critical: dict[str, Any] = field(default_factory=dict)
     kai: dict[str, Any] = field(default_factory=dict)
+    gate: dict[str, Any] = field(default_factory=dict)
+    selected_task: dict[str, Any] | None = None
+    worktree: dict[str, Any] | None = None
     algo_context_keys: list[str] = field(default_factory=list)
     capture: str = ""
     outcome: str = "auto-continue"
     notes: list[str] = field(default_factory=list)
+    constraints: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -39,15 +39,39 @@ class AttlRunResult:
             "proposed": self.proposed,
             "critical": self.critical,
             "kai": self.kai,
+            "gate": self.gate,
+            "selected_task": self.selected_task,
+            "worktree": self.worktree,
             "algo_context_keys": self.algo_context_keys,
             "capture": self.capture,
             "outcome": self.outcome,
             "notes": self.notes,
+            "constraints": self.constraints,
         }
+
+    @classmethod
+    def from_mesh(cls, snap: MeshSnapshot, *, dry_run: bool) -> AttlRunResult:
+        return cls(
+            mode=snap.mode,
+            dry_run=dry_run,
+            roster=snap.roster,
+            brain_stats=snap.brain,
+            proposed=snap.proposed,
+            critical=snap.critical,
+            kai=snap.kai,
+            gate=snap.gate,
+            selected_task=snap.selected_task,
+            worktree=snap.worktree,
+            algo_context_keys=sorted(snap.algo_context.keys()),
+            capture=snap.capture,
+            outcome=snap.outcome,
+            notes=snap.notes,
+            constraints=snap.constraints,
+        )
 
 
 class AttlOrchestrator:
-    """Run auto ATTL cycle with Nova → Reed → (Kai if critical)."""
+    """Thin facade over MeshController (constraints + brain + gate + Reed + Kai)."""
 
     def __init__(
         self,
@@ -58,49 +82,55 @@ class AttlOrchestrator:
     ) -> None:
         self.repo_root = repo_root or Path.cwd()
         self.data_dir = data_dir or (self.repo_root / "data" / "paper" / "attl")
-        self.llm = llm
-        self.nova = NovaAgent(llm) if llm is not None else NovaAgent(_NullLLM())
-        self.reed = ReedAgent(llm) if llm is not None else ReedAgent(_NullLLM())
-        self.kai = KaiAgent(llm) if llm is not None else KaiAgent(_NullLLM())
+        self.mesh = MeshController(
+            repo_root=self.repo_root,
+            data_dir=self.data_dir,
+            llm=llm,
+        )
+        self.reed = self.mesh.reed
+        self.nova = self.mesh.nova
+        self.kai = self.mesh.kai
 
     def init_workspace(self) -> dict[str, Any]:
         brain = ensure_brain_workspace(self.repo_root)
         store = BrainStore.open(self.repo_root)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         cfg_path = self.data_dir / "config.json"
-        if not cfg_path.is_file():
-            cfg_path.write_text(
-                json.dumps(
-                    {
-                        "mode": "auto-12",
-                        "review_policy": "critical_only",
-                        "roster_size": len(TWELVE_MEMBER_ROSTER),
-                    },
-                    indent=2,
-                ),
-                encoding="utf-8",
-            )
+        policy = self.mesh.load_policy()
+        cfg = {
+            "mode": policy.mode,
+            "review_policy": policy.review_policy,
+            "roster_size": len(TWELVE_MEMBER_ROSTER),
+            "hard_floor_rules": len(policy.hard_floor),
+            "meshed": True,
+        }
+        cfg_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
         return {
             "brain": str(brain),
             "mode": store.mode,
             "roster": roster_names(),
             "stats": store.stats(),
             "config": str(cfg_path),
+            "constraints": policy.to_dict(),
         }
 
     def status(self) -> dict[str, Any]:
         store = BrainStore.open(self.repo_root)
-        cfg = {}
+        policy = self.mesh.load_policy()
+        cfg: dict[str, Any] = {}
         cfg_path = self.data_dir / "config.json"
         if cfg_path.is_file():
             cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
         return {
-            "mode": cfg.get("mode") or store.mode,
-            "review_policy": cfg.get("review_policy", "critical_only"),
+            "mode": cfg.get("mode") or policy.mode,
+            "review_policy": cfg.get("review_policy") or policy.review_policy,
             "roster": roster_names(),
             "roster_size": len(TWELVE_MEMBER_ROSTER),
             "brain": store.stats(),
             "pending_tasks": _count_proposed(self.data_dir),
+            "paused": policy.pause_active,
+            "hard_floor_rules": len(policy.hard_floor),
+            "meshed": True,
         }
 
     def roster(self) -> list[dict[str, str]]:
@@ -110,11 +140,11 @@ class AttlOrchestrator:
         ]
 
     def propose(self) -> dict[str, Any]:
-        repair_items = _load_repair_items(self.repo_root)
-        backlog_items = _load_backlog_items(self.repo_root)
+        from aoa.attl.mesh import _load_backlog_items, _load_repair_items
+
         return self.reed.propose_tasks(
-            repair_items=repair_items,
-            backlog_items=backlog_items,
+            repair_items=_load_repair_items(self.repo_root),
+            backlog_items=_load_backlog_items(self.repo_root),
             out_dir=self.data_dir,
         )
 
@@ -131,66 +161,24 @@ class AttlOrchestrator:
         gate_action: str = "l2-allowed",
         verify_ok: bool | None = True,
     ) -> AttlRunResult:
-        init = self.init_workspace()
-        brain = self.brain_sync()
-        proposed = self.propose()
-        algo_ctx = brain_context_for_algorithms(self.repo_root)
+        """Run meshed cycle.
 
-        signal = detect_critical(
+        When bob_can_proceed is explicitly True/False (tests), MeshController uses it.
+        Pass None to force live Bob audit (production CLI).
+        """
+        # Preserve test override API: default True means "assume healthy" for unit tests;
+        # CLI passes bob_can_proceed=None for live health.
+        snap = self.mesh.sync(
+            dry_run=dry_run,
+            report=report,
+            create_worktree=not dry_run,
             bob_can_proceed=bob_can_proceed,
             bob_summary=bob_summary,
-            gate_action=gate_action,
             verify_ok=verify_ok,
-            report_requested=report,
         )
-        kai = self.kai.review_if_needed(signal.to_dict())
-
-        outcome = "auto-continue"
-        notes = [
-            "Mode auto-12: process review skipped unless critical.",
-            f"Reed proposed {proposed.get('count', 0)} tasks (need-ordered).",
-        ]
-        if dry_run:
-            outcome = "dry-run"
-            notes.append("Dry-run — no worktree/PR side effects.")
-        elif kai.get("engaged"):
-            outcome = "critical-report"
-            notes.append(f"Kai engaged: {kai.get('summary')}")
-        else:
-            notes.append("Kai skipped — no critical flaw / system failure / report.")
-
-        store = BrainStore.open(self.repo_root)
-        capture = store.write_capture(
-            "ATTL run",
-            (
-                f"outcome: {outcome}\n"
-                f"proposed: {proposed.get('count', 0)}\n"
-                f"kai: {kai.get('verdict')}\n"
-                f"dry_run: {dry_run}\n"
-            ),
-            critical=bool(kai.get("engaged")),
-        )
-
-        return AttlRunResult(
-            mode=str(init.get("mode") or "auto-12"),
-            dry_run=dry_run,
-            roster=roster_names(),
-            brain_stats=brain.get("stats") or store.stats(),
-            proposed={"count": proposed.get("count", 0), "path": proposed.get("path", "")},
-            critical=signal.to_dict(),
-            kai=kai,
-            algo_context_keys=sorted(algo_ctx.keys()),
-            capture=str(capture),
-            outcome=outcome,
-            notes=notes,
-        )
-
-
-class _NullLLM:
-    """Placeholder when no LLM is wired — agents use deterministic paths."""
-
-    def structured(self, system: str, prompt: str, schema: dict, **kwargs):  # noqa: ANN001
-        raise RuntimeError("LLM not configured for ATTL structured calls")
+        # If caller forced a gate_action for tests via unused param, ignore — mesh uses real gate.
+        _ = gate_action
+        return AttlRunResult.from_mesh(snap, dry_run=dry_run)
 
 
 def _count_proposed(data_dir: Path) -> int:
@@ -204,40 +192,8 @@ def _count_proposed(data_dir: Path) -> int:
     return len(data.get("tasks") or [])
 
 
+# Re-export for tests that imported helpers from orchestrator historically
 def _load_repair_items(repo_root: Path) -> list[dict[str, Any]]:
-    candidates = [
-        repo_root / "loop-state" / "repair-queue.json",
-        repo_root / "data" / "paper" / "repair" / "queue.json",
-    ]
-    for path in candidates:
-        if not path.is_file():
-            continue
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            continue
-        if isinstance(data, list):
-            return [x for x in data if isinstance(x, dict)]
-        if isinstance(data, dict):
-            items = data.get("items") or data.get("queue") or []
-            if isinstance(items, dict):
-                return [{"id": k, **v} if isinstance(v, dict) else {"id": k} for k, v in items.items()]
-            return [x for x in items if isinstance(x, dict)]
-    return []
+    from aoa.attl.mesh import _load_repair_items as _impl
 
-
-def _load_backlog_items(repo_root: Path) -> list[dict[str, Any]]:
-    path = repo_root / "docs" / "upgrade-backlog.json"
-    if not path.is_file():
-        return []
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-    items = data.get("items") or {}
-    out: list[dict[str, Any]] = []
-    for key, val in items.items():
-        if isinstance(val, dict):
-            row = {"id": key, **val}
-            out.append(row)
-    return out
+    return _impl(repo_root)
