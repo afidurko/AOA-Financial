@@ -113,10 +113,20 @@ Scheduled task routing: [docs/how-to/fable-max-operating-schedule.md](docs/how-t
 - **Claude Max 5×** — setup, PR review, interactive Claude Code / gstack; does not power `aoa run`.
 - **Anthropic API** — swarm runtime only (`ANTHROPIC_API_KEY` in `.env`).
 
+## Planned: Agentic Task-Team Loop (ATTL)
+
+Design (awaiting user approval before implementation):
+[docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md)
+
+Unifies auto task-loop **proposal/activation**, coding workflow, and five-member
+proofread (Bob → Julie → Alan → Aaron-agent → **User**) with the human as
+ultimate usage authority. Default planned mode: `propose-only` until you activate.
+
 ## Links
 
 - Fork: [github.com/afidurko/loop-engineering](https://github.com/afidurko/loop-engineering)
 - Fable 5: [docs/fable5-repair-loop.md](docs/fable5-repair-loop.md)
+- ATTL design: [docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md)
 - Operating schedule: [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
 - Automation schedule: [docs/how-to/loop-automation-schedule.md](docs/how-to/loop-automation-schedule.md)
 - L2 promotion: [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md)

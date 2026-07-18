@@ -9,7 +9,12 @@
     "upg-005",
     "upg-006",
     "upg-007",
-    "upg-009"
+    "upg-009",
+    "upg-011",
+    "upg-012",
+    "upg-013",
+    "upg-014",
+    "upg-015"
   ],
   "assumed_completed": ["upg-003", "upg-004", "upg-005", "upg-006", "upg-007"],
   "items": {
@@ -78,6 +83,61 @@
       "skill": "human",
       "automatable": false,
       "detail": "Configure ntfy/Pushover webhook, optional OpenStock, run aoa serve."
+    },
+    "upg-011": {
+      "title": "ATTL Phase 1 — shared five-member coding proofread",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Extract/share workloop team_review for repair path behind AOA_ATTL_TEAM_REVIEW (default false). See docs/design/agentic-task-team-loop.md.",
+      "files": [
+        "src/aoa/workloop/team_review.py",
+        "src/aoa/team/code_review.py",
+        "docs/fable5-repair-loop.md",
+        "tests/test_team_review.py"
+      ],
+      "blocked_by": ["human-attl-design-approval"]
+    },
+    "upg-012": {
+      "title": "ATTL Phase 2 — task factory propose/activate",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Implement aoa attl propose|list|activate|deactivate|reject|mode; never auto-activate. Default mode propose-only.",
+      "files": [
+        "src/aoa/attl/",
+        "src/aoa/cli.py",
+        "tests/test_attl.py"
+      ],
+      "blocked_by": ["upg-011"]
+    },
+    "upg-013": {
+      "title": "ATTL Phase 3 — workflow composition aoa attl run",
+      "skill": "fable-repair",
+      "automatable": true,
+      "detail": "Compose gate→worktree→maker→verifier→team-review→draft PR; add ATTL prompt shortkeys gated by usage mode.",
+      "files": [
+        "src/aoa/attl/",
+        "loop-prompts.yaml",
+        ".cursor/skills/fable-repair/SKILL.md"
+      ],
+      "blocked_by": ["upg-012"]
+    },
+    "upg-014": {
+      "title": "ATTL Phase 4 — unified approvals + BRIEF inbox",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Approvals store; aoa attl pending|approve|deny; surface in BRIEF/iPhone; map alert respond to approval ids only.",
+      "files": [
+        "src/aoa/attl/",
+        "src/aoa/loop/user_brief.py"
+      ],
+      "blocked_by": ["upg-013"]
+    },
+    "upg-015": {
+      "title": "ATTL Phase 5 — budget, docs, naming harden",
+      "skill": "human",
+      "automatable": false,
+      "detail": "ATTL caps in loop-budget.md; trading-five vs coding-five glossary; how-to activate first loop; document-release pass.",
+      "blocked_by": ["upg-014"]
     }
   }
 }

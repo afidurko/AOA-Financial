@@ -93,3 +93,21 @@ patterns:
     prompt_shortkey: BRIEF
     human_gates: [denylist-paths, draft-only-sensitive]
     level: L1
+
+  - id: attl
+    name: Agentic Task-Team Loop
+    file: docs/design/agentic-task-team-loop.md
+    goal: >-
+      Propose/activate coding task loops; run maker-checker workflow; five-member
+      proofread (Bob/Julie/Alan/Aaron/User) with user as ultimate usage gate
+    cadence: user-gated
+    risk: medium
+    tools: [cursor, claude-code, fable-5]
+    skills: [fable-repair, minimal-fix, loop-verifier, coding-engineer]
+    state: STATE.md
+    queue: data/{AOA_ENV}/attl/
+    phases: [propose, activate, worktree, fix, verify, team-review, pr-draft]
+    human_gates: [activate-before-use, denylist-paths, draft-pr-only, escalate-user, loop-pause-all]
+    cli: aoa attl
+    level: proposed
+    status: design-only

@@ -53,3 +53,12 @@ The critical rule (from Anthropic harness design): **the agent that implements a
 1. Week one: `loop-triage` only (no code).
 2. Enable `fable-repair` with worktree + verifier for fixable audit/verify items.
 3. Escalate architectural or denylist paths to human / workloop.
+
+## Planned: ATTL (five-member proofread on coding tasks)
+
+Today, Bob→Julie→Alan→Aaron→user team review lives on **workloop** only.
+The proposed Agentic Task-Team Loop wires that proofread into the repair /
+task-chain coding path, and adds user-gated task-loop creation.
+
+See [design/agentic-task-team-loop.md](design/agentic-task-team-loop.md).
+No behavior change until that design is approved and phased in.
