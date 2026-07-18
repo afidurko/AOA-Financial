@@ -18,6 +18,7 @@ Commands:
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
+  aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -1064,6 +1065,109 @@ def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
     return 0
 
 
+def _attl_orchestrator(cfg: Config):
+    from aoa.attl.orchestrator import AttlOrchestrator
+    from aoa.config import data_dir_for
+
+    root = Path.cwd()
+    return AttlOrchestrator(
+        repo_root=root,
+        data_dir=data_dir_for(cfg.env) / "attl",
+    )
+
+
+def cmd_attl_init(cfg: Config) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.init_workspace()
+    print("ATTL init — auto-12")
+    print(f"Brain: {result['brain']}")
+    print(f"Mode: {result['mode']}")
+    print(f"Roster ({len(result['roster'])}): {', '.join(result['roster'])}")
+    print(f"Config: {result['config']}")
+    return 0
+
+
+def cmd_attl_status(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    status = orch.status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Mode: {status['mode']}")
+    print(f"Review policy: {status['review_policy']}")
+    print(f"Roster size: {status['roster_size']}")
+    print(f"Pending tasks: {status['pending_tasks']}")
+    brain = status.get("brain") or {}
+    print(
+        "Brain: "
+        f"members={brain.get('members')} algos={brain.get('algorithms')} "
+        f"required_ok={brain.get('required_ok')}"
+    )
+    return 0
+
+
+def cmd_attl_roster(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    rows = orch.roster()
+    if as_json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    print("Twelve-member meshed team")
+    for i, row in enumerate(rows, 1):
+        print(f"  {i:2}. {row['name']:8} — {row['role']}")
+    return 0
+
+
+def cmd_attl_propose(cfg: Config) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.propose()
+    print(f"Reed proposed {result['count']} tasks (need-ordered)")
+    if result.get("path"):
+        print(f"Wrote: {result['path']}")
+    for task in (result.get("tasks") or [])[:10]:
+        flag = "auto" if task.get("automatable") else "human"
+        print(f"  - [{flag}] {task.get('id')}: {task.get('title')}")
+    return 0
+
+
+def cmd_attl_brain_sync(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.brain_sync()
+    if as_json:
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+    print(f"Nova sync ok={result.get('ok')}")
+    print(f"Capture: {result.get('capture')}")
+    stats = result.get("stats") or {}
+    print(f"Stats: {stats}")
+    return 0 if result.get("ok") else 1
+
+
+def cmd_attl_run(
+    cfg: Config,
+    *,
+    dry_run: bool = False,
+    report: bool = False,
+    as_json: bool = False,
+) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.run(dry_run=dry_run, report=report)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2, default=str))
+    else:
+        print(f"ATTL run — outcome: {result.outcome}")
+        print(f"Mode: {result.mode}  dry_run={result.dry_run}")
+        print(f"Kai: {result.kai.get('verdict')} engaged={result.kai.get('engaged')}")
+        for note in result.notes:
+            print(f"  · {note}")
+        print(f"Capture: {result.capture}")
+    return 0 if result.outcome != "critical-report" else 2
+
+
+def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:
+    return cmd_attl_run(cfg, dry_run=False, report=True, as_json=as_json)
+
+
 def cmd_tasks_list() -> int:
     from aoa.loop.prompts import format_prompt_list
 
@@ -1539,6 +1643,28 @@ def main(argv: list[str] | None = None) -> int:
         help="Backlog item id, e.g. upg-007",
     )
 
+    at = sub.add_parser(
+        "attl",
+        help="Agentic Task-Team Loop — auto-12, brain mesh, critical-only review.",
+    )
+    at_sub = at.add_subparsers(dest="attl_command", required=True)
+    at_sub.add_parser("init", help="Ensure brain/ workspace + ATTL config (auto-12).")
+    at_status = at_sub.add_parser("status", help="Show ATTL mode, roster, mesh stats.")
+    at_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_roster = at_sub.add_parser("roster", help="Print the 12-member meshed team.")
+    at_roster.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_sub.add_parser("propose", help="Reed: auto-propose tasks from repair/backlog.")
+    at_run = at_sub.add_parser("run", help="One ATTL auto cycle (Kai only if critical).")
+    at_run.add_argument("--dry-run", action="store_true", help="No side-effect notes beyond capture.")
+    at_run.add_argument("--report", action="store_true", help="Force Kai report path.")
+    at_run.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_report = at_sub.add_parser("report", help="Force critical report via Kai/Aaron path.")
+    at_report.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_brain = at_sub.add_parser("brain", help="Second-brain workspace ops.")
+    at_brain_sub = at_brain.add_subparsers(dest="brain_command", required=True)
+    at_brain_sync = at_brain_sub.add_parser("sync", help="Nova: refresh mesh + capture.")
+    at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
+
     args = parser.parse_args(argv)
     _ensure_env_template()
     cfg = Config.from_env()
@@ -1656,6 +1782,27 @@ def main(argv: list[str] | None = None) -> int:
                     return cmd_tasks_chain_bootstrap()
                 if args.chain_command == "advance":
                     return cmd_tasks_chain_advance(completed=args.complete)
+        if args.command == "attl":
+            if args.attl_command == "init":
+                return cmd_attl_init(cfg)
+            if args.attl_command == "status":
+                return cmd_attl_status(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "roster":
+                return cmd_attl_roster(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "propose":
+                return cmd_attl_propose(cfg)
+            if args.attl_command == "run":
+                return cmd_attl_run(
+                    cfg,
+                    dry_run=getattr(args, "dry_run", False),
+                    report=getattr(args, "report", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.attl_command == "report":
+                return cmd_attl_report(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "brain":
+                if args.brain_command == "sync":
+                    return cmd_attl_brain_sync(cfg, as_json=getattr(args, "json", False))
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

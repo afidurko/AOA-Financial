@@ -1,0 +1,23 @@
+# Cross-repo aids for ATTL / second brain
+repos:
+  - name: AOA-Financial
+    url: https://github.com/afidurko/AOA-Financial
+    role: primary runtime
+  - name: loop-engineering
+    url: https://github.com/afidurko/loop-engineering
+    role: loop patterns, audit, budget shapes
+  - name: spine
+    url: https://github.com/afidurko/spine
+    role: feature-spine note layout
+  - name: obsidian-second-brain
+    url: https://github.com/afidurko/obsidian-second-brain
+    role: living vault / _CLAUDE.md habits
+  - name: AutoHedge
+    url: https://github.com/afidurko/AutoHedge
+    role: swarm worker role separation
+  - name: FinancePy
+    url: https://github.com/afidurko/FinancePy
+    role: derivatives pricing reference
+  - name: py-moomoo-api
+    url: https://github.com/afidurko/py-moomoo-api
+    role: broker API reference

@@ -113,14 +113,16 @@ Scheduled task routing: [docs/how-to/fable-max-operating-schedule.md](docs/how-t
 - **Claude Max 5×** — setup, PR review, interactive Claude Code / gstack; does not power `aoa run`.
 - **Anthropic API** — swarm runtime only (`ANTHROPIC_API_KEY` in `.env`).
 
-## Planned: Agentic Task-Team Loop (ATTL)
+## Agentic Task-Team Loop (ATTL) — auto-12
 
-Design (awaiting user approval before implementation):
-[docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md)
+Design + runtime: [docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md)
 
-Unifies auto task-loop **proposal/activation**, coding workflow, and five-member
-proofread (Bob → Julie → Alan → Aaron-agent → **User**) with the human as
-ultimate usage authority. Default planned mode: `propose-only` until you activate.
+- **Mode:** `auto-12` (default) — 12-member meshed team
+- **Review:** critical-only (Kai) — critical flaw / system failure / `aoa attl report`
+- **Second brain:** `brain/` meshed into vault + Julie algorithms
+- **CLI:** `aoa attl init|status|roster|propose|run|report|brain sync`
+
+Cross-repo aids: loop-engineering, spine, obsidian-second-brain, AutoHedge.
 
 ## Links
 
