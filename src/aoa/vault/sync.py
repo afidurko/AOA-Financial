@@ -165,6 +165,7 @@ def sync_vault_engineering(
         "loops/workloop.md",
         "system/health.md",
         "trading/cycle-latest.md",
+        "brain/mesh.md",
     }
     return sync_vault(
         config,

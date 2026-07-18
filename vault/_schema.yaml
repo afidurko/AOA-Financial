@@ -115,3 +115,25 @@ note_types:
     type: string
     source: system_health
     refresh: every_run
+
+  brain-mesh:
+  - name: mode
+    type: string
+    source: brain_mesh
+    refresh: every_run
+  - name: member_count
+    type: integer
+    source: brain_mesh
+    refresh: every_run
+  - name: algorithm_count
+    type: integer
+    source: brain_mesh
+    refresh: every_run
+  - name: required_ok
+    type: boolean
+    source: brain_mesh
+    refresh: every_run
+  - name: last_synced
+    type: string
+    source: brain_mesh
+    refresh: every_run

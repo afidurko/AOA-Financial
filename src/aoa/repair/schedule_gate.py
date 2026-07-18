@@ -27,6 +27,7 @@ class LoopCaps:
 DEFAULT_CAPS: dict[str, LoopCaps] = {
     "daily-triage": LoopCaps(max_runs_per_day=2, max_tokens_per_day=100_000),
     "fable-repair": LoopCaps(max_runs_per_day=4, max_tokens_per_day=200_000),
+    "attl": LoopCaps(max_runs_per_day=4, max_tokens_per_day=200_000),
 }
 
 # Keywords that mark a repair item as needing CEO (Aaron) approval, higher
