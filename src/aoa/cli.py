@@ -17,6 +17,7 @@ Commands:
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
+  aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
@@ -1064,6 +1065,161 @@ def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
     return 0
 
 
+def _repo_root() -> Path:
+    repo_root = Path.cwd()
+    for parent in [repo_root, *repo_root.parents]:
+        if (parent / "pyproject.toml").is_file() and (parent / "src" / "aoa").is_dir():
+            return parent
+    return repo_root
+
+
+def _study_cortex(cfg: Config):
+    from aoa.study.cortex import StudyCortex
+
+    return StudyCortex.from_config(cfg, repo_root=_repo_root())
+
+
+def cmd_study_status(cfg: Config, *, as_json: bool) -> int:
+    status = _study_cortex(cfg).status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== Study cortex ===")
+    print(f"Cards: {status['n_cards']} | due: {status['n_due']} | mastered: {status['n_mastered']}")
+    print(f"Sessions: {status['sessions']} | updated: {status['updated_at'] or '(never)'}")
+    print(f"Mastery file: {status['mastery_path']}")
+    for field, bucket in status["by_field"].items():
+        print(
+            f"  {field}: {bucket['mastered']}/{bucket['total']} mastered, {bucket['due']} due"
+        )
+    if status["lessons"]:
+        print("Recent lessons:")
+        for lesson in status["lessons"][:5]:
+            print(f"  - {lesson}")
+    print(
+        "Phases: learn (drill/grade) → use (AOA_STUDY_USAGE_ENABLED) → "
+        "distill (aoa study export → LoRA/sLM)"
+    )
+    return 0
+
+
+def cmd_study_drill(cfg: Config, *, n: int, field: str, reveal: bool, as_json: bool) -> int:
+    items = _study_cortex(cfg).drill(n=n, field=field, include_answers=reveal)
+    if as_json:
+        print(json.dumps(items, indent=2))
+        return 0
+    if not items:
+        print("No cards match that field.")
+        return 1
+    for i, item in enumerate(items, 1):
+        due = "due" if item["due"] else "scheduled"
+        print(f"--- {i}. {item['id']} [{item['field']}] ({due}, mastery {item['mastery']:.2f})")
+        print(f"Title: {item['title']}")
+        print(f"Drill: {item['drill_prompt']}")
+        if reveal:
+            print(f"Statement: {item['statement']}")
+            print(f"Proof sketch:\n{item['proof_sketch']}")
+            print(f"AOA mesh: {item['aoa_mesh']}")
+        else:
+            print(f"Reveal: aoa study show {item['id']}")
+            print(f"Grade:  aoa study grade {item['id']} ok|miss")
+        print()
+    return 0
+
+
+def cmd_study_show(cfg: Config, card_id: str, *, as_json: bool) -> int:
+    data = _study_cortex(cfg).show(card_id, reveal=True)
+    if data is None:
+        print(f"Unknown card: {card_id}", file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(data, indent=2))
+        return 0
+    print(f"=== {data['id']}: {data['title']} ===")
+    print(f"Field: {data['field']} | mastery: {data['mastery']:.2f}")
+    print(f"\nStatement:\n{data['statement']}")
+    print(f"\nProof sketch:\n{data['proof_sketch']}")
+    print("\nApplications:")
+    for app in data["applications"]:
+        print(f"  - {app}")
+    print(f"\nAOA mesh:\n{data['aoa_mesh']}")
+    if data["bridges"]:
+        print(f"\nBridges: {', '.join(data['bridges'])}")
+    print(f"\nDrill:\n{data['drill_prompt']}")
+    return 0
+
+
+def cmd_study_grade(cfg: Config, card_id: str, result: str, *, note: str) -> int:
+    passed = result.lower() in {"ok", "pass", "passed", "1", "true", "yes"}
+    if result.lower() not in {
+        "ok",
+        "pass",
+        "passed",
+        "1",
+        "true",
+        "yes",
+        "miss",
+        "fail",
+        "failed",
+        "0",
+        "false",
+        "no",
+    }:
+        print("Result must be ok|miss (or pass|fail).", file=sys.stderr)
+        return 1
+    out = _study_cortex(cfg).grade(card_id, passed, note=note)
+    if not out.get("ok"):
+        print(out.get("error", "grade failed"), file=sys.stderr)
+        return 1
+    sched = out["schedule"]
+    print(
+        f"Graded {card_id}: {'ok' if passed else 'miss'} | "
+        f"ease={sched['ease']:.2f} interval={sched['interval_days']:.1f}d "
+        f"due={sched['due_at']}"
+    )
+    return 0
+
+
+def cmd_study_usage(cfg: Config, *, as_json: bool) -> int:
+    block = _study_cortex(cfg).to_usage_block(limit=cfg.study_usage_limit)
+    if as_json:
+        print(json.dumps({"usage_block": block, "enabled": cfg.study_usage_enabled}, indent=2))
+        return 0
+    if not block:
+        print(
+            "No mastered meshes yet. Drill + grade until mastery ≥ 0.45, "
+            "then re-run. Enable swarm injection with AOA_STUDY_USAGE_ENABLED=true."
+        )
+        return 0
+    print(block)
+    if not cfg.study_usage_enabled:
+        print("\n(not injected into swarm yet — set AOA_STUDY_USAGE_ENABLED=true)")
+    return 0
+
+
+def cmd_study_export(cfg: Config, *, out: str, only_mastered: bool) -> int:
+    path = Path(out) if out else cfg.data_dir / "study" / "corpus.jsonl"
+    summary = _study_cortex(cfg).export_jsonl(path, only_mastered=only_mastered)
+    print(
+        f"Exported {summary['written']} pairs → {summary['path']} "
+        f"(skipped {summary['skipped']})"
+    )
+    print("Next: fine-tune a small instruct model with aoa.adapt.torch_lora on this JSONL.")
+    return 0
+
+
+def cmd_study_sync(cfg: Config, *, as_json: bool) -> int:
+    result = _study_cortex(cfg).sync_vault()
+    if as_json:
+        print(json.dumps(result, indent=2))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "sync failed"), file=sys.stderr)
+        return 1
+    print(f"Study vault sync: wrote {result['notes_written']} notes under {result['study_dir']}")
+    return 0
+
+
 def cmd_tasks_list() -> int:
     from aoa.loop.prompts import format_prompt_list
 
@@ -1500,6 +1656,52 @@ def main(argv: list[str] | None = None) -> int:
     vp_status = vp_sub.add_parser("status", help="Report stale vault properties.")
     vp_status.add_argument("--json", action="store_true", help="Emit JSON report.")
 
+    st = sub.add_parser(
+        "study",
+        help="Study cortex — learn DE/physics/econ bridges, use in swarm, export for sLM/LoRA.",
+    )
+    st_sub = st.add_subparsers(dest="study_command", required=True)
+    st_status = st_sub.add_parser("status", help="Mastery overview by field.")
+    st_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_drill = st_sub.add_parser("drill", help="Next spaced drills (prompts only by default).")
+    st_drill.add_argument("-n", type=int, default=3, help="Number of cards.")
+    st_drill.add_argument(
+        "--field",
+        default="",
+        help="Filter: de | physics | econ | bridge",
+    )
+    st_drill.add_argument(
+        "--reveal",
+        action="store_true",
+        help="Include proof sketches (open-book mode).",
+    )
+    st_drill.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_show = st_sub.add_parser("show", help="Reveal a card (statement + proof + mesh).")
+    st_show.add_argument("card_id", help="Card id, e.g. bridge-bs-heat")
+    st_show.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_grade = st_sub.add_parser("grade", help="Record drill result (ok|miss).")
+    st_grade.add_argument("card_id", help="Card id")
+    st_grade.add_argument("result", help="ok or miss")
+    st_grade.add_argument("--note", default="", help="Optional lesson note")
+    st_usage = st_sub.add_parser("usage", help="Print mastered meshes for swarm injection.")
+    st_usage.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_export = st_sub.add_parser(
+        "export",
+        help="Export JSONL corpus for LoRA/sLM distillation.",
+    )
+    st_export.add_argument(
+        "--out",
+        default="",
+        help="Output path (default: data/{env}/study/corpus.jsonl)",
+    )
+    st_export.add_argument(
+        "--only-mastered",
+        action="store_true",
+        help="Export only cards with mastery ≥ 0.6",
+    )
+    st_sync = st_sub.add_parser("sync", help="Write vault/study notes from curriculum + mastery.")
+    st_sync.add_argument("--json", action="store_true", help="Emit JSON.")
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
@@ -1640,6 +1842,35 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.vault_command == "status":
                 return cmd_vault_status(cfg, as_json=getattr(args, "json", False))
+        if args.command == "study":
+            if args.study_command == "status":
+                return cmd_study_status(cfg, as_json=getattr(args, "json", False))
+            if args.study_command == "drill":
+                return cmd_study_drill(
+                    cfg,
+                    n=getattr(args, "n", 3),
+                    field=getattr(args, "field", "") or "",
+                    reveal=getattr(args, "reveal", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.study_command == "show":
+                return cmd_study_show(
+                    cfg, args.card_id, as_json=getattr(args, "json", False)
+                )
+            if args.study_command == "grade":
+                return cmd_study_grade(
+                    cfg, args.card_id, args.result, note=getattr(args, "note", "")
+                )
+            if args.study_command == "usage":
+                return cmd_study_usage(cfg, as_json=getattr(args, "json", False))
+            if args.study_command == "export":
+                return cmd_study_export(
+                    cfg,
+                    out=getattr(args, "out", "") or "",
+                    only_mastered=getattr(args, "only_mastered", False),
+                )
+            if args.study_command == "sync":
+                return cmd_study_sync(cfg, as_json=getattr(args, "json", False))
         if args.command == "tasks":
             if args.tasks_command == "automations":
                 return cmd_tasks_automations()

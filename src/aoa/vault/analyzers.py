@@ -217,11 +217,74 @@ def _analyze_workloop_summary(ctx: AnalyzerContext) -> dict[str, Any]:
     }
 
 
+def _analyze_study_progress(ctx: AnalyzerContext) -> dict[str, Any]:
+    from aoa.config import study_path_for
+    from aoa.study.cortex import StudyCortex
+
+    # Prefer env data dir under repo; fall back to paper-dry.
+    mastery_path = None
+    data_root = ctx.repo_root / "data"
+    if data_root.is_dir():
+        for candidate in sorted(data_root.glob("*/study/mastery.json")):
+            mastery_path = candidate
+            break
+    if mastery_path is None:
+        mastery_path = ctx.repo_root / study_path_for("paper-dry")
+    cortex = StudyCortex(mastery_path=mastery_path, vault_root=ctx.vault_root)
+    status = cortex.status()
+    mastered = status["n_mastered"]
+    total = max(1, status["n_cards"])
+    phase = "use" if mastered / total >= 0.5 else "learn"
+    if mastered / total >= 0.8:
+        phase = "distill"
+    return {
+        "n_cards": status["n_cards"],
+        "n_mastered": status["n_mastered"],
+        "n_due": status["n_due"],
+        "sessions": status["sessions"],
+        "last_session": status.get("updated_at") or "",
+        "slm_phase": phase,
+    }
+
+
+def _analyze_study_card(ctx: AnalyzerContext) -> dict[str, Any]:
+    from aoa.config import study_path_for
+    from aoa.study.cortex import StudyCortex
+    from aoa.study.curriculum import get_card
+
+    if ctx.note_path is None:
+        return {}
+    card_id = ctx.note_path.stem
+    card = get_card(card_id)
+    if card is None:
+        return {"card_id": card_id}
+    mastery_path = ctx.repo_root / study_path_for("paper-dry")
+    data_root = ctx.repo_root / "data"
+    if data_root.is_dir():
+        for candidate in sorted(data_root.glob("*/study/mastery.json")):
+            mastery_path = candidate
+            break
+    cortex = StudyCortex(mastery_path=mastery_path, vault_root=ctx.vault_root)
+    mastery = cortex.load()
+    row = mastery.cards.get(card_id)
+    return {
+        "card_id": card.id,
+        "field": card.field,
+        "title": card.title,
+        "mastery": round(row.mastery_score(), 4) if row else 0.0,
+        "last_reviewed": row.last_reviewed if row else "",
+        "due_at": row.due_at if row else "",
+        "bridges_count": len(card.bridges),
+    }
+
+
 register("loop_engineering", _analyze_loop_engineering)
 register("cycle_summary", _analyze_cycle_summary)
 register("symbol_view", _analyze_symbol_view)
 register("system_health", _analyze_system_health)
 register("workloop_summary", _analyze_workloop_summary)
+register("study_progress", _analyze_study_progress)
+register("study_card", _analyze_study_card)
 
 
 def engineering_l2_enabled(repo_root: Path) -> bool:

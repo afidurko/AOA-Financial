@@ -190,6 +190,20 @@ class AnalyzeStage(PipelineStage):
         return True
 
 
+def _cycle_memory_context(ctx: CycleContext) -> str:
+    """Plasticity lessons plus optional study-cortex usage meshes."""
+    plasticity = ctx.plasticity.prompt_block() if ctx.plasticity else ""
+    study = ""
+    if getattr(ctx.config, "study_usage_enabled", False):
+        from aoa.study.cortex import StudyCortex
+
+        study = StudyCortex.from_config(ctx.config).to_usage_block(
+            limit=int(getattr(ctx.config, "study_usage_limit", 8) or 8)
+        )
+    parts = [p for p in (plasticity.strip(), study.strip()) if p]
+    return "\n\n".join(parts)
+
+
 @dataclass
 class PortfolioStage(PipelineStage):
     """Portfolio manager synthesizes meshed views into target trades."""
@@ -206,7 +220,7 @@ class PortfolioStage(PipelineStage):
             positions_ctx,
             account_ctx,
             max_new_positions=ctx.config.risk.max_orders_per_cycle,
-            plasticity_context=ctx.plasticity.prompt_block() if ctx.plasticity else "",
+            plasticity_context=_cycle_memory_context(ctx),
             trading_agents_enabled=ctx.config.trading_agents_enabled,
         )
         bb.commentary = pm.get("portfolio_commentary", "")
@@ -256,7 +270,7 @@ class RiskStage(PipelineStage):
             bb.account,
             bb.positions,
             starting_equity=ctx.starting_equity,
-            plasticity_context=ctx.plasticity.prompt_block() if ctx.plasticity else "",
+            plasticity_context=_cycle_memory_context(ctx),
         )
         ctx.journal.record(
             "risk.review",
