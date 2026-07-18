@@ -93,8 +93,7 @@ def _extract_rule(line: str) -> str:
 
 
 def _pause_active(repo_root: Path) -> bool:
-    state = repo_root / "STATE.md"
-    if not state.is_file():
-        return False
-    text = state.read_text(encoding="utf-8")
-    return "loop-pause-all" in text.lower()
+    """Use the same pause detector as the repair schedule gate."""
+    from aoa.repair.schedule_gate import is_paused
+
+    return is_paused(repo_root / "STATE.md")

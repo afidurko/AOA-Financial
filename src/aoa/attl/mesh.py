@@ -142,9 +142,11 @@ class MeshController:
         }
         notes.append(f"Reed proposed {proposed.get('count', 0)} tasks (need-ordered).")
 
+        # Gate exposes auto-fixable *titles*; also accept item ids.
+        fixable_keys = set(gate.fixable_items or ())
         selected = _select_next_task(
             proposed.get("tasks") or [],
-            fixable_ids=set(gate.fixable_items or ()),
+            fixable_keys=fixable_keys,
         )
         snap.selected_task = selected
         if selected:
@@ -174,7 +176,11 @@ class MeshController:
             and gate.action.value == "l2-allowed"
             and not kai.get("engaged")
         ):
-            item_id = str(selected.get("id", "task")).replace("/", "-")
+            item_id = str(
+                selected.get("item_id") or selected.get("id") or "task"
+            ).replace("/", "-")
+            if item_id.startswith("repair-"):
+                item_id = item_id.removeprefix("repair-")
             branch = f"repair/{item_id}"
             worktree = create_repair_worktree(
                 self.repo_root,
@@ -253,28 +259,36 @@ class _NullLLM:
 def _select_next_task(
     tasks: list[dict[str, Any]],
     *,
-    fixable_ids: set[str],
+    fixable_keys: set[str],
 ) -> dict[str, Any] | None:
-    """Prefer repair items in gate fixable set, else first automatable."""
-    if not tasks:
+    """Select next automatable task, preferring gate fixable titles/ids.
+
+    ``evaluate_gate(...).fixable_items`` is a tuple of **titles** today; also
+    accept item_id / repair-<id> so selection stays correct if the gate evolves.
+    When the gate publishes a non-empty fixable set, only those tasks may be
+    selected (no silent fallthrough to unrelated backlog items).
+    """
+    automatable = [t for t in tasks if t.get("automatable")]
+    if not automatable:
         return None
-    for task in tasks:
-        if not task.get("automatable"):
-            continue
-        tid = str(task.get("id", ""))
-        raw = tid.removeprefix("repair-")
-        if fixable_ids and (raw in fixable_ids or tid in fixable_ids):
-            return task
-    for task in tasks:
-        if not task.get("automatable"):
-            continue
-        tid = str(task.get("id", ""))
-        if tid.startswith("repair-") and fixable_ids:
-            raw = tid.removeprefix("repair-")
-            if raw not in fixable_ids and tid not in fixable_ids:
-                continue
-        return task
-    return None
+    keys = {str(k).strip() for k in fixable_keys if str(k).strip()}
+
+    def _matches_fixable(task: dict[str, Any]) -> bool:
+        candidates = {
+            str(task.get("id", "")).strip(),
+            str(task.get("item_id", "")).strip(),
+            str(task.get("title", "")).strip(),
+            str(task.get("id", "")).removeprefix("repair-").strip(),
+        }
+        candidates.discard("")
+        return bool(candidates & keys)
+
+    if keys:
+        for task in automatable:
+            if _matches_fixable(task):
+                return task
+        return None
+    return automatable[0]
 
 
 def _bob_health(repo_root: Path) -> tuple[bool, str]:
@@ -290,27 +304,50 @@ def _bob_health(repo_root: Path) -> tuple[bool, str]:
 def _load_repair_items(repo_root: Path) -> list[dict[str, Any]]:
     candidates = [
         repo_root / "loop-state" / "repair-queue.json",
-        repo_root / "data" / "paper" / "repair" / "queue.json",
         repo_root / "data" / "paper-dry" / "repair" / "queue.json",
+        repo_root / "data" / "paper" / "repair" / "queue.json",
+        repo_root / "data" / "live" / "repair" / "queue.json",
     ]
+    seen: set[str] = set()
     for path in candidates:
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
         if not path.is_file():
             continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             continue
+        rows: list[dict[str, Any]] = []
         if isinstance(data, list):
-            return [x for x in data if isinstance(x, dict)]
-        if isinstance(data, dict):
+            rows = [x for x in data if isinstance(x, dict)]
+        elif isinstance(data, dict):
             items = data.get("items") or data.get("queue") or []
             if isinstance(items, dict):
-                return [
-                    {"id": k, **v} if isinstance(v, dict) else {"id": k}
+                rows = [
+                    {"item_id": k, **v} if isinstance(v, dict) else {"item_id": k}
                     for k, v in items.items()
                 ]
-            return [x for x in items if isinstance(x, dict)]
+            else:
+                rows = [x for x in items if isinstance(x, dict)]
+        if rows:
+            return [_normalize_repair_row(r) for r in rows]
     return []
+
+
+def _normalize_repair_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Ensure item_id is populated for Reed (queue uses item_id, not id)."""
+    out = dict(row)
+    if not out.get("item_id"):
+        out["item_id"] = str(out.get("id") or out.get("key") or "")
+    if not out.get("id"):
+        out["id"] = out["item_id"]
+    return out
 
 
 def _load_backlog_items(repo_root: Path) -> list[dict[str, Any]]:

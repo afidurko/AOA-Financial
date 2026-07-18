@@ -22,15 +22,44 @@ def test_load_constraints_hard_floor_and_auto12():
     assert cs.pause_active is False
 
 
-def test_select_next_task_prefers_fixable_repair():
+def test_select_next_task_matches_gate_titles_and_ids():
     tasks = [
-        {"id": "upg-x", "automatable": True, "title": "backlog"},
-        {"id": "repair-abc", "automatable": True, "title": "fix me"},
-        {"id": "repair-zzz", "automatable": False, "title": "human"},
+        {
+            "id": "upg-x",
+            "source": "backlog",
+            "automatable": True,
+            "title": "backlog",
+            "item_id": "upg-x",
+        },
+        {
+            "id": "repair-abc",
+            "source": "repair",
+            "automatable": True,
+            "title": "Ruff check failed",
+            "item_id": "abc",
+        },
+        {
+            "id": "repair-zzz",
+            "source": "repair",
+            "automatable": False,
+            "title": "human",
+            "item_id": "zzz",
+        },
     ]
-    picked = _select_next_task(tasks, fixable_ids={"abc"})
-    assert picked is not None
-    assert picked["id"] == "repair-abc"
+    # Gate currently publishes titles (not ids)
+    by_title = _select_next_task(tasks, fixable_keys={"Ruff check failed"})
+    assert by_title is not None
+    assert by_title["item_id"] == "abc"
+
+    by_id = _select_next_task(tasks, fixable_keys={"abc"})
+    assert by_id is not None
+    assert by_id["id"] == "repair-abc"
+
+    # Non-empty fixable set with no match → do not fall through to backlog
+    assert _select_next_task(tasks, fixable_keys={"missing"}) is None
+
+    # Empty gate set → first automatable (need-ordered list)
+    assert _select_next_task(tasks, fixable_keys=set())["id"] == "upg-x"
 
 
 def test_mesh_controller_dry_run(tmp_path: Path):

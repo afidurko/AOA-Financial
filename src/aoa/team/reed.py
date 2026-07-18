@@ -31,20 +31,33 @@ class ReedAgent(Agent):
         """Auto-create prioritized task definitions (no human activate step)."""
         proposed: list[dict[str, Any]] = []
         for item in repair_items or []:
+            item_id = str(
+                item.get("item_id") or item.get("id") or item.get("key") or "unknown"
+            )
+            title = str(
+                item.get("title") or item.get("summary") or item_id
+            )
+            escalated = bool(item.get("requires_escalation", False))
+            fixable = item.get("fixable")
+            if fixable is None:
+                fixable = not escalated
             proposed.append(
                 {
-                    "id": f"repair-{item.get('id', 'unknown')}",
+                    "id": f"repair-{item_id}",
+                    "item_id": item_id,
                     "source": "repair",
-                    "title": item.get("title") or item.get("summary") or str(item.get("id")),
-                    "priority": item.get("severity") or item.get("severity", "medium"),
-                    "automatable": not item.get("requires_escalation", False),
+                    "title": title,
+                    "priority": str(item.get("severity") or item.get("priority") or "medium"),
+                    "automatable": bool(fixable) and not escalated,
                     "detail": item.get("detail") or item.get("summary") or "",
+                    "skill": item.get("suggested_skill") or "minimal-fix",
                 }
             )
         for item in backlog_items or []:
             proposed.append(
                 {
                     "id": str(item.get("id") or item.get("key") or "backlog"),
+                    "item_id": str(item.get("id") or item.get("key") or "backlog"),
                     "source": "backlog",
                     "title": item.get("title", ""),
                     "priority": "planned",

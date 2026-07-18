@@ -158,7 +158,6 @@ class AttlOrchestrator:
         report: bool = False,
         bob_can_proceed: bool | None = True,
         bob_summary: str = "",
-        gate_action: str = "l2-allowed",
         verify_ok: bool | None = True,
     ) -> AttlRunResult:
         """Run meshed cycle.
@@ -166,8 +165,6 @@ class AttlOrchestrator:
         When bob_can_proceed is explicitly True/False (tests), MeshController uses it.
         Pass None to force live Bob audit (production CLI).
         """
-        # Preserve test override API: default True means "assume healthy" for unit tests;
-        # CLI passes bob_can_proceed=None for live health.
         snap = self.mesh.sync(
             dry_run=dry_run,
             report=report,
@@ -176,8 +173,6 @@ class AttlOrchestrator:
             bob_summary=bob_summary,
             verify_ok=verify_ok,
         )
-        # If caller forced a gate_action for tests via unused param, ignore — mesh uses real gate.
-        _ = gate_action
         return AttlRunResult.from_mesh(snap, dry_run=dry_run)
 
 
@@ -190,10 +185,3 @@ def _count_proposed(data_dir: Path) -> int:
     except json.JSONDecodeError:
         return 0
     return len(data.get("tasks") or [])
-
-
-# Re-export for tests that imported helpers from orchestrator historically
-def _load_repair_items(repo_root: Path) -> list[dict[str, Any]]:
-    from aoa.attl.mesh import _load_repair_items as _impl
-
-    return _impl(repo_root)
