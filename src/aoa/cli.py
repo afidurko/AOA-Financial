@@ -131,6 +131,53 @@ def _print_environment(cfg: Config) -> None:
         f"mode: {cfg.trading_mode} | data: {cfg.data_dir}"
     )
     print(f"Journal: {cfg.journal_path}")
+    print(
+        f"Swarm memory: plasticity={'ON' if cfg.plasticity_enabled else 'OFF'} | "
+        f"study_usage={'ON' if cfg.study_usage_enabled else 'OFF'} "
+        f"(limit={cfg.study_usage_limit}) | "
+        f"trading_agents={'ON' if cfg.trading_agents_enabled else 'OFF'} | "
+        f"adapt={'ON' if cfg.adapt_enabled else 'OFF'}"
+    )
+
+
+def _print_swarm_memory_config(cfg: Config) -> None:
+    """Report plasticity / study / TradingAgents / adapt configuration."""
+    if cfg.plasticity_enabled:
+        print(
+            f"  ✓ Plasticity ON (tail={cfg.plasticity_tail}, "
+            f"max_lessons={cfg.plasticity_max_lessons}, path={cfg.plasticity_path})"
+        )
+    else:
+        print("  · Plasticity OFF (set AOA_PLASTICITY_ENABLED=true to enable).")
+    if cfg.study_usage_enabled:
+        from aoa.study.cortex import StudyCortex
+
+        status = StudyCortex.from_config(cfg).status()
+        print(
+            f"  ✓ Study cortex usage ON "
+            f"(mastered={status['n_mastered']}/{status['n_cards']}, "
+            f"due={status['n_due']}, limit={cfg.study_usage_limit}, "
+            f"path={cfg.study_path})"
+        )
+        if status["n_mastered"] == 0:
+            print("  · No mastered cards yet — run: aoa study drill && aoa study grade … ok")
+    else:
+        print("  · Study cortex usage OFF (set AOA_STUDY_USAGE_ENABLED=true to enable).")
+    if cfg.trading_agents_enabled:
+        print(
+            f"  ✓ TradingAgents ON (debate_rounds={cfg.trading_agents_debate_rounds})"
+        )
+    else:
+        print("  · TradingAgents OFF (set AOA_TRADING_AGENTS_ENABLED=true to enable).")
+    if cfg.adapt_enabled:
+        adapter = build_signal_adapter(cfg)
+        print(
+            f"  ✓ Low-rank signal adaptation ON "
+            f"(rank={cfg.adapt_rank}, alpha={cfg.adapt_alpha}, "
+            f"updates so far={adapter.updates if adapter else 0}, path={cfg.adapt_path})"
+        )
+    else:
+        print("  · Low-rank signal adaptation OFF (set AOA_ADAPT_ENABLED=true to enable).")
 
 
 def build_team(cfg: Config) -> TeamOrchestrator:
@@ -381,6 +428,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         if cfg.alpaca_cli_profile:
             label = f"{label} (profile {cfg.alpaca_cli_profile})"
         print(f"  ✓ Alpaca auth: {label}")
+    _print_swarm_memory_config(cfg)
     if offline or cfg.is_test:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
@@ -432,15 +480,6 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     except LLMError as exc:
         print(f"  ✗ LLM check failed: {exc}")
         return 1
-    if cfg.adapt_enabled:
-        adapter = build_signal_adapter(cfg)
-        print(
-            f"  ✓ Low-rank signal adaptation ON "
-            f"(rank={cfg.adapt_rank}, alpha={cfg.adapt_alpha}, "
-            f"updates so far={adapter.updates if adapter else 0}, path={cfg.adapt_path})"
-        )
-    else:
-        print("  · Low-rank signal adaptation OFF (set AOA_ADAPT_ENABLED=true to enable).")
     return 0
 
 
