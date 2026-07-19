@@ -115,3 +115,59 @@ note_types:
     type: string
     source: system_health
     refresh: every_run
+
+  study-progress:
+  - name: n_cards
+    type: integer
+    source: study_progress
+    refresh: every_run
+  - name: n_mastered
+    type: integer
+    source: study_progress
+    refresh: every_run
+  - name: n_due
+    type: integer
+    source: study_progress
+    refresh: every_run
+  - name: sessions
+    type: integer
+    source: study_progress
+    refresh: every_run
+  - name: last_session
+    type: string
+    source: study_progress
+    refresh: every_run
+  - name: slm_phase
+    type: string
+    source: study_progress
+    refresh: every_run
+
+  study-card:
+  - name: card_id
+    type: string
+    source: study_card
+    refresh: every_run
+  - name: field
+    type: string
+    source: study_card
+    refresh: every_run
+  - name: title
+    type: string
+    source: study_card
+    refresh: every_run
+  - name: mastery
+    type: float
+    source: study_card
+    refresh: every_run
+  - name: last_reviewed
+    type: string
+    source: study_card
+    refresh: every_run
+  - name: due_at
+    type: string
+    source: study_card
+    refresh: every_run
+  - name: bridges_count
+    type: integer
+    source: study_card
+    refresh: every_run
