@@ -135,10 +135,10 @@ class StudyCortex:
         self.save()
         return {"ok": True, "card_id": card_id, "passed": passed, "schedule": row.to_context()}
 
-    def to_usage_block(self, *, limit: int = 8) -> str:
+    def to_usage_block(self, *, limit: int = 8, baseline: bool = True) -> str:
         mastery = self.load()
-        meta = [(c.id, c.title, c.aoa_mesh) for c in all_cards()]
-        return mastery.to_usage_block(meta, limit=limit)
+        meta = [(c.id, c.title, c.aoa_mesh, c.field) for c in all_cards()]
+        return mastery.to_usage_block(meta, limit=limit, baseline=baseline)
 
     def export_jsonl(
         self,
@@ -177,8 +177,8 @@ class StudyCortex:
             body=(
                 "\n# Study cortex progress\n\n"
                 "Phase **learn**: spaced drills on DE / physics / economics bridges.\n"
-                "Phase **use**: `aoa study usage` injects mastered meshes into the swarm "
-                "when `AOA_STUDY_USAGE_ENABLED=true`.\n"
+                "Phase **use**: always-on — baseline bridges inject every cycle; "
+                "mastery raises weight (`AOA_STUDY_USAGE_ENABLED`, default true).\n"
                 "Phase **distill**: `aoa study export` writes JSONL for LoRA/sLM via "
                 "`aoa.adapt.torch_lora`.\n"
             ),

@@ -194,11 +194,12 @@ def _cycle_memory_context(ctx: CycleContext) -> str:
     """Plasticity lessons plus optional study-cortex usage meshes."""
     plasticity = ctx.plasticity.prompt_block() if ctx.plasticity else ""
     study = ""
-    if getattr(ctx.config, "study_usage_enabled", False):
+    if getattr(ctx.config, "study_usage_enabled", True):
         from aoa.study.cortex import StudyCortex
 
         study = StudyCortex.from_config(ctx.config).to_usage_block(
-            limit=int(getattr(ctx.config, "study_usage_limit", 8) or 8)
+            limit=int(getattr(ctx.config, "study_usage_limit", 8) or 8),
+            baseline=bool(getattr(ctx.config, "study_usage_baseline", True)),
         )
     parts = [p for p in (plasticity.strip(), study.strip()) if p]
     return "\n\n".join(parts)

@@ -52,17 +52,16 @@ def test_cortex_drill_grade_usage_export_sync(tmp_path: Path):
     assert "proof_sketch" not in drills[0]
 
     card_id = drills[0]["id"]
-    # Pump mastery high enough for usage block.
     for _ in range(4):
         cortex.grade(card_id, True)
-    # Also grade a bridge with mesh content explicitly if needed.
     bridge = get_card("bridge-ou-meanrev")
     assert bridge is not None
     for _ in range(4):
         cortex.grade(bridge.id, True)
 
-    usage = cortex.to_usage_block()
+    usage = cortex.to_usage_block(baseline=True)
     assert "Study cortex" in usage
+    assert "bridge-bs-heat" in usage  # baseline bridges always present
     assert bridge.id in usage or card_id in usage
 
     out = tmp_path / "corpus.jsonl"
@@ -78,6 +77,15 @@ def test_cortex_drill_grade_usage_export_sync(tmp_path: Path):
     assert (vault_root / "study" / "cards" / f"{card_id}.md").is_file()
 
 
+def test_usage_block_always_on_without_mastery():
+    mastery = StudyMastery()
+    meta = [(c.id, c.title, c.aoa_mesh, c.field) for c in all_cards()]
+    block = mastery.to_usage_block(meta, limit=8, baseline=True)
+    assert "always-on" in block
+    assert "bridge-bs-heat" in block
+    assert "bridge-ou-meanrev" in block
+
+
 def test_combined_memory_context_and_cycle_helper():
     assert combined_memory_context("a", "") == "a"
     assert combined_memory_context("", "b") == "b"
@@ -86,12 +94,34 @@ def test_combined_memory_context_and_cycle_helper():
     class _Cfg:
         study_usage_enabled = False
         study_usage_limit = 8
+        study_usage_baseline = True
 
     class _Ctx:
         config = _Cfg()
         plasticity = None
 
     assert _cycle_memory_context(_Ctx()) == ""
+
+
+def test_cycle_memory_includes_baseline_when_enabled(tmp_path: Path, monkeypatch):
+    mastery_path = tmp_path / "mastery.json"
+
+    class _Cfg:
+        study_usage_enabled = True
+        study_usage_limit = 8
+        study_usage_baseline = True
+        study_path = mastery_path
+        vault_path = str(tmp_path / "vault")
+        env = "paper-dry"
+        data_dir = tmp_path
+
+    class _Ctx:
+        config = _Cfg()
+        plasticity = None
+
+    block = _cycle_memory_context(_Ctx())
+    assert "Study cortex" in block
+    assert "bridge-bs-heat" in block
 
 
 def test_export_all_cards(tmp_path: Path):

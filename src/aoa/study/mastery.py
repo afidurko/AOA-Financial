@@ -147,27 +147,48 @@ class StudyMastery:
                 out.append(cid)
         return out
 
-    def to_usage_block(self, cards_meta: list[tuple[str, str, str]], *, limit: int = 8) -> str:
-        """Render mastered bridges for swarm / tutor usage.
+    def to_usage_block(
+        self,
+        cards_meta: list[tuple[str, str, str, str]],
+        *,
+        limit: int = 8,
+        baseline: bool = True,
+    ) -> str:
+        """Render standing + mastered meshes for swarm / tutor usage.
 
-        ``cards_meta`` is a list of (id, title, aoa_mesh).
+        ``cards_meta`` is a list of (id, title, aoa_mesh, field).
+        When ``baseline`` is true, all bridge-field meshes are always included
+        so swarm injection stays active before any drills are graded.
         """
+        baseline_rows: list[tuple[str, str, str]] = []
         scored: list[tuple[float, str, str, str]] = []
-        for cid, title, mesh in cards_meta:
+        for cid, title, mesh, card_field in cards_meta:
+            if not mesh:
+                continue
             row = self.cards.get(cid)
-            if row is None:
-                continue
-            score = row.mastery_score()
-            if score < 0.45 or not mesh:
-                continue
-            scored.append((score, cid, title, mesh))
+            score = row.mastery_score() if row else 0.0
+            if baseline and card_field == "bridge":
+                baseline_rows.append((cid, title, mesh))
+            if score >= 0.45:
+                scored.append((score, cid, title, mesh))
         scored.sort(reverse=True)
-        if not scored:
+
+        # Prefer mastered non-baseline cards to fill remaining slots.
+        baseline_ids = {cid for cid, _, _ in baseline_rows}
+        mastered_extra = [(s, c, t, m) for s, c, t, m in scored if c not in baseline_ids]
+
+        if not baseline_rows and not mastered_extra:
             return ""
-        lines = [
-            "Study cortex (mastered theory → usage constraints):",
-        ]
-        for score, cid, title, mesh in scored[:limit]:
+
+        lines = ["Study cortex (always-on theory → usage constraints):"]
+        slots = max(1, limit)
+        for cid, title, mesh in baseline_rows[:slots]:
+            row = self.cards.get(cid)
+            score = row.mastery_score() if row else 0.0
+            tag = f"mastery {score:.2f}" if score > 0 else "baseline"
+            lines.append(f"- [{cid}] {title} ({tag}): {mesh}")
+            slots -= 1
+        for score, cid, title, mesh in mastered_extra[: max(0, slots)]:
             lines.append(f"- [{cid}] {title} (mastery {score:.2f}): {mesh}")
         if self.lessons:
             lines.append("Recent study lessons (weak spots):")

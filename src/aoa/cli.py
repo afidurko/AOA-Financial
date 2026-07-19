@@ -153,14 +153,15 @@ def _print_swarm_memory_config(cfg: Config) -> None:
         from aoa.study.cortex import StudyCortex
 
         status = StudyCortex.from_config(cfg).status()
+        baseline = "baseline+mastered" if cfg.study_usage_baseline else "mastered-only"
         print(
-            f"  ✓ Study cortex usage ON "
-            f"(mastered={status['n_mastered']}/{status['n_cards']}, "
+            f"  ✓ Study cortex usage ALWAYS ON "
+            f"(mode={baseline}, mastered={status['n_mastered']}/{status['n_cards']}, "
             f"due={status['n_due']}, limit={cfg.study_usage_limit}, "
             f"path={cfg.study_path})"
         )
-        if status["n_mastered"] == 0:
-            print("  · No mastered cards yet — run: aoa study drill && aoa study grade … ok")
+        if status["n_mastered"] == 0 and cfg.study_usage_baseline:
+            print("  · Bridge baselines inject every cycle; drill to raise mastery weights.")
     else:
         print("  · Study cortex usage OFF (set AOA_STUDY_USAGE_ENABLED=true to enable).")
     if cfg.trading_agents_enabled:
@@ -1220,19 +1221,30 @@ def cmd_study_grade(cfg: Config, card_id: str, result: str, *, note: str) -> int
 
 
 def cmd_study_usage(cfg: Config, *, as_json: bool) -> int:
-    block = _study_cortex(cfg).to_usage_block(limit=cfg.study_usage_limit)
+    block = _study_cortex(cfg).to_usage_block(
+        limit=cfg.study_usage_limit,
+        baseline=cfg.study_usage_baseline,
+    )
     if as_json:
-        print(json.dumps({"usage_block": block, "enabled": cfg.study_usage_enabled}, indent=2))
-        return 0
-    if not block:
         print(
-            "No mastered meshes yet. Drill + grade until mastery ≥ 0.45, "
-            "then re-run. Enable swarm injection with AOA_STUDY_USAGE_ENABLED=true."
+            json.dumps(
+                {
+                    "usage_block": block,
+                    "enabled": cfg.study_usage_enabled,
+                    "baseline": cfg.study_usage_baseline,
+                },
+                indent=2,
+            )
         )
         return 0
-    print(block)
     if not cfg.study_usage_enabled:
-        print("\n(not injected into swarm yet — set AOA_STUDY_USAGE_ENABLED=true)")
+        print("Swarm injection is OFF — set AOA_STUDY_USAGE_ENABLED=true (default is on).")
+        return 1
+    if not block:
+        print("No usage meshes available (unexpected with baseline on).")
+        return 1
+    print(block)
+    print("\n(always-on: injected into portfolio/risk prompts each cycle)")
     return 0
 
 

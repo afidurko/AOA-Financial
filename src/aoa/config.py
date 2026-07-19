@@ -315,9 +315,10 @@ class Config:
     vault_sync_enabled: bool = True
     vault_auto_write: bool = True
 
-    # Study cortex (learn → use → optional LoRA/sLM distill)
-    study_usage_enabled: bool = False
+    # Study cortex (learn → use → optional LoRA/sLM distill). Always on by default.
+    study_usage_enabled: bool = True
     study_usage_limit: int = 8
+    study_usage_baseline: bool = True  # inject bridge meshes even before mastery
 
     trading_agents_enabled: bool = True
     trading_agents_debate_rounds: int = 1
@@ -485,8 +486,9 @@ class Config:
             vault_path=os.environ.get("AOA_VAULT_PATH", "vault").strip() or "vault",
             vault_sync_enabled=_bool("AOA_VAULT_SYNC_ENABLED", True),
             vault_auto_write=_bool("AOA_VAULT_AUTO_WRITE", True),
-            study_usage_enabled=_bool("AOA_STUDY_USAGE_ENABLED", False),
+            study_usage_enabled=_bool("AOA_STUDY_USAGE_ENABLED", True),
             study_usage_limit=max(1, _int("AOA_STUDY_USAGE_LIMIT", 8)),
+            study_usage_baseline=_bool("AOA_STUDY_USAGE_BASELINE", True),
             trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
             trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(
