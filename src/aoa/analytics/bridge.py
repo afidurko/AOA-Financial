@@ -88,6 +88,10 @@ def _cycle_payload(result: TeamCycleResult) -> dict[str, Any]:
         out["trends"] = [t.to_context() for t in result.trends]
     if result.algorithms:
         out["algorithms"] = [a.to_context() for a in result.algorithms]
+    if result.short_term:
+        out["short_term"] = [j.to_context() for j in result.short_term]
+    if result.company_analyses:
+        out["company_analyses"] = [c.to_context() for c in result.company_analyses]
     if result.cycle:
         bb = result.cycle.blackboard
         out["commentary"] = bb.commentary
@@ -148,6 +152,36 @@ def _extract_signals(result: TeamCycleResult) -> list[dict[str, Any]]:
                 "conviction": ctx.get("volume_ratio"),
                 "summary": ctx.get("summary", ""),
                 "metrics": {"liquidity": ctx.get("liquidity_note")},
+            }
+        )
+    for jim in result.short_term:
+        ctx = jim.to_context()
+        signals.append(
+            {
+                "ticker": ctx.get("symbol", ""),
+                "agent": "Jim",
+                "direction": ctx.get("direction", ""),
+                "conviction": ctx.get("conviction"),
+                "summary": ctx.get("rationale", ""),
+                "metrics": {
+                    "horizon_bars": ctx.get("horizon_bars"),
+                    "expected_return": ctx.get("expected_return"),
+                },
+            }
+        )
+    for cindy in result.company_analyses:
+        ctx = cindy.to_context()
+        signals.append(
+            {
+                "ticker": ctx.get("symbol", ""),
+                "agent": "Cindy",
+                "direction": ctx.get("profitability_grade", ""),
+                "conviction": ctx.get("conviction"),
+                "summary": ctx.get("thesis", ""),
+                "metrics": {
+                    "quality_score": ctx.get("quality_score"),
+                    "fair_value": ctx.get("fair_value"),
+                },
             }
         )
     if result.cycle:

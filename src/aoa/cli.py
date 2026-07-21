@@ -217,6 +217,20 @@ def _print_team(result: TeamCycleResult) -> None:
                 f"  {c.symbol:<6} risk={c.event_risk:<6} sentiment={c.headline_sentiment:<8}  "
                 f"{c.catalyst_summary[:50]}"
             )
+    if result.short_term:
+        print("\n=== Jim — short-term technical overlays ===")
+        for j in result.short_term:
+            print(
+                f"  {j.symbol:<6} {j.direction.value:<8} conv={j.conviction:.2f}  "
+                f"ret={j.expected_return:+.2%}  {j.rationale[:50]}"
+            )
+    if result.company_analyses:
+        print("\n=== Cindy — company profitability ===")
+        for c in result.company_analyses:
+            print(
+                f"  {c.symbol:<6} grade={c.profitability_grade:<3} q={c.quality_score:+.2f}  "
+                f"fv={c.fair_value}  {c.thesis[:50]}"
+            )
     if result.risk_plans:
         print("\n=== Andrea — pre-execution risk plans ===")
         for r in result.risk_plans:
