@@ -390,6 +390,8 @@ def _sweep_state_dict(state) -> dict[str, Any]:
 
 
 def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
+    from aoa.team.overlay import build_chart_overlays
+
     out: dict[str, Any] = {
         "halted": result.halted,
         "halt_reason": result.halt_reason,
@@ -398,11 +400,14 @@ def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
         "algorithms": [a.to_context() for a in result.algorithms],
         "market_contexts": [m.to_context() for m in result.market_contexts],
         "catalysts": [c.to_context() for c in result.catalysts],
+        "short_term": [j.to_context() for j in result.short_term],
+        "company_analyses": [c.to_context() for c in result.company_analyses],
         "risk_plans": [r.to_context() for r in result.risk_plans],
         "decision": result.decision.to_context() if result.decision else None,
         "ceo": result.ceo.to_context() if result.ceo else None,
         "assistant": result.assistant.to_context() if result.assistant else None,
         "team_status": result.ceo.team_status if result.ceo else [],
+        "chart_overlays": [],
         "notes": [],
         "commentary": "",
         "candidates": [],
@@ -412,6 +417,12 @@ def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
         "stage_metrics": [],
     }
     if result.cycle is None:
+        out["chart_overlays"] = build_chart_overlays(
+            snapshots={},
+            short_term=result.short_term,
+            company_analyses=result.company_analyses,
+            decision=result.decision,
+        )
         return out
     cycle = result.cycle
     bb = cycle.blackboard
@@ -432,6 +443,12 @@ def _team_cycle_to_dict(result: TeamCycleResult) -> dict[str, Any]:
             "proposals": proposals,
             "execution": execution,
             "analyst_reports": _analyst_reports_from_env(bb.environment),
+            "chart_overlays": build_chart_overlays(
+                snapshots=bb.snapshots,
+                short_term=result.short_term,
+                company_analyses=result.company_analyses,
+                decision=result.decision,
+            ),
         }
     )
     return out

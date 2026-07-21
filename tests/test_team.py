@@ -105,9 +105,15 @@ def test_full_team_cycle(fake_broker, fake_llm, tmp_path):
     assert "team.aaron.review" in events
     assert "team.morgan.context" in events
     assert "team.hailey.catalysts" in events
+    assert "team.jim.short_term" in events
+    assert "team.cindy.company" in events
     assert "team.andrea.risk_plans" in events
     assert "team.alex.brief" in events
     assert result.assistant is not None
+    assert result.short_term
+    assert result.company_analyses
+    assert result.short_term[0].predicted_path
+    assert result.company_analyses[0].fair_value is not None
 
 
 def test_aaron_escalates_on_critical_health(fake_broker, fake_llm):

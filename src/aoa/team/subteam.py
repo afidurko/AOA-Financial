@@ -398,8 +398,12 @@ def run_alan_with_subteam(
     code_quality: CodeQualityReport | None = None,
     market_contexts: list[MarketContextReport] | None = None,
     catalyst_contexts: list | None = None,
+    short_term_contexts: list | None = None,
+    company_contexts: list | None = None,
 ) -> DecisionBrief:
     by_symbol = {a.symbol: a for a in algorithms}
+    jim_by = {j.symbol: j for j in (short_term_contexts or [])}
+    cindy_by = {c.symbol: c for c in (company_contexts or [])}
     pairs = [
         {
             "symbol": t.symbol,
@@ -407,10 +411,16 @@ def run_alan_with_subteam(
             "algorithm": by_symbol.get(t.symbol, {}).to_context()
             if t.symbol in by_symbol
             else None,
+            "jim_short_term": jim_by[t.symbol].to_context()
+            if t.symbol in jim_by
+            else None,
+            "cindy_company": cindy_by[t.symbol].to_context()
+            if t.symbol in cindy_by
+            else None,
         }
         for t in trends
     ]
-    task = f"Trend + algorithm pairs:\n{json.dumps(pairs, default=str)}\n"
+    task = f"Trend + algorithm pairs (with Jim/Cindy):\n{json.dumps(pairs, default=str)}\n"
     if scanner_context:
         task += f"\nScanner shortlist:\n{json.dumps(scanner_context, default=str)}\n"
     if code_quality is not None:
@@ -425,6 +435,16 @@ def run_alan_with_subteam(
             f"\nHailey catalyst context:\n"
             f"{json.dumps([c.to_context() for c in catalyst_contexts], default=str)}\n"
         )
+    if short_term_contexts:
+        task += (
+            f"\nJim short-term overlays:\n"
+            f"{json.dumps([j.to_context() for j in short_term_contexts], default=str)}\n"
+        )
+    if company_contexts:
+        task += (
+            f"\nCindy company analysis:\n"
+            f"{json.dumps([c.to_context() for c in company_contexts], default=str)}\n"
+        )
     members = runner.run_members(team, task, lead_slug="alan")
     try:
         r = runner.synthesize(
@@ -434,7 +454,8 @@ def run_alan_with_subteam(
             schema=_ALAN_SCHEMA,
             instruction=(
                 "You are Alan synthesizing your sub-team's bull/risk perspectives "
-                "into one decision brief."
+                "plus Jim's short-term path and Cindy's profitability work into "
+                "one decision brief. Adapt conviction partially from their inputs."
             ),
             lead_slug="alan",
         )
@@ -457,4 +478,6 @@ def run_alan_with_subteam(
             code_quality=code_quality,
             market_contexts=market_contexts,
             catalyst_contexts=catalyst_contexts,
+            short_term_contexts=short_term_contexts,
+            company_contexts=company_contexts,
         )

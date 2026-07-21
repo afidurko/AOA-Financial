@@ -75,6 +75,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tab" data-tab="research">Research</div>
       <div class="tab" data-tab="promotions">Promotions</div>
       <div class="tab" data-tab="catalysts">Catalysts</div>
+      <div class="tab" data-tab="overlay">Jim &amp; Cindy</div>
       <div class="tab" data-tab="risk">Risk plans</div>
       <div class="tab" data-tab="journal">Journal</div>
     </div>
@@ -120,6 +121,19 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div id="panel-catalysts" class="panel card">
       <h2>Hailey — news &amp; catalysts</h2>
       <div id="catalysts-list"></div>
+    </div>
+    <div id="panel-overlay" class="panel card">
+      <h2>Jim &amp; Cindy — predicted path overlays</h2>
+      <p class="stat-sm" style="margin-bottom:.75rem">Jim’s short-term predicted path and Cindy’s fair-value bands over the price chart. Alan adapts conviction from both.</p>
+      <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
+        <label style="font-size:.8rem;color:var(--muted)">Symbol
+          <select id="overlay-symbol" onchange="drawOverlay()" style="margin-left:.35rem;padding:.3rem .5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px"></select>
+        </label>
+        <label style="font-size:.8rem;color:var(--muted)"><input type="checkbox" id="overlay-jim" checked onchange="drawOverlay()"/> Jim path</label>
+        <label style="font-size:.8rem;color:var(--muted)"><input type="checkbox" id="overlay-cindy" checked onchange="drawOverlay()"/> Cindy bands</label>
+      </div>
+      <svg id="overlay-chart" viewBox="0 0 720 280" width="100%" height="280" style="background:#0f1419;border:1px solid var(--border);border-radius:8px"></svg>
+      <div id="overlay-meta" style="margin-top:.75rem;font-size:.85rem"></div>
     </div>
     <div id="panel-risk" class="panel card">
       <h2>Andrea — pre-execution risk &amp; trade plans</h2>
@@ -189,6 +203,12 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       renderPromotions(promotions.items||[]);
       renderCatalysts(r.catalysts||[]);
       renderRiskPlans(r.risk_plans||[]);
+      window._overlays=r.chart_overlays||[];
+      const sel=document.getElementById('overlay-symbol');
+      const prev=sel.value;
+      sel.innerHTML=(window._overlays||[]).map(o=>`<option value="${o.symbol}">${o.symbol}</option>`).join('')||'<option value="">—</option>';
+      if(prev && [...sel.options].some(o=>o.value===prev)) sel.value=prev;
+      drawOverlay();
     }
     function renderTeam(r){
       const roster=[
@@ -197,6 +217,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         {name:'Julie',role:'Algorithms',data:r.algorithms,count:(r.algorithms||[]).length},
         {name:'Morgan',role:'Volume & Options',data:r.market_contexts,count:(r.market_contexts||[]).length},
         {name:'Hailey',role:'Catalysts',data:r.catalysts,count:(r.catalysts||[]).length},
+        {name:'Jim',role:'Short-term TA',data:r.short_term,count:(r.short_term||[]).length},
+        {name:'Cindy',role:'Company / FV',data:r.company_analyses,count:(r.company_analyses||[]).length},
         {name:'Alan',role:'Decision',data:r.decision,summary:r.decision?.summary},
         {name:'Andrea',role:'Risk',data:r.risk_plans,count:(r.risk_plans||[]).length},
         {name:'Aaron',role:'CEO',data:r.ceo,summary:r.ceo?.summary},
@@ -214,9 +236,64 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       (r.algorithms||[]).forEach(a=>rows.push({symbol:a.symbol,analyst:'Julie',direction:a.validated?'validated':'review',conviction:a.adjusted_strength,summary:a.method_notes}));
       (r.market_contexts||[]).forEach(m=>rows.push({symbol:m.symbol,analyst:'Morgan',direction:m.volume_regime,conviction:m.volume_ratio,summary:(m.options_volume_note?m.options_volume_note+' · ':'')+(m.summary||'')}));
       (r.catalysts||[]).forEach(c=>rows.push({symbol:c.symbol,analyst:'Hailey',direction:c.headline_sentiment,conviction:c.impact_score,summary:c.catalyst_summary}));
+      (r.short_term||[]).forEach(j=>rows.push({symbol:j.symbol,analyst:'Jim',direction:j.direction,conviction:j.conviction,summary:j.rationale}));
+      (r.company_analyses||[]).forEach(c=>rows.push({symbol:c.symbol,analyst:'Cindy',direction:c.profitability_grade,conviction:c.conviction,summary:c.thesis}));
       document.getElementById('analysts-body').innerHTML=rows.length
         ? rows.map(x=>`<tr><td>${x.symbol||''}</td><td>${x.analyst||''}</td><td>${x.direction||''}</td><td>${x.conviction??'—'}</td><td>${(x.summary||'').slice(0,80)}</td></tr>`).join('')
         : '<tr><td colspan="5">No reports yet</td></tr>';
+    }
+    function drawOverlay(){
+      const svg=document.getElementById('overlay-chart');
+      const meta=document.getElementById('overlay-meta');
+      const overlays=window._overlays||[];
+      const sym=document.getElementById('overlay-symbol').value;
+      const o=overlays.find(x=>x.symbol===sym);
+      if(!o){ svg.innerHTML=''; meta.textContent='Run a cycle to populate Jim & Cindy overlays.'; return; }
+      const bars=o.bars||[];
+      const showJim=document.getElementById('overlay-jim').checked;
+      const showCindy=document.getElementById('overlay-cindy').checked;
+      const prices=bars.map(b=>b.c).filter(v=>v!=null);
+      if(showJim && o.jim?.predicted_path) o.jim.predicted_path.forEach(p=>prices.push(p.price));
+      if(showCindy && o.cindy){ [o.cindy.fair_value,o.cindy.upside_price,o.cindy.downside_price].forEach(v=>{ if(v!=null) prices.push(v); }); }
+      if(showJim && o.jim){ [o.jim.support,o.jim.resistance,o.jim.stop].forEach(v=>{ if(v!=null) prices.push(v); }); }
+      if(!prices.length){ svg.innerHTML=''; meta.textContent='No price series for '+sym; return; }
+      const pad={l:48,r:16,t:16,b:28}, W=720, H=280;
+      const minP=Math.min(...prices), maxP=Math.max(...prices);
+      const span=Math.max(maxP-minP, maxP*0.01, 0.01);
+      const nHist=Math.max(bars.length,1);
+      const nFwd=(showJim && o.jim?.predicted_path)?o.jim.predicted_path.length:0;
+      const nTot=nHist+nFwd;
+      const x=i=>pad.l+(W-pad.l-pad.r)*(i/Math.max(nTot-1,1));
+      const y=p=>pad.t+(H-pad.t-pad.b)*(1-((p-minP)/span));
+      let html=`<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${H-pad.b}" stroke="#2d3a4f"/><line x1="${pad.l}" y1="${H-pad.b}" x2="${W-pad.r}" y2="${H-pad.b}" stroke="#2d3a4f"/>`;
+      html+=`<text x="8" y="${pad.t+8}" fill="#8b9cb3" font-size="10">${maxP.toFixed(2)}</text>`;
+      html+=`<text x="8" y="${H-pad.b}" fill="#8b9cb3" font-size="10">${minP.toFixed(2)}</text>`;
+      if(bars.length>1){
+        const pts=bars.map((b,i)=>`${x(i)},${y(b.c)}`).join(' ');
+        html+=`<polyline fill="none" stroke="#e7ecf3" stroke-width="1.6" points="${pts}"/>`;
+      }
+      if(showCindy && o.cindy){
+        const levels=[{p:o.cindy.fair_value,c:'#3b82f6',l:'FV'},{p:o.cindy.upside_price,c:'#22c55e',l:'Up'},{p:o.cindy.downside_price,c:'#ef4444',l:'Dn'}];
+        levels.forEach(L=>{ if(L.p==null) return; html+=`<line x1="${pad.l}" y1="${y(L.p)}" x2="${W-pad.r}" y2="${y(L.p)}" stroke="${L.c}" stroke-dasharray="4 3" stroke-width="1"/><text x="${W-pad.r-2}" y="${y(L.p)-3}" fill="${L.c}" font-size="10" text-anchor="end">${L.l} ${Number(L.p).toFixed(2)}</text>`; });
+      }
+      if(showJim && o.jim){
+        if(o.jim.predicted_path?.length){
+          const baseX=nHist-1;
+          const pts=o.jim.predicted_path.map(p=>`${x(baseX+p.step)},${y(p.price)}`).join(' ');
+          const start=bars.length?`${x(baseX)},${y(bars[bars.length-1].c)} `:'';
+          html+=`<polyline fill="none" stroke="#f59e0b" stroke-width="2" stroke-dasharray="6 3" points="${start}${pts}"/>`;
+        }
+        [o.jim.support,o.jim.resistance,o.jim.stop].forEach((p,idx)=>{
+          if(p==null) return;
+          const c=idx===2?'#ef4444':(idx===0?'#22c55e':'#93c5fd');
+          html+=`<line x1="${pad.l}" y1="${y(p)}" x2="${W-pad.r}" y2="${y(p)}" stroke="${c}" stroke-opacity=".45" stroke-width="1"/>`;
+        });
+      }
+      svg.innerHTML=html;
+      const jimTxt=o.jim?`Jim ${o.jim.direction} · conv ${o.jim.conviction} · ret ${(o.jim.expected_return*100).toFixed(1)}% — ${(o.jim.rationale||'').slice(0,120)}`:'Jim: —';
+      const cindyTxt=o.cindy?`Cindy grade ${o.cindy.profitability_grade} · q ${o.cindy.quality_score} · FV ${o.cindy.fair_value??'—'} — ${(o.cindy.thesis||'').slice(0,120)}`:'Cindy: —';
+      const alanTxt=o.alan?`Alan adapted: ${o.alan.action} @ ${o.alan.conviction} — ${(o.alan.rationale||'').slice(0,140)}`:'Alan: —';
+      meta.innerHTML=`<div><strong>${sym}</strong></div><div style="color:var(--amber);margin-top:.35rem">${jimTxt}</div><div style="color:var(--accent);margin-top:.35rem">${cindyTxt}</div><div style="color:var(--muted);margin-top:.35rem">${alanTxt}</div>`;
     }
     function renderApprovals(items){
       document.getElementById('approvals-list').innerHTML=items.length?items.map(a=>`

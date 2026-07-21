@@ -21,17 +21,21 @@ from aoa.team.alan import AlanAgent
 from aoa.team.alex import AlexAgent
 from aoa.team.andrea import AndreaAgent
 from aoa.team.bob import BobAgent
+from aoa.team.cindy import CindyAgent
 from aoa.team.hailey import HaileyAgent
+from aoa.team.jim import JimAgent
 from aoa.team.julie import JulieAgent
 from aoa.team.models import (
     AlgorithmReport,
     AssistantBrief,
     CatalystReport,
     CEOReport,
+    CompanyAnalysisReport,
     DecisionBrief,
     HealthReport,
     MarketContextReport,
     RiskPlanReport,
+    ShortTermReport,
     TeamExpansionProposal,
     TrendReport,
 )
@@ -60,6 +64,8 @@ class TeamCycleResult:
     decision: DecisionBrief | None = None
     market_contexts: list[MarketContextReport] = field(default_factory=list)
     catalysts: list[CatalystReport] = field(default_factory=list)
+    short_term: list[ShortTermReport] = field(default_factory=list)
+    company_analyses: list[CompanyAnalysisReport] = field(default_factory=list)
     risk_plans: list[RiskPlanReport] = field(default_factory=list)
     ceo: CEOReport | None = None
     assistant: AssistantBrief | None = None
@@ -75,6 +81,8 @@ class OpportunitySweepResult:
     trends: list[TrendReport] = field(default_factory=list)
     algorithms: list[AlgorithmReport] = field(default_factory=list)
     catalysts: list[CatalystReport] = field(default_factory=list)
+    short_term: list[ShortTermReport] = field(default_factory=list)
+    company_analyses: list[CompanyAnalysisReport] = field(default_factory=list)
     decision: DecisionBrief | None = None
     opportunities_notified: int = 0
 
@@ -103,6 +111,8 @@ class TeamOrchestrator:
         self.julie = JulieAgent(llm)
         self.morgan = MorganAgent(llm, broker)
         self.hailey = HaileyAgent(llm, self.news_feed)
+        self.jim = JimAgent(llm)
+        self.cindy = CindyAgent(llm)
         self.andrea = AndreaAgent(llm, broker, config)
         self.bob = BobAgent(config, broker)
         self.alan = AlanAgent(llm)
@@ -153,11 +163,13 @@ class TeamOrchestrator:
         self.trading.market.clear_cache()
         snapshots = self.trading.market.snapshots(symbols)
 
-        trends, algorithms, market_contexts, catalysts, decision, _ = self._run_analysis_pipeline(
-            snapshots,
-            scanner_context=scanner_context,
+        trends, algorithms, market_contexts, catalysts, short_term, company, decision, _ = (
+            self._run_analysis_pipeline(
+                snapshots,
+                scanner_context=scanner_context,
+            )
         )
-        _ = market_contexts, catalysts
+        _ = market_contexts, catalysts, short_term, company
         return trends, algorithms, decision
 
     def run_opportunity_sweep(
@@ -182,7 +194,16 @@ class TeamOrchestrator:
         self.trading.market.clear_cache()
         snapshots = self.trading.market.snapshots(symbols)
 
-        trends, algorithms, market_contexts, catalysts, decision, _ = self._run_analysis_pipeline(
+        (
+            trends,
+            algorithms,
+            market_contexts,
+            catalysts,
+            short_term,
+            company,
+            decision,
+            _,
+        ) = self._run_analysis_pipeline(
             snapshots,
         )
         _ = market_contexts
@@ -203,6 +224,8 @@ class TeamOrchestrator:
             trends=trends,
             algorithms=algorithms,
             catalysts=catalysts,
+            short_term=short_term,
+            company_analyses=company,
             decision=decision,
             opportunities_notified=len(notes),
         )
@@ -211,6 +234,8 @@ class TeamOrchestrator:
             {
                 "trends": len(trends),
                 "catalysts": len(catalysts),
+                "short_term": len(short_term),
+                "company_analyses": len(company),
                 "opportunities_notified": len(notes),
                 "summary": decision.summary if decision else "",
             },
@@ -260,6 +285,8 @@ class TeamOrchestrator:
         result.decision = getattr(cycle, "_team_decision", None)
         result.market_contexts = getattr(cycle, "_team_market_contexts", [])
         result.catalysts = getattr(cycle, "_team_catalysts", [])
+        result.short_term = getattr(cycle, "_team_short_term", [])
+        result.company_analyses = getattr(cycle, "_team_company_analyses", [])
         result.risk_plans = getattr(cycle, "_team_risk_plans", [])
 
         result.ceo = self.aaron.review(
@@ -268,6 +295,8 @@ class TeamOrchestrator:
             julie_done=len(result.algorithms) > 0 or not cycle.blackboard.candidates,
             alan_done=result.decision is not None,
             hailey_done=len(result.catalysts) > 0 or not cycle.blackboard.candidates,
+            jim_done=len(result.short_term) > 0 or not cycle.blackboard.candidates,
+            cindy_done=len(result.company_analyses) > 0 or not cycle.blackboard.candidates,
             andrea_done=len(result.risk_plans) > 0 or not cycle.blackboard.candidates,
             decision=result.decision,
             tom_count=len(result.trends),
@@ -335,6 +364,8 @@ class TeamOrchestrator:
             cr._team_algorithms = []  # type: ignore[attr-defined]
             cr._team_decision = None  # type: ignore[attr-defined]
             cr._team_catalysts = []  # type: ignore[attr-defined]
+            cr._team_short_term = []  # type: ignore[attr-defined]
+            cr._team_company_analyses = []  # type: ignore[attr-defined]
             cr._team_risk_plans = []  # type: ignore[attr-defined]
             return cr, team_remediation
 
@@ -342,12 +373,19 @@ class TeamOrchestrator:
         candidate_snaps = {s: bb.snapshots[s] for s in candidate_symbols if s in bb.snapshots}
 
         subteams = self._approved_subteams()
-        trends, algorithms, market_contexts, catalysts, decision, code_quality = (
-            self._run_analysis_pipeline(
-                candidate_snaps,
-                scanner_context=bb.candidates,
-                subteams=subteams,
-            )
+        (
+            trends,
+            algorithms,
+            market_contexts,
+            catalysts,
+            short_term,
+            company_analyses,
+            decision,
+            code_quality,
+        ) = self._run_analysis_pipeline(
+            candidate_snaps,
+            scanner_context=bb.candidates,
+            subteams=subteams,
         )
         self.journal.record("team.julie.code_audit", code_quality.to_context())
 
@@ -402,6 +440,8 @@ class TeamOrchestrator:
                         code_quality=code_quality,
                         market_contexts=market_contexts,
                         catalyst_contexts=catalysts,
+                        short_term_contexts=short_term,
+                        company_contexts=company_analyses,
                     ),
                 )
             )
@@ -413,6 +453,8 @@ class TeamOrchestrator:
                 code_quality=code_quality,
                 market_contexts=market_contexts,
                 catalyst_contexts=catalysts,
+                short_term_contexts=short_term,
+                company_contexts=company_analyses,
             )
             self.journal.record("team.alan.decision", decision.to_context())
 
@@ -423,6 +465,8 @@ class TeamOrchestrator:
             decision,
             candidate_symbols,
             catalysts=catalysts,
+            short_term=short_term,
+            company_analyses=company_analyses,
         )
         if decision.summary:
             prefix = decision.summary
@@ -456,6 +500,8 @@ class TeamOrchestrator:
         cr._team_decision = decision  # type: ignore[attr-defined]
         cr._team_market_contexts = market_contexts  # type: ignore[attr-defined]
         cr._team_catalysts = catalysts  # type: ignore[attr-defined]
+        cr._team_short_term = short_term  # type: ignore[attr-defined]
+        cr._team_company_analyses = company_analyses  # type: ignore[attr-defined]
         cr._team_risk_plans = risk_plans  # type: ignore[attr-defined]
         return cr, team_remediation
 
@@ -483,6 +529,8 @@ class TeamOrchestrator:
         list[AlgorithmReport],
         list[MarketContextReport],
         list[CatalystReport],
+        list[ShortTermReport],
+        list[CompanyAnalysisReport],
         DecisionBrief,
         object,
     ]:
@@ -522,6 +570,18 @@ class TeamOrchestrator:
             {"reports": [c.to_context() for c in catalysts]},
         )
 
+        short_term = self.jim.analyze_contexts(snapshots) if snapshots else []
+        self.journal.record(
+            "team.jim.short_term",
+            {"reports": [j.to_context() for j in short_term]},
+        )
+
+        company_analyses = self.cindy.analyze_contexts(snapshots) if snapshots else []
+        self.journal.record(
+            "team.cindy.company",
+            {"reports": [c.to_context() for c in company_analyses]},
+        )
+
         decision = self._run_alan(
             trends,
             algorithms,
@@ -530,12 +590,23 @@ class TeamOrchestrator:
             code_quality=code_quality,
             market_contexts=market_contexts,
             catalyst_contexts=catalysts,
+            short_term_contexts=short_term,
+            company_contexts=company_analyses,
         )
         self.journal.record(
             "team.alan.decision",
             {**decision.to_context(), "subteam": "Alan" in subteams},
         )
-        return trends, algorithms, market_contexts, catalysts, decision, code_quality
+        return (
+            trends,
+            algorithms,
+            market_contexts,
+            catalysts,
+            short_term,
+            company_analyses,
+            decision,
+            code_quality,
+        )
 
     def _run_trends(
         self, snapshots: dict, subteams: dict[str, ApprovedSubTeam]
@@ -568,6 +639,8 @@ class TeamOrchestrator:
         code_quality=None,
         market_contexts: list[MarketContextReport] | None = None,
         catalyst_contexts: list[CatalystReport] | None = None,
+        short_term_contexts: list[ShortTermReport] | None = None,
+        company_contexts: list[CompanyAnalysisReport] | None = None,
     ) -> DecisionBrief:
         team = subteams.get("Alan")
         if team:
@@ -581,6 +654,8 @@ class TeamOrchestrator:
                 code_quality=code_quality,
                 market_contexts=market_contexts,
                 catalyst_contexts=catalyst_contexts,
+                short_term_contexts=short_term_contexts,
+                company_contexts=company_contexts,
             )
         return self.alan.aggregate(
             trends,
@@ -589,6 +664,8 @@ class TeamOrchestrator:
             code_quality=code_quality,
             market_contexts=market_contexts,
             catalyst_contexts=catalyst_contexts,
+            short_term_contexts=short_term_contexts,
+            company_contexts=company_contexts,
         )
 
     def _run_julie_for_trends(
@@ -696,12 +773,16 @@ def _inject_team_brief(
     symbols: list[str],
     *,
     catalysts: list[CatalystReport] | None = None,
+    short_term: list[ShortTermReport] | None = None,
+    company_analyses: list[CompanyAnalysisReport] | None = None,
 ) -> None:
     brief_ctx = decision.to_context()
     environment.global_context["team_brief"] = brief_ctx
     trend_by = {t.symbol: t for t in trends}
     algo_by = {a.symbol: a for a in algorithms}
     catalyst_by = {c.symbol: c for c in (catalysts or [])}
+    jim_by = {j.symbol: j for j in (short_term or [])}
+    cindy_by = {c.symbol: c for c in (company_analyses or [])}
     rec_by = {r["symbol"].upper(): r for r in decision.recommendations if r.get("symbol")}
     for sym in symbols:
         environment.set_domain(
@@ -710,6 +791,8 @@ def _inject_team_brief(
                 "trend": trend_by[sym].to_context() if sym in trend_by else None,
                 "algorithm": algo_by[sym].to_context() if sym in algo_by else None,
                 "catalyst": catalyst_by[sym].to_context() if sym in catalyst_by else None,
+                "short_term": jim_by[sym].to_context() if sym in jim_by else None,
+                "company": cindy_by[sym].to_context() if sym in cindy_by else None,
                 "recommendation": rec_by.get(sym),
                 "team_brief": brief_ctx,
             },

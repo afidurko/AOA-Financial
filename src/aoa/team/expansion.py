@@ -73,6 +73,16 @@ LEAD_PROFILES: tuple[dict[str, str], ...] = (
         "domain": "headlines, earnings, macro events, catalyst-driven risk",
     },
     {
+        "name": "Jim",
+        "role": "Short-Term Technical Analyst",
+        "domain": "short-horizon indicators, predicted path overlays, near-term levels",
+    },
+    {
+        "name": "Cindy",
+        "role": "Company Profitability Analyst",
+        "domain": "fair value, profitability math, quality composites, valuation bands",
+    },
+    {
         "name": "Alan",
         "role": "Decision Aggregator",
         "domain": "cross-agent synthesis, recommendation quality, confidence calibration",

@@ -225,6 +225,70 @@ class CatalystReport:
 
 
 @dataclass
+class ShortTermReport:
+    """Jim — short-term technical analysis with chart-overlay levels."""
+
+    symbol: str
+    direction: TrendDirection
+    conviction: float  # 0.0–1.0
+    horizon_bars: int
+    rationale: str
+    indicator_flags: list[str] = field(default_factory=list)
+    support: float | None = None
+    resistance: float | None = None
+    stop: float | None = None
+    predicted_path: list[dict] = field(default_factory=list)  # [{step, price}, ...]
+    expected_return: float = 0.0
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "direction": self.direction.value,
+            "conviction": round(self.conviction, 2),
+            "horizon_bars": self.horizon_bars,
+            "rationale": self.rationale,
+            "indicator_flags": self.indicator_flags,
+            "support": self.support,
+            "resistance": self.resistance,
+            "stop": self.stop,
+            "predicted_path": self.predicted_path,
+            "expected_return": round(self.expected_return, 4),
+        }
+
+
+@dataclass
+class CompanyAnalysisReport:
+    """Cindy — company profitability / fair-value analysis with overlay bands."""
+
+    symbol: str
+    quality_score: float  # [-1, 1] profitability/quality composite
+    fair_value: float | None
+    upside_price: float | None
+    downside_price: float | None
+    expected_return: float
+    conviction: float  # 0.0–1.0
+    thesis: str
+    math_notes: list[str] = field(default_factory=list)
+    components: dict = field(default_factory=dict)
+    profitability_grade: str = "n/a"  # A–F or n/a
+
+    def to_context(self) -> dict:
+        return {
+            "symbol": self.symbol,
+            "quality_score": round(self.quality_score, 3),
+            "fair_value": self.fair_value,
+            "upside_price": self.upside_price,
+            "downside_price": self.downside_price,
+            "expected_return": round(self.expected_return, 4),
+            "conviction": round(self.conviction, 2),
+            "thesis": self.thesis,
+            "math_notes": self.math_notes,
+            "components": self.components,
+            "profitability_grade": self.profitability_grade,
+        }
+
+
+@dataclass
 class TradePlanLevels:
     """Andrea — concrete entry/exit levels for pre-execution review."""
 
