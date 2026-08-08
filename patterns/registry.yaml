@@ -113,3 +113,14 @@ patterns:
     level: L2-auto
     status: active
     roster_size: 12
+
+  - id: qm-companion
+    name: QM Multiplayer Harness
+    file: docs/how-to/qm-integration.md
+    goal: Optional sibling agent harness (Slack + web) linked via AOA_QM_URL
+    cadence: on-demand
+    risk: low
+    tools: [qm]
+    state: vault/system/qm.md
+    cli: ./scripts/qm-setup.sh
+    level: optional

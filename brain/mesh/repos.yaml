@@ -21,3 +21,6 @@ repos:
   - name: py-moomoo-api
     url: https://github.com/afidurko/py-moomoo-api
     role: broker API reference
+  - name: qm
+    url: https://github.com/afidurko/qm
+    role: multiplayer agent harness (Slack + web); AOA_QM_URL companion
