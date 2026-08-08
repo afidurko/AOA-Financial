@@ -9,7 +9,12 @@
     "upg-005",
     "upg-006",
     "upg-007",
-    "upg-009"
+    "upg-009",
+    "upg-011",
+    "upg-012",
+    "upg-013",
+    "upg-014",
+    "upg-015"
   ],
   "assumed_completed": ["upg-003", "upg-004", "upg-005", "upg-006", "upg-007"],
   "items": {
@@ -78,6 +83,63 @@
       "skill": "human",
       "automatable": false,
       "detail": "Configure ntfy/Pushover webhook, optional OpenStock, run aoa serve."
+    },
+    "upg-011": {
+      "title": "ATTL P0/P1 — brain workspace + 12-member roster",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Landed: brain/ second brain, Nova/Reed/Kai, aoa.brain mesh, Aaron 12-roster. See docs/design/agentic-task-team-loop.md.",
+      "files": [
+        "brain/",
+        "src/aoa/brain/",
+        "src/aoa/team/roster.py",
+        "src/aoa/team/nova.py",
+        "src/aoa/team/reed.py",
+        "src/aoa/team/kai.py"
+      ]
+    },
+    "upg-012": {
+      "title": "ATTL P2 — auto-12 runtime + critical-only Kai",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Landed: aoa attl init|status|roster|propose|run|report|brain sync; critical-only review.",
+      "files": [
+        "src/aoa/attl/",
+        "src/aoa/cli.py",
+        "tests/test_attl.py"
+      ]
+    },
+    "upg-013": {
+      "title": "ATTL P3 — mesh controller + constraints unify + worktree",
+      "skill": "fable-repair",
+      "automatable": true,
+      "detail": "Landed: aoa.attl.mesh MeshController, aoa.constraints, hard-floor+auto-12 docs/skills, worktree on l2-allowed, TeamOrchestrator Nova/Reed/Kai.",
+      "files": [
+        "src/aoa/attl/mesh.py",
+        "src/aoa/constraints.py",
+        "loop-constraints.md",
+        ".cursor/skills/fable-repair/SKILL.md",
+        "loop-prompts.yaml"
+      ]
+    },
+    "upg-014": {
+      "title": "ATTL P4 — deepen algorithm mesh (signal adapter + swarm)",
+      "skill": "coding-engineer",
+      "automatable": true,
+      "detail": "Pass brain_context into swarm blackboard / signal adapter, not only Julie refine prompts.",
+      "files": [
+        "src/aoa/brain/context.py",
+        "src/aoa/swarm/orchestrator.py",
+        "src/aoa/adapt/signal_adapter.py"
+      ],
+      "blocked_by": ["upg-013"]
+    },
+    "upg-015": {
+      "title": "ATTL P5 — critical BRIEF/iPhone reports + docs harden",
+      "skill": "human",
+      "automatable": false,
+      "detail": "Push Kai critical reports via BRIEF/iPhone; document-release; budget row for attl.",
+      "blocked_by": ["upg-014"]
     }
   }
 }

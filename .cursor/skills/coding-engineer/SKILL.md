@@ -3,18 +3,22 @@ name: coding-engineer
 description: Maintain and simplify the AOA Financial codebase. Use when refactoring, fixing lint errors, deduplicating logic, or preventing regressions in the trading swarm.
 ---
 
-# Coding Engineer — Julie, Alan, and Bob
+# Coding Engineer — twelve-member mesh
 
-Code health is a **team responsibility**, not a separate role. The five-member team
-coordinates coding-engineer work like this:
+Code health is a **team responsibility**. The meshed roster:
 
 | Member | Coding-engineer job |
 |--------|---------------------|
-| **Bob** | Deterministic systems health + code integrity (`BobAgent.audit_codebase`, `team.bob.code_quality` journal events) |
-| **Julie** | Algorithm validation **and** code-clarity review — she reads Bob's audit and notes issues in her method notes (`team.julie.code_audit`) |
-| **Alan** | Decision aggregation **and** code oversight — lowers confidence when code quality is degraded or critical |
+| **Bob** | Deterministic systems health + code integrity |
+| **Julie** | Algorithm validation + clarity; reads brain mesh context |
+| **Alan** | Decision aggregation + code oversight |
+| **Reed** | Task-loop architect / implementer (ATTL factory + maker handoff) |
+| **Kai** | Critical-only sentinel (not routine review) |
+| **Nova** | Second-brain mesh curator (`brain/`) |
+| **Aaron** | CEO remediate / escalate critical Kai reports |
+| **Alex** | User priorities / BRIEF |
 
-Tom handles trend reads; Aaron (CEO) remediates recoverable issues and escalates.
+Tom / Morgan / Hailey / Andrea own market/risk lanes; they feed Alan.
 
 ## Deterministic checks (`src/aoa/team/code_engineering.py`)
 
@@ -32,23 +36,22 @@ Bob and Julie share `run_code_quality_audit()`:
 |---------|--------|
 | Order limit pricing | `src/aoa/execution/pricing.py` |
 | Alpaca feed/adjustment constants | `src/aoa/brokerage/constants.py` |
-| Code audit implementation | `src/aoa/team/code_engineering.py` |
-| Bob's health gate | `src/aoa/team/bob.py` |
-| Julie's clarity review | `src/aoa/team/julie.py` |
-| Alan's brief + code confidence | `src/aoa/team/alan.py` |
-| Pipeline stages | `src/aoa/swarm/stages.py` |
-| LLM failures | Catch `LLMError`, not bare `Exception` |
+| Code audit | `src/aoa/team/code_engineering.py` |
+| ATTL mesh | `src/aoa/attl/mesh.py` |
+| Constraints loader | `src/aoa/constraints.py` |
+| Second brain | `src/aoa/brain/` + `brain/` |
 | Hard risk rules | `src/aoa/risk/guards.py` (deterministic, binding) |
 
 ## CLI
 
 ```bash
-python3 -m aoa.cli team health   # Bob's health + code audit
-python3 -m aoa.cli team brief    # Tom→Julie→Alan with code context
-python3 -m aoa.cli run           # Full team-coordinated cycle
+python3 -m aoa.cli team health
+python3 -m aoa.cli attl status
+python3 -m aoa.cli attl run --dry-run
+python3 -m aoa.cli run
 ```
 
-## Verification checklist
+## Verification
 
 ```bash
 python3 -m ruff check src tests

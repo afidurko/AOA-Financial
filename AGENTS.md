@@ -12,11 +12,13 @@ dependency, update that `install` command so future agents inherit it.
 ```bash
 python3 -m ruff check src tests
 python3 -m pytest -q
-python3 -m aoa.cli tasks run verify       # same checks via task loop
-python3 -m aoa.cli tasks run tier1-check  # gate preflight
+python3 -m aoa.cli tasks run verify
+python3 -m aoa.cli tasks run tier1-check
 python3 -m aoa.cli repair triage
 python3 -m aoa.cli repair gate --for triage
 python3 -m aoa.cli repair gate --for repair
+python3 -m aoa.cli attl status
+python3 -m aoa.cli attl run --dry-run
 python3 -m aoa.cli team health
 ```
 
@@ -26,43 +28,42 @@ Full install (web dashboard + import sweep):
 pip install -e ".[dev,web]"
 ```
 
-Core-only install (trading CLI; `aoa.web.app` import is optional in Bob's sweep):
+Core-only install:
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-## Loop conventions
+## Meshed loop conventions (ATTL auto-12)
 
-- Report-only week one (L1) before enabling auto-fix (L2)
-- See `LOOP.md` for cadence and human gates
-- L2 promotion: `docs/loop-l2-checklist.md`
-- Binding constraints: `loop-constraints.md` and `docs/safety.md`
-- State file: `STATE.md` (commit after each triage run)
-- Run log: `loop-run-log.md` (markdown table rows)
+- Constraints: `loop-constraints.md` — **Hard Safety Floor** + **Auto-12 Policy**
+- Safety: `docs/safety.md`
+- Second brain: `brain/` (Nova) meshed into vault + Julie algorithms
+- Twelve-member roster: `aoa attl roster`
+- Review: **critical-only** (Kai)
+- State: `STATE.md` · Run log: `loop-run-log.md`
+- Design: `docs/design/agentic-task-team-loop.md`
 
-## Loop run order
-
-```
-loop-constraints → loop-budget (start) → loop-triage → STATE.md + loop-run-log.md → loop-budget (end)
-```
-
-Deterministic preflight (no LLM): `aoa tasks run tier1` · Prompt shortkeys: `aoa tasks list` · `aoa tasks show L1`
-
-L2 (one item per run):
+## Canonical meshed run order
 
 ```
-aoa repair triage → … → minimal-fix → loop-verifier → draft PR (human merge)
+loop-constraints → loop-budget (start)
+  → aoa attl run          # Nova + gate + Reed + Kai (+ worktree when allowed)
+  → maker / verifier only if coding
+  → draft PR (human merge)
+  → loop-budget (end)
 ```
+
+L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 
 ## Project skills
 
 | Skill | Purpose |
 |-------|---------|
-| `loop-constraints` | Binding guardrails (runs first) |
+| `loop-constraints` | Hard floor + auto-12 (runs first) |
 | `loop-budget` | Token caps and run-log enforcement |
 | `loop-triage` | Daily engineering triage → `STATE.md` |
-| `fable-repair` | Fable 5 orchestrator — discover, delegate, verify |
-| `minimal-fix` | Smallest L2+ fix for one item (maker) |
-| `loop-verifier` | Maker/checker for L2+ code changes |
-| `coding-engineer` | Code health, Bob/Julie audit patterns |
+| `fable-repair` | Repair orchestrator meshed into ATTL |
+| `minimal-fix` | Maker — smallest coding fix |
+| `loop-verifier` | Checker when verifying a PR / Kai path |
+| `coding-engineer` | Twelve-member code-health patterns |

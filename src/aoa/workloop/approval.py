@@ -13,7 +13,7 @@ class ApprovalRequired(RuntimeError):
 
 
 class TeamRejected(RuntimeError):
-    """Raised when the five-member team rejects a change proposal."""
+    """Raised when the meshed team rejects a change proposal."""
 
 
 def required_approver_for_run(run, config) -> str:
