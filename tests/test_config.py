@@ -40,6 +40,29 @@ def test_validate_flags_missing_credentials():
     assert not any("ALPACA" in p for p in problems)
 
 
+def test_validate_openai_compatible_requires_base_url():
+    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="openai_compatible")
+    problems = cfg.validate()
+    assert any("AOA_LLM_BASE_URL" in p for p in problems)
+    assert not any("ANTHROPIC_API_KEY" in p for p in problems)
+
+
+def test_validate_openai_compatible_clean():
+    cfg = Config(
+        env="paper-dry",
+        broker="moomoo",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+    )
+    assert cfg.validate() == []
+
+
+def test_validate_rejects_unknown_llm_provider():
+    cfg = Config(env="paper-dry", broker="moomoo", anthropic_api_key="x", llm_provider="ollama")
+    problems = cfg.validate()
+    assert any("AOA_LLM_PROVIDER" in p for p in problems)
+
+
 def test_validate_alpaca_broker_requires_keys():
     cfg = Config(env="paper-dry", broker="alpaca")
     problems = cfg.validate()

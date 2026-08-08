@@ -73,7 +73,20 @@ def build_broker(cfg: Config) -> Broker:
 
 
 def build_llm(cfg: Config) -> LLMClient:
-    return LLMClient(cfg.anthropic_api_key, model=cfg.model, effort=cfg.effort)
+    if cfg.llm_provider == "openai_compatible":
+        return LLMClient(
+            cfg.llm_api_key or cfg.anthropic_api_key or "local",
+            provider="openai_compatible",
+            model=cfg.model,
+            effort=cfg.effort,
+            base_url=cfg.llm_base_url,
+        )
+    return LLMClient(
+        cfg.anthropic_api_key,
+        provider="anthropic",
+        model=cfg.model,
+        effort=cfg.effort,
+    )
 
 
 def build_news(cfg: Config) -> NewsFeed:
@@ -425,7 +438,13 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         return 1
     try:
         llm = build_llm(cfg)
-        print("  ✓ LLM client initialized.")
+        if cfg.llm_provider == "openai_compatible":
+            print(
+                f"  ✓ LLM client initialized "
+                f"(provider=openai_compatible, base_url={cfg.llm_base_url})."
+            )
+        else:
+            print("  ✓ LLM client initialized (provider=anthropic).")
         llm.ping()
         print(f"  ✓ LLM reachable (model={cfg.model}).")
     except LLMError as exc:

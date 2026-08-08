@@ -25,6 +25,7 @@ from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timefra
 
 VALID_BROKERS = frozenset({"moomoo", "alpaca"})
 VALID_ENVS = frozenset({"test", "paper-dry", "paper", "live"})
+VALID_LLM_PROVIDERS = frozenset({"anthropic", "openai_compatible"})
 _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
     "test": {"dry_run": True, "alpaca_live": False},
     "paper-dry": {"dry_run": True, "alpaca_live": False},
@@ -200,6 +201,11 @@ class Config:
     repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
 
     # LLM
+    # provider: anthropic (default) or openai_compatible (local WASTE / any
+    # OpenAI chat-completions server — speeds opportunity decision loops).
+    llm_provider: str = "anthropic"
+    llm_base_url: str = ""
+    llm_api_key: str = ""
     anthropic_api_key: str = ""
     model: str = "claude-sonnet-4-6"
     effort: str = "high"
@@ -380,6 +386,12 @@ class Config:
             workloop_path=workloop_path_for(env),
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
+            llm_provider=(
+                os.environ.get("AOA_LLM_PROVIDER", "anthropic").strip().lower()
+                or "anthropic"
+            ),
+            llm_base_url=os.environ.get("AOA_LLM_BASE_URL", "").strip().rstrip("/"),
+            llm_api_key=os.environ.get("AOA_LLM_API_KEY", "").strip(),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -497,9 +509,19 @@ class Config:
             problems.append(
                 f"AOA_BROKER must be one of {sorted(VALID_BROKERS)} (got {self.broker!r})."
             )
+        if self.llm_provider not in VALID_LLM_PROVIDERS:
+            problems.append(
+                f"AOA_LLM_PROVIDER must be one of {sorted(VALID_LLM_PROVIDERS)} "
+                f"(got {self.llm_provider!r})."
+            )
         if self.env != "test":
-            if not self.anthropic_api_key:
+            if self.llm_provider == "anthropic" and not self.anthropic_api_key:
                 problems.append("ANTHROPIC_API_KEY is not set — the agents cannot reason.")
+            if self.llm_provider == "openai_compatible" and not self.llm_base_url:
+                problems.append(
+                    "AOA_LLM_BASE_URL is required when AOA_LLM_PROVIDER=openai_compatible "
+                    "(e.g. http://127.0.0.1:8000/v1 for a local WASTE serve)."
+                )
             if self.broker == "alpaca" and not self.has_brokerage_creds:
                 problems.append(
                     "Alpaca credentials missing — set ALPACA_API_KEY_ID and "
