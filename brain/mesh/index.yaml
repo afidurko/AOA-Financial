@@ -1,0 +1,94 @@
+# Machine-readable ATTL mesh — agents, algorithms, brain spines
+version: 1
+mode: auto-12
+updated_at: "2026-07-18T23:40:00+00:00"
+
+members:
+  - id: tom
+    name: Tom
+    role: Trend Analyst
+    feeds: [julie, alan]
+  - id: julie
+    name: Julie
+    role: Algorithm Specialist & Code Clarity
+    feeds: [alan, reed, algo.julie]
+  - id: morgan
+    name: Morgan
+    role: Market & Volume Analyst
+    feeds: [alan, hailey]
+  - id: hailey
+    name: Hailey
+    role: News & Catalyst Analyst
+    feeds: [alan, andrea]
+  - id: alan
+    name: Alan
+    role: Decision Aggregator & Code Oversight
+    feeds: [aaron, reed]
+  - id: andrea
+    name: Andrea
+    role: Risk Manager & Pre-Execution
+    feeds: [aaron, bob]
+  - id: bob
+    name: Bob
+    role: Systems Health & Code Integrity
+    feeds: [aaron, kai, reed]
+  - id: aaron
+    name: Aaron
+    role: CEO
+    feeds: [user, alex]
+  - id: alex
+    name: Alex
+    role: Executive Assistant
+    feeds: [user, brief]
+  - id: nova
+    name: Nova
+    role: Second-Brain / Knowledge Mesh Curator
+    feeds: [brain, vault, julie, reed]
+  - id: reed
+    name: Reed
+    role: Task-Loop Architect & Implementer
+    feeds: [factory, maker, julie, brain]
+  - id: kai
+    name: Kai
+    role: Critical Failure Sentinel
+    feeds: [aaron, bob]
+    review_policy: critical_only
+
+algorithms:
+  - id: algo.julie
+    owner: julie
+    spine: spine/Algorithms.md
+  - id: algo.signal_adapter
+    owner: julie
+    module: aoa.adapt.signal_adapter
+  - id: algo.swarm
+    owner: alan
+    module: aoa.swarm.orchestrator
+
+spines:
+  - path: spine/ATTL.md
+    owners: [reed, nova, kai]
+  - path: spine/Algorithms.md
+    owners: [julie, nova]
+  - path: spine/Team-Mesh.md
+    owners: [nova, aaron]
+
+loops:
+  - id: constraints
+    file: loop-constraints.md
+    tiers: [hard_floor, auto-12]
+  - id: attl-mesh
+    module: aoa.attl.mesh
+    cli: aoa attl run
+  - id: repair
+    module: aoa.repair
+    feeds: [reed, kai]
+  - id: trading-swarm
+    module: aoa.swarm.orchestrator
+    feeds: [tom, julie, alan]
+  - id: workloop
+    module: aoa.workloop
+    feeds: [bob, julie, alan, aaron]
+  - id: vault
+    module: aoa.vault
+    feeds: [nova]

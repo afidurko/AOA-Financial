@@ -106,3 +106,23 @@ patterns:
     level: L1
     phases: [learn, use, distill]
     notes: vault/study/
+
+  - id: attl
+    name: Agentic Task-Team Loop
+    file: docs/design/agentic-task-team-loop.md
+    goal: >-
+      Auto-12 meshed team task loops; second-brain workspace; critical-only
+      review (Kai); mesh into algorithms
+    cadence: auto
+    risk: medium
+    tools: [cursor, claude-code, fable-5]
+    skills: [fable-repair, minimal-fix, loop-verifier, coding-engineer]
+    state: STATE.md
+    queue: data/{AOA_ENV}/attl/
+    brain: brain/
+    phases: [brain-sync, propose, implement, critical-gate, capture]
+    human_gates: [denylist-paths, draft-pr-only, loop-pause-all, critical-report]
+    cli: aoa attl
+    level: L2-auto
+    status: active
+    roster_size: 12

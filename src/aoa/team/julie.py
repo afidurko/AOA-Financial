@@ -68,6 +68,12 @@ class JulieAgent(Agent):
                 f"\nBob's code-quality audit:\n"
                 f"{json.dumps(code_quality.to_context(), default=str)}\n"
             )
+        try:
+            from aoa.brain.context import format_brain_context_prompt
+
+            prompt += f"\n{format_brain_context_prompt()}\n"
+        except Exception:  # noqa: BLE001
+            pass
         prompt += "\nValidate and refine Tom's trend read. Return JSON."
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
         notes = r.get("method_notes", "")

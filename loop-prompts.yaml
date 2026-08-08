@@ -27,33 +27,37 @@ prompts:
       Never auto-merge. Never edit .env or live trading paths.
 
   L2:
-    title: Fable repair fix (Automation B)
+    title: ATTL auto-12 mesh fix (Automation B)
     tier: "2"
     automation: "AOA fable repair L2"
     cadence: "Daily 15:00 UTC (after L2 enabled in STATE.md)"
     branch: main
     body: |
-      Run the fable-repair skill on AOA-Financial.
-      Read loop-constraints.md, docs/safety.md, LOOP.md.
+      Run ATTL auto-12 mesh on AOA-Financial (fable-repair + twelve-member team).
+      Read loop-constraints.md (Hard Safety Floor + Auto-12), docs/safety.md, LOOP.md.
 
-      Run: python3 -m aoa.cli repair gate --for repair --json
-      If action is not "l2-allowed", append one line to loop-run-log.md (outcome: report-only, note gate reason) and exit.
+      Run: python3 -m aoa.cli attl run
+      Outcomes:
+      - paused / critical-report → stop; surface brain capture; do not keep patching
+      - gate-blocked → log and exit (discovery/propose already done)
+      - auto-continue with worktree → minimal-fix ONE selected task in that worktree
+        then loop-verifier in a NEW agent context — never self-verify
+        then ruff + pytest, draft PR only, never auto-merge
+        then aoa tasks chain advance --complete <id> when applicable (exit 3 = human only)
 
-      If l2-allowed:
-      1. Pick the first item whose id is in the gate's "fixable_items" (auto-fixable,
-         requires_escalation=false). NEVER pick an item with requires_escalation=true —
-         those need CEO approval / user notification and stay in STATE.md High Priority.
-         (aoa tasks chain status shows the current backlog id.)
-         aoa repair worktree --item-id <that item_id from queue.json>
-      2. minimal-fix (maker) — ONE item only
-      3. loop-verifier (checker) in a NEW agent context — never self-verify
-      4. python3 -m ruff check src tests && python3 -m pytest -q
-      5. Draft PR only; never auto-merge; never push without draft PR
-      6. aoa tasks chain advance --complete <id>   # queues NEXT task automatically
-         Exit 3 = alert human only (do not continue unattended)
-
-      Respect denylist: src/aoa/risk/guards.py, .env*, profiles/live.env
+      Kai reviews only on critical flaw / system failure / explicit report.
+      Denylist: src/aoa/risk/guards.py, .env*, profiles/live.env
       Max 3 fix attempts per item; escalate in STATE.md after that.
+
+  ATTL:
+    title: ATTL mesh status + dry run
+    tier: "2"
+    body: |
+      On AOA-Financial:
+      1. python3 -m aoa.cli attl status
+      2. python3 -m aoa.cli attl roster
+      3. python3 -m aoa.cli attl run --dry-run
+      Report mode, pause flag, selected task, and Kai verdict. No draft PR on dry-run.
 
   BRIEF:
     title: User response brief (Automation C)
