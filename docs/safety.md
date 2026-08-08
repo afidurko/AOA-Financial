@@ -1,8 +1,9 @@
-# Safety — loop and agent operations
+# Safety — meshed loop and agent operations
 
-Binding rules for unattended agent loops (see also `loop-constraints.md`).
+Binding rules for unattended agent loops. Aligns with `loop-constraints.md`
+(Hard Safety Floor + ATTL Auto-12 Policy).
 
-## Denylist paths
+## Hard Safety Floor
 
 Never edit without explicit human approval:
 
@@ -11,32 +12,56 @@ Never edit without explicit human approval:
 - `profiles/live.env`
 - `src/aoa/risk/guards.py` (hard risk rules)
 
-## Auto-merge policy
+Never:
 
-- **Never** auto-merge to `main`.
-- Draft PRs only until a human marks ready and merges.
-- Workloop merge requires Aaron approval (`aoa workloop approve`).
-
-## Trading safety
-
-- No live orders from loop runs (`ALPACA_LIVE=true`, `AOA_ENV=live`).
-- No disabling or bypassing risk guards.
-- `AOA_LIVE_ACK=I_UNDERSTAND` required for live env (human-only).
-
-## MCP / connectors
-
-MCP is optional for daily triage. When enabled:
-
-- Read-only GitHub discovery first; no write scopes until L2+ is trusted.
-- Scope connectors to the minimum needed for the active pattern.
+- Auto-merge to `main` (draft PRs only)
+- Live orders from loop runs (`ALPACA_LIVE=true`, `AOA_ENV=live` without `AOA_LIVE_ACK`)
+- Disable or bypass risk guards
+- Store secrets in `brain/` or `vault/`
 
 ## Kill switch
 
-- GitHub label or `STATE.md` flag: `loop-pause-all`
-- Pause Cursor Automations and report-only until cleared by a human.
+- `STATE.md` flag: `loop-pause-all`
+- Pause Cursor Automations until a human clears it
+- `aoa attl run` and repair gates respect pause
 
-## Fable 5 repair loop
+## ATTL Auto-12 (meshed)
 
-- Maker (`minimal-fix`) and checker (`loop-verifier`) **must run in separate agent contexts**.
-- Fixes run in `.aoa-worktrees/` only; draft PRs only.
-- See `docs/fable5-repair-loop.md` and `LOOP.md`.
+| Concern | Behavior |
+|---------|----------|
+| Mode | `auto-12` by default |
+| Review | Kai **critical-only** (flaw / system failure / `aoa attl report`) |
+| Team | 12 members — see `aoa attl roster` / `brain/mesh/index.yaml` |
+| Second brain | `brain/` meshed into vault + Julie algorithms |
+| Task factory | Reed proposes from repair + backlog |
+| User | Ultimate override; can fix anything after the fact |
+
+Routine process review and “activate before use” are **not** required under auto-12.
+
+## Fable 5 / coding path (inside ATTL)
+
+```
+aoa attl run → (automatable item) worktree → maker → tests → draft PR
+```
+
+- Maker (`minimal-fix` / Reed handoff) and checker (`loop-verifier`) stay separate **when Kai engages** or when verifying a coding fix before draft PR.
+- Under auto-12, skip full team proofread unless critical.
+- Fixes in `.aoa-worktrees/` when using repair worktrees.
+
+## Workloop
+
+- Larger discover→merge improvements
+- Merge still requires `aoa workloop approve` when `AOA_WORKLOOP_ALLOW_MERGE` is set
+- Shares Bob/Julie/Alan/Aaron signals; ATTL owns the coding task factory
+
+## MCP / connectors
+
+- Optional for daily triage
+- Read-only GitHub discovery first; no write scopes until trusted
+
+## See also
+
+- `loop-constraints.md`
+- `docs/design/agentic-task-team-loop.md`
+- `docs/fable5-repair-loop.md`
+- `LOOP.md`

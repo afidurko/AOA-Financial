@@ -217,11 +217,26 @@ def _analyze_workloop_summary(ctx: AnalyzerContext) -> dict[str, Any]:
     }
 
 
+def _analyze_brain_mesh(ctx: AnalyzerContext) -> dict[str, Any]:
+    from aoa.brain.store import BrainStore
+
+    store = BrainStore.open(ctx.repo_root)
+    stats = store.stats()
+    return {
+        "mode": store.mode,
+        "member_count": int(stats.get("members") or 0),
+        "algorithm_count": int(stats.get("algorithms") or 0),
+        "required_ok": bool(stats.get("required_ok")),
+        "last_synced": _utc_now(),
+    }
+
+
 register("loop_engineering", _analyze_loop_engineering)
 register("cycle_summary", _analyze_cycle_summary)
 register("symbol_view", _analyze_symbol_view)
 register("system_health", _analyze_system_health)
 register("workloop_summary", _analyze_workloop_summary)
+register("brain_mesh", _analyze_brain_mesh)
 
 
 def engineering_l2_enabled(repo_root: Path) -> bool:

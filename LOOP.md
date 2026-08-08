@@ -1,7 +1,8 @@
-# Loop Configuration — AOA-Financial (Fable 5)
+# Loop Configuration — AOA-Financial (ATTL Auto-12 meshed)
 
 > Scaffolded from [afidurko/loop-engineering](https://github.com/afidurko/loop-engineering).
-> **Operational level: L1 report-only** until [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md) is complete and a human approves L2.
+> **Operating mode: ATTL `auto-12`** — Hard Safety Floor + critical-only review (Kai).
+> See [docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md).
 
 ## Loop run order
 
@@ -11,10 +12,12 @@ Every daily triage run:
 loop-constraints → loop-budget (start) → loop-triage → STATE.md + vault sync + loop-run-log.md → loop-budget (end)
 ```
 
-L2 repair (one item per run):
+Meshed L2 / coding (prefer one command):
 
 ```
-fable-repair → aoa repair triage → worktree → minimal-fix → loop-verifier → draft PR (human merge)
+aoa attl run
+  → Nova brain sync → repair gate → Reed propose → Kai critical gate
+  → worktree (when l2-allowed) → maker → verifier → draft PR (human merge)
 ```
 
 ## Active loops
@@ -23,30 +26,38 @@ fable-repair → aoa repair triage → worktree → minimal-fix → loop-verifie
 |---------|---------|-------|-----------------|
 | Daily triage | 1d | L1 | `loop-triage` skill |
 | **Vault sync** | 1d / per-cycle | L1 | `aoa vault sync` · tier1 `vault-sync` step |
-| **Fable 5 repair** | on-demand / 1d | L2 | `aoa repair triage` + `fable-repair` skill |
+| **ATTL mesh** | on-demand / 1d | L2-auto | `aoa attl run` · `fable-repair` |
+| **Fable 5 repair** | inside ATTL | L2 | `aoa repair triage` + worktree |
 | Trading swarm | `AOA_CYCLE_SECONDS` | prod | `aoa loop` / web `LoopRunner` |
 | Work loop | `AOA_WORKLOOP_INTERVAL_SECONDS` | gated | `aoa workloop loop` |
+| **Second brain** | per ATTL run | L1/L2 | `aoa attl brain sync` · `brain/` |
 
-## Fable 5 harness (six blocks)
+## Meshed harness
 
 ```
- Automations          Worktrees              Skills
- aoa repair triage    .aoa-worktrees/        fable-repair (orchestrator)
- Cursor Automations   repair/<id> branches   minimal-fix (maker)
-                                              loop-verifier (checker)
-        │                    │                      │
-        └──────── Connectors ─┴── State ────────────┘
-              Bob audit, verify, STATE.md, repair/queue.json
+ Constraints (hard floor + auto-12)
+        │
+        ▼
+ brain/ (Nova) ──► algorithms (Julie) ──► vault/brain/mesh.md
+        │
+        ▼
+ Reed propose ← repair queue + backlog
+        │
+        ▼
+ Kai critical-only? ──yes──► report / BRIEF
+        │ no
+        ▼
+ worktree → maker → verifier → draft PR
 ```
 
-### Repair workflow (L2)
+### Repair workflow (via ATTL)
 
 ```bash
-aoa repair triage              # discover → queue.json + STATE.md (quick verify)
-aoa repair queue               # list fixable items
-aoa repair worktree --item-id X   # isolated branch for fix
+aoa attl run                   # meshed cycle (preferred)
+aoa repair triage              # discover only
+aoa attl propose               # Reed need-ordered tasks
 python3 -m ruff check src tests && python3 -m pytest -q
-# maker: minimal-fix → checker: loop-verifier (separate agent pass)
+# maker: minimal-fix → checker: loop-verifier when verifying a PR
 ```
 
 ## Scheduled automations (Tier 1 + Tier 2)
@@ -97,13 +108,13 @@ Enable L2 automation after checklist sign-off — add `L2: enabled` under `## Lo
 
 | Skill | Role |
 |-------|------|
-| `loop-constraints` | Binding guardrails (runs first) |
+| `loop-constraints` | Hard floor + auto-12 (runs first) |
 | `loop-budget` | Token / run caps |
 | `loop-triage` | L1 signal → `STATE.md` |
-| `fable-repair` | L2 orchestrator |
+| `fable-repair` | Repair orchestrator (meshed into ATTL) |
 | `minimal-fix` | Maker — smallest diff |
-| `loop-verifier` | Checker — reject by default |
-| `coding-engineer` | Bob/Julie audit patterns |
+| `loop-verifier` | Checker when verifying a PR / Kai path |
+| `coding-engineer` | Twelve-member code-health patterns |
 
 ## Credential split (Fable trial vs Max 5× vs API)
 
@@ -113,10 +124,22 @@ Scheduled task routing: [docs/how-to/fable-max-operating-schedule.md](docs/how-t
 - **Claude Max 5×** — setup, PR review, interactive Claude Code / gstack; does not power `aoa run`.
 - **Anthropic API** — swarm runtime only (`ANTHROPIC_API_KEY` in `.env`).
 
+## Agentic Task-Team Loop (ATTL) — auto-12
+
+Design + runtime: [docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md)
+
+- **Mode:** `auto-12` (default) — 12-member meshed team
+- **Review:** critical-only (Kai) — critical flaw / system failure / `aoa attl report`
+- **Second brain:** `brain/` meshed into vault + Julie algorithms
+- **CLI:** `aoa attl init|status|roster|propose|run|report|brain sync`
+
+Cross-repo aids: loop-engineering, spine, obsidian-second-brain, AutoHedge.
+
 ## Links
 
 - Fork: [github.com/afidurko/loop-engineering](https://github.com/afidurko/loop-engineering)
 - Fable 5: [docs/fable5-repair-loop.md](docs/fable5-repair-loop.md)
+- ATTL design: [docs/design/agentic-task-team-loop.md](docs/design/agentic-task-team-loop.md)
 - Operating schedule: [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
 - Automation schedule: [docs/how-to/loop-automation-schedule.md](docs/how-to/loop-automation-schedule.md)
 - L2 promotion: [docs/loop-l2-checklist.md](docs/loop-l2-checklist.md)

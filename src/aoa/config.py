@@ -307,6 +307,13 @@ class Config:
     vault_sync_enabled: bool = True
     vault_auto_write: bool = True
 
+    # Second brain + Agentic Task-Team Loop (auto-12, critical-only review)
+    brain_path: str = "brain"
+    brain_mesh_into_algorithms: bool = True
+    attl_enabled: bool = True
+    attl_mode: str = "auto-12"
+    attl_review_policy: str = "critical_only"
+
     trading_agents_enabled: bool = True
     trading_agents_debate_rounds: int = 1
 
@@ -472,6 +479,14 @@ class Config:
             vault_path=os.environ.get("AOA_VAULT_PATH", "vault").strip() or "vault",
             vault_sync_enabled=_bool("AOA_VAULT_SYNC_ENABLED", True),
             vault_auto_write=_bool("AOA_VAULT_AUTO_WRITE", True),
+            brain_path=os.environ.get("AOA_BRAIN_PATH", "brain").strip() or "brain",
+            brain_mesh_into_algorithms=_bool("AOA_BRAIN_MESH_INTO_ALGORITHMS", True),
+            attl_enabled=_bool("AOA_ATTL_ENABLED", True),
+            attl_mode=os.environ.get("AOA_ATTL_MODE", "auto-12").strip() or "auto-12",
+            attl_review_policy=(
+                os.environ.get("AOA_ATTL_REVIEW_POLICY", "critical_only").strip()
+                or "critical_only"
+            ),
             trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
             trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(

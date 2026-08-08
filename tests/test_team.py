@@ -1,4 +1,4 @@
-"""Tests for the five-member agent team."""
+"""Tests for the meshed agent team."""
 
 from __future__ import annotations
 

@@ -25,6 +25,7 @@ from aoa.team.cindy import CindyAgent
 from aoa.team.hailey import HaileyAgent
 from aoa.team.jim import JimAgent
 from aoa.team.julie import JulieAgent
+from aoa.team.kai import KaiAgent
 from aoa.team.models import (
     AlgorithmReport,
     AssistantBrief,
@@ -40,6 +41,8 @@ from aoa.team.models import (
     TrendReport,
 )
 from aoa.team.morgan import MorganAgent
+from aoa.team.nova import NovaAgent
+from aoa.team.reed import ReedAgent
 from aoa.team.remediation import RemediationAction, RemediationResult, TeamRemediator
 from aoa.team.subteam import (
     ApprovedSubTeam,
@@ -117,6 +120,9 @@ class TeamOrchestrator:
         self.bob = BobAgent(config, broker)
         self.alan = AlanAgent(llm)
         self.alex = AlexAgent(llm)
+        self.nova = NovaAgent(llm)
+        self.reed = ReedAgent(llm)
+        self.kai = KaiAgent(llm)
         self.remediator = TeamRemediator(self.bob, broker)
         notifier = IPhoneNotifier(
             custom_app_webhook_url=config.custom_app_webhook_url,

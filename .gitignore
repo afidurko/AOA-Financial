@@ -235,6 +235,10 @@ reports/
 data/
 journal/*.jsonl
 
+# ATTL second-brain auto captures (keep directory via .gitkeep)
+brain/captures/run-*.md
+brain/captures/critical-*.md
+
 # Learned low-rank adapter state
 .aoa/
 
