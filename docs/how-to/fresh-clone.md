@@ -95,3 +95,9 @@ export AOA_OPENSTOCK_URL=http://localhost:3000
 ```
 
 See [openstock-integration.md](openstock-integration.md) for Docker and env details.
+
+## 7. Related help content (optional)
+
+For the multiplayer agent harness ([qm](https://github.com/afidurko/qm)), local
+model runtime ([waste](https://github.com/afidurko/waste)), and other companion
+repos, see [docs/help.md](../help.md).

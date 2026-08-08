@@ -834,6 +834,7 @@ loop-run-log.md            # loop run history
 loop-budget.md             # token/run caps
 .cursor/skills/            # loop-triage, minimal-fix, loop-verifier, …
 docs/safety.md             # agent safety policy
+docs/help.md               # related content (qm, OpenStock, loop-engineering, …)
 docs/how-to/fresh-clone.md # first-time setup checklist
 examples/run_demo.py       # aoa_financial end-to-end demonstration
 deploy/                    # systemd unit files for production
@@ -919,6 +920,19 @@ from aoa.swarm.stages import default_stages, PortfolioStage
 custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
 orch = Orchestrator(config, broker, llm, pipeline=custom)
 ```
+
+## Help — related content
+
+Companion tools that sit beside this repo (not vendored here):
+
+| Project | Why it helps |
+|---------|----------------|
+| **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness (Slack + web) for scoped collaboration around the swarm |
+| **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
+| **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
+
+Full catalog and clone notes: **[docs/help.md](docs/help.md)**.
 
 ## Disclaimer
 
