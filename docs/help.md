@@ -10,14 +10,14 @@ you need them.
 |----------|------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness for work — personal and shared scopes, Slack + web UI, crons, sandbox, and harness-agnostic agent loops (Pi, OpenCode, Codex, Claude Code). Upstream: [yc-software/qm](https://github.com/yc-software/qm). |
 
-Use QM when you want Slack/channel collaboration, scoped memory, and a deployable
-agent core around AOA (or other tools) without tying the deployment to one vendor
-harness. Deployment and security posture live in a separate org deployment repo;
-see the QM README for `qm init` and `SECURITY.md`.
+**In-system wiring:** set `AOA_QM_URL` for the dashboard **QM ↗** header link and
+`/api/config`. Clone sibling with `./scripts/qm-setup.sh`. Vault note:
+`vault/system/qm.md`. Full guide: [how-to/qm-integration.md](how-to/qm-integration.md).
 
 ```bash
-git clone https://github.com/afidurko/qm.git
-# or upstream: git clone https://github.com/yc-software/qm.git
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+aoa serve
 ```
 
 ## Market UI

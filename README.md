@@ -714,6 +714,21 @@ Open **http://localhost:8080/** for the dashboard. REST endpoints:
 Set `AOA_WEB_AUTO_LOOP=true` to run the team trading loop automatically in the
 background while the web server is up.
 
+Optional header shortcuts (same pattern as OpenStock):
+
+| Env | Dashboard link |
+|-----|----------------|
+| `AOA_OPENSTOCK_URL` | OpenStock ↗ |
+| `AOA_QM_URL` | QM ↗ |
+
+```bash
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+aoa serve
+```
+
+See [docs/how-to/qm-integration.md](docs/how-to/qm-integration.md).
+
 ---
 
 ## Docker deployment
@@ -835,7 +850,9 @@ loop-budget.md             # token/run caps
 .cursor/skills/            # loop-triage, minimal-fix, loop-verifier, …
 docs/safety.md             # agent safety policy
 docs/help.md               # related content (qm, OpenStock, loop-engineering, …)
+docs/how-to/qm-integration.md # QM sibling harness (AOA_QM_URL)
 docs/how-to/fresh-clone.md # first-time setup checklist
+vault/system/qm.md         # system companion note for QM
 examples/run_demo.py       # aoa_financial end-to-end demonstration
 deploy/                    # systemd unit files for production
 Dockerfile                 # container image
@@ -927,7 +944,7 @@ Companion tools that sit beside this repo (not vendored here):
 
 | Project | Why it helps |
 |---------|----------------|
-| **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness (Slack + web) for scoped collaboration around the swarm |
+| **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
