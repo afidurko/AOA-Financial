@@ -50,6 +50,15 @@ class RepairOrchestrator:
         self.store.record("repair.triage", {"run_id": run.run_id, "count": len(items)})
         if sync_state and self.config.repair_sync_state:
             _sync_state_md(self.state_path, items, run.run_id)
+            if self.config.vault_sync_enabled:
+                from aoa.vault.sync import sync_vault_engineering
+
+                sync_vault_engineering(
+                    self.config,
+                    repo_root=self.repo_root,
+                    dry_run=None,
+                    run_verify=False,
+                )
         return RepairResult(
             run=run,
             queue_path=self.store.queue_path,

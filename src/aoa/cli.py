@@ -3,6 +3,7 @@
 Commands:
   aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
   aoa doctor     Validate configuration & connectivity.
+  aoa setup      One-time setup (mac, moomoo, …).
   aoa status     Show account, positions, and market clock.
   aoa run        Run a single analysis→decision→execution cycle.
   aoa loop       Run cycles continuously on the configured cadence.
@@ -15,7 +16,9 @@ Commands:
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
+  aoa vault      Sync schema-driven vault property notes.
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
+  aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -23,6 +26,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -49,6 +53,7 @@ from aoa.simulation.trends import analyze_trends
 from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
+from aoa.vault.sync import sync_vault_engineering, vault_status
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
 from aoa.workloop.scheduler import build_scheduler
@@ -96,6 +101,7 @@ def build_signal_adapter(cfg: Config) -> SignalAdapter | None:
         rank=cfg.adapt_rank,
         alpha=cfg.adapt_alpha,
         lr=cfg.adapt_lr,
+        return_scale=cfg.adapt_return_scale,
     )
 
 
@@ -365,6 +371,10 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Broker: {cfg.broker} | bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
+    if cfg.openstock_url:
+        print(f"  ✓ OpenStock link: {cfg.openstock_url}")
+    if cfg.qm_url:
+        print(f"  ✓ QM harness link: {cfg.qm_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
@@ -508,6 +518,59 @@ def cmd_loop(cfg: Config) -> int:
             time.sleep(cfg.cycle_seconds)
     except KeyboardInterrupt:
         print("\nStopped.")
+    return 0
+
+
+def cmd_loop_brief(cfg: Config, *, push: bool, as_json: bool) -> int:
+    from aoa.loop.user_brief import (
+        build_loop_user_brief,
+        deliver_loop_brief,
+        repair_queue_summary,
+    )
+
+    team = build_team(cfg)
+    assistant = team.run_assistant_brief()
+    pending: list[dict] = []
+    if team.analytics is not None:
+        pending = team.analytics.store.list_pending_responses()
+    brief = build_loop_user_brief(
+        assistant_brief=assistant,
+        repair_summary=repair_queue_summary(cfg.repair_path),
+        pending_responses=pending,
+    )
+
+    if as_json:
+        print(json.dumps(brief.to_context(), indent=2, default=str))
+    else:
+        print("\n=== Loop brief — trading + engineering ===")
+        print(f"Focus: {brief.focus}")
+        print(brief.summary)
+        for label, items in (
+            ("MUST DO", brief.must_do),
+            ("SHOULD DO", brief.should_do),
+            ("CAN WAIT", brief.can_wait),
+        ):
+            if items:
+                print(f"\n{label}:")
+                for item in items:
+                    hint = f" → {item['action_hint']}" if item.get("action_hint") else ""
+                    print(f"  • {item['title']}: {item['detail']}{hint}")
+        if brief.suggested_replies:
+            print("\nAWAITING YOUR REPLY:")
+            for reply in brief.suggested_replies:
+                print(f"  • {reply.prompt} (id {reply.target})")
+
+    if push:
+        notifier = team.aaron.notifier
+        if not notifier.configured:
+            print(
+                "\niPhone push not configured — set AOA_CUSTOM_APP_WEBHOOK_URL "
+                "(or Pushover / ntfy) to deliver.",
+                file=sys.stderr,
+            )
+            return 1
+        channels = deliver_loop_brief(brief, notifier)
+        print(f"\nBrief delivered via: {', '.join(channels)}")
     return 0
 
 
@@ -959,10 +1022,183 @@ def cmd_repair_worktree(cfg: Config, *, item_id: str) -> int:
     return 0
 
 
+def cmd_vault_sync(cfg: Config, *, dry_run: bool, as_json: bool) -> int:
+    if not cfg.vault_sync_enabled:
+        print("Vault sync is disabled (AOA_VAULT_SYNC_ENABLED=false).")
+        return 0
+    repo_root = Path.cwd()
+    for parent in [repo_root, *repo_root.parents]:
+        if (parent / "pyproject.toml").is_file() and (parent / "src" / "aoa").is_dir():
+            repo_root = parent
+            break
+    effective_dry: bool | None = True if dry_run else None
+    result = sync_vault_engineering(cfg, repo_root=repo_root, dry_run=effective_dry)
+    if as_json:
+        print(json.dumps(result.to_context(), indent=2))
+    else:
+        mode = "dry-run" if result.dry_run else "write"
+        print(
+            f"Vault sync ({mode}): scanned={result.notes_scanned} "
+            f"updated={result.notes_updated} properties_changed={result.properties_changed}"
+        )
+        for note in result.note_results:
+            if note.changed:
+                keys = ", ".join(note.changed)
+                print(f"  {note.path}: {keys}")
+        for err in result.errors:
+            print(f"  error: {err}", file=sys.stderr)
+    return 0
+
+
+def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
+    repo_root = Path.cwd()
+    for parent in [repo_root, *repo_root.parents]:
+        if (parent / "pyproject.toml").is_file() and (parent / "src" / "aoa").is_dir():
+            repo_root = parent
+            break
+    report = vault_status(cfg, repo_root=repo_root)
+    if as_json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Vault: {report['vault_root']}")
+        print(f"Notes scanned: {report['notes_scanned']}")
+        print(f"Stale notes: {report['stale_count']}")
+        for row in report.get("stale_notes", []):
+            keys = ", ".join(row.get("would_change", []))
+            print(f"  {row['path']}: {keys}")
+    return 0
+
+
+def _attl_orchestrator(cfg: Config):
+    from aoa.attl.orchestrator import AttlOrchestrator
+    from aoa.config import data_dir_for
+
+    root = Path.cwd()
+    return AttlOrchestrator(
+        repo_root=root,
+        data_dir=data_dir_for(cfg.env) / "attl",
+    )
+
+
+def cmd_attl_init(cfg: Config) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.init_workspace()
+    print("ATTL init — auto-12")
+    print(f"Brain: {result['brain']}")
+    print(f"Mode: {result['mode']}")
+    print(f"Roster ({len(result['roster'])}): {', '.join(result['roster'])}")
+    print(f"Config: {result['config']}")
+    return 0
+
+
+def cmd_attl_status(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    status = orch.status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Mode: {status['mode']}  meshed={status.get('meshed')}")
+    print(f"Review policy: {status['review_policy']}")
+    print(f"Paused: {status.get('paused')}")
+    print(f"Hard floor rules: {status.get('hard_floor_rules')}")
+    print(f"Roster size: {status['roster_size']}")
+    print(f"Pending tasks: {status['pending_tasks']}")
+    brain = status.get("brain") or {}
+    print(
+        "Brain: "
+        f"members={brain.get('members')} algos={brain.get('algorithms')} "
+        f"required_ok={brain.get('required_ok')}"
+    )
+    return 0
+
+
+def cmd_attl_roster(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    rows = orch.roster()
+    if as_json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    print("Twelve-member meshed team")
+    for i, row in enumerate(rows, 1):
+        print(f"  {i:2}. {row['name']:8} — {row['role']}")
+    return 0
+
+
+def cmd_attl_propose(cfg: Config) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.propose()
+    print(f"Reed proposed {result['count']} tasks (need-ordered)")
+    if result.get("path"):
+        print(f"Wrote: {result['path']}")
+    for task in (result.get("tasks") or [])[:10]:
+        flag = "auto" if task.get("automatable") else "human"
+        print(f"  - [{flag}] {task.get('id')}: {task.get('title')}")
+    return 0
+
+
+def cmd_attl_brain_sync(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.brain_sync()
+    if as_json:
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+    print(f"Nova sync ok={result.get('ok')}")
+    print(f"Capture: {result.get('capture')}")
+    stats = result.get("stats") or {}
+    print(f"Stats: {stats}")
+    return 0 if result.get("ok") else 1
+
+
+def cmd_attl_run(
+    cfg: Config,
+    *,
+    dry_run: bool = False,
+    report: bool = False,
+    as_json: bool = False,
+) -> int:
+    orch = _attl_orchestrator(cfg)
+    # None → live Bob audit inside mesh; critical-only Kai
+    result = orch.run(dry_run=dry_run, report=report, bob_can_proceed=None)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2, default=str))
+    else:
+        print(f"ATTL mesh — outcome: {result.outcome}")
+        print(f"Mode: {result.mode}  dry_run={result.dry_run}")
+        gate = result.gate or {}
+        print(f"Gate: {gate.get('action')} — {gate.get('reason', '')}")
+        if result.selected_task:
+            print(
+                f"Selected: {result.selected_task.get('id')} — "
+                f"{result.selected_task.get('title')}"
+            )
+        if result.worktree:
+            print(f"Worktree: {result.worktree.get('path')} ok={result.worktree.get('ok')}")
+        print(f"Kai: {result.kai.get('verdict')} engaged={result.kai.get('engaged')}")
+        for note in result.notes:
+            print(f"  · {note}")
+        print(f"Capture: {result.capture}")
+    if result.outcome == "paused":
+        return 2
+    if result.outcome == "critical-report":
+        return 2
+    return 0
+
+
+def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:
+    return cmd_attl_run(cfg, dry_run=False, report=True, as_json=as_json)
+
+
 def cmd_tasks_list() -> int:
     from aoa.loop.prompts import format_prompt_list
 
     print(format_prompt_list())
+    return 0
+
+
+def cmd_tasks_automations() -> int:
+    from aoa.loop.prompts import format_automations
+
+    print(format_automations())
     return 0
 
 
@@ -994,6 +1230,58 @@ def cmd_tasks_run(task: str) -> int:
         print(f"Gate: {result.gate_action}")
     print(f"Steps: {', '.join(result.steps_run) or '(none)'}")
     print(result.message)
+    return result.exit_code
+
+
+def cmd_tasks_chain_status(*, as_json: bool = False) -> int:
+    import json
+
+    from aoa.config import Config
+    from aoa.loop.task_chain import chain_status
+
+    cfg = Config.from_env(load_dotenv=False)
+    report = chain_status(env=cfg.env)
+    if as_json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"Backlog: {report['backlog']}")
+        print(f"Chain state: {report['chain_state']}")
+        print(f"Completed: {', '.join(report['completed']) or '(none)'}")
+        print(f"Current: {report['current'] or '(none)'} — {report['current_title'] or ''}")
+        if report["skipped_human"]:
+            print(f"Skipped (human): {', '.join(report['skipped_human'])}")
+        if report["alerts"]:
+            print("Alerts:")
+            for line in report["alerts"]:
+                print(f"  - {line}")
+    return 0
+
+
+def cmd_tasks_chain_bootstrap() -> int:
+    from aoa.config import Config
+    from aoa.loop.task_chain import bootstrap_chain_from_state, chain_status
+
+    cfg = Config.from_env(load_dotenv=False)
+    bootstrap_chain_from_state(env=cfg.env)
+    report = chain_status(env=cfg.env)
+    print(f"Bootstrapped task chain for env={cfg.env}")
+    print(f"Current: {report['current']} — {report['current_title']}")
+    return 0
+
+
+def cmd_tasks_chain_advance(*, completed: str) -> int:
+    from aoa.config import Config
+    from aoa.loop.task_chain import advance_chain, format_advance_result
+
+    cfg = Config.from_env(load_dotenv=False)
+    try:
+        result = advance_chain(completed.strip(), env=cfg.env)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(format_advance_result(result))
+    if result.action.value == "alert_human":
+        print("\n*** HUMAN ACTION REQUIRED — automation paused ***", file=sys.stderr)
     return result.exit_code
 
 
@@ -1117,6 +1405,37 @@ def cmd_burnin(cfg: Config, *, cycles: int, pause: int) -> int:
     return 1 if halted or exec_errors else 0
 
 
+def _repo_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "pyproject.toml").exists() and (parent / "src" / "aoa").exists():
+            return parent
+    return Path.cwd()
+
+
+def cmd_setup_moomoo(cfg: Config) -> int:
+    """Run the Moomoo OpenD setup helper script."""
+    script = _repo_root() / "scripts" / "setup_moomoo_auth.sh"
+    if not script.is_file():
+        print(f"Setup script not found: {script}", file=sys.stderr)
+        return 1
+    print("Running Moomoo setup helper…")
+    print(f"  Broker: {cfg.broker} | OpenD: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port}")
+    result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
+    return int(result.returncode)
+
+
+def cmd_setup_mac(_cfg: Config) -> int:
+    """Run the macOS bootstrap script (Python 3.10+, venv, pip install)."""
+    script = _repo_root() / "scripts" / "setup_mac.sh"
+    if not script.is_file():
+        print(f"Setup script not found: {script}", file=sys.stderr)
+        return 1
+    print("Running macOS bootstrap (Python 3.10+, venv, pip install)…")
+    result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
+    return int(result.returncode)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1126,9 +1445,30 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Validate config only; skip live broker and LLM checks.",
     )
+    setup = sub.add_parser("setup", help="One-time broker and environment setup helpers.")
+    setup_sub = setup.add_subparsers(dest="setup_command", required=True)
+    setup_sub.add_parser(
+        "moomoo",
+        help="Install checks for Moomoo OpenD + moomoo-api (runs scripts/setup_moomoo_auth.sh).",
+    )
+    setup_sub.add_parser(
+        "mac",
+        help="macOS bootstrap: Python 3.10+, venv, pip install (runs scripts/setup_mac.sh).",
+    )
     sub.add_parser("status", help="Show account, positions, and market clock.")
     sub.add_parser("run", help="Run a single team-coordinated swarm cycle.")
-    sub.add_parser("loop", help="Run team cycles continuously.")
+    lp = sub.add_parser("loop", help="Run team cycles continuously, or generate a user brief.")
+    lp_sub = lp.add_subparsers(dest="loop_command", required=False)
+    lp_brief = lp_sub.add_parser(
+        "brief",
+        help="Loop-aware user brief (Alex + STATE.md + repair queue).",
+    )
+    lp_brief.add_argument(
+        "--push",
+        action="store_true",
+        help="Deliver the brief to your iPhone if a channel is configured.",
+    )
+    lp_brief.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     sub.add_parser("assistant", help="Alex — prioritized must-do vs should-do brief.")
     team = sub.add_parser("team", help="Team-specific commands.")
     team_sub = team.add_subparsers(dest="team_command", required=True)
@@ -1272,12 +1612,28 @@ def main(argv: list[str] | None = None) -> int:
     rp_wt = rp_sub.add_parser("worktree", help="Create an isolated git worktree for a fix.")
     rp_wt.add_argument("--item-id", default="", help="Repair item id (optional).")
 
+    vp = sub.add_parser("vault", help="Schema-driven vault property sync.")
+    vp_sub = vp.add_subparsers(dest="vault_command", required=True)
+    vp_sync = vp_sub.add_parser("sync", help="Analyze and update all vault properties.")
+    vp_sync.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report changes without writing (also forced when L1-only).",
+    )
+    vp_sync.add_argument("--json", action="store_true", help="Emit JSON result.")
+    vp_status = vp_sub.add_parser("status", help="Report stale vault properties.")
+    vp_status.add_argument("--json", action="store_true", help="Emit JSON report.")
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
     )
     tk_sub = tk.add_subparsers(dest="tasks_command", required=True)
     tk_sub.add_parser("list", help="List prompt shortkeys and task loops.")
+    tk_sub.add_parser(
+        "automations",
+        help="Print ready-to-create Cursor automation specs (A/B/C).",
+    )
     tk_show = tk_sub.add_parser("show", help="Print a copy-paste prompt by shortkey.")
     tk_show.add_argument(
         "shortkey",
@@ -1288,6 +1644,46 @@ def main(argv: list[str] | None = None) -> int:
         help="Run a deterministic task loop (tier1, tier1-check, tier2-check, verify).",
     )
     tk_run.add_argument("task", help="Task name from loop-prompts.yaml.")
+    tk_chain = tk_sub.add_parser(
+        "chain",
+        help="Upgrade backlog task chain — auto-queue next L2 item.",
+    )
+    tk_chain_sub = tk_chain.add_subparsers(dest="chain_command", required=True)
+    tk_chain_status = tk_chain_sub.add_parser("status", help="Show chain state.")
+    tk_chain_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    tk_chain_sub.add_parser("bootstrap", help="Seed chain from docs/upgrade-backlog.json.")
+    tk_chain_adv = tk_chain_sub.add_parser(
+        "advance",
+        help="Mark item complete and queue next automatable task in STATE.md.",
+    )
+    tk_chain_adv.add_argument(
+        "--complete",
+        required=True,
+        metavar="ID",
+        help="Backlog item id, e.g. upg-007",
+    )
+
+    at = sub.add_parser(
+        "attl",
+        help="Agentic Task-Team Loop — auto-12, brain mesh, critical-only review.",
+    )
+    at_sub = at.add_subparsers(dest="attl_command", required=True)
+    at_sub.add_parser("init", help="Ensure brain/ workspace + ATTL config (auto-12).")
+    at_status = at_sub.add_parser("status", help="Show ATTL mode, roster, mesh stats.")
+    at_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_roster = at_sub.add_parser("roster", help="Print the 12-member meshed team.")
+    at_roster.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_sub.add_parser("propose", help="Reed: auto-propose tasks from repair/backlog.")
+    at_run = at_sub.add_parser("run", help="One ATTL auto cycle (Kai only if critical).")
+    at_run.add_argument("--dry-run", action="store_true", help="No side-effect notes beyond capture.")
+    at_run.add_argument("--report", action="store_true", help="Force Kai report path.")
+    at_run.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_report = at_sub.add_parser("report", help="Force critical report via Kai/Aaron path.")
+    at_report.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_brain = at_sub.add_parser("brain", help="Second-brain workspace ops.")
+    at_brain_sub = at_brain.add_subparsers(dest="brain_command", required=True)
+    at_brain_sync = at_brain_sub.add_parser("sync", help="Nova: refresh mesh + capture.")
+    at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
 
     args = parser.parse_args(argv)
     _ensure_env_template()
@@ -1298,11 +1694,20 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_bars(cfg, args.symbols, timeframe=args.timeframe, limit=args.limit)
         if args.command == "doctor":
             return cmd_doctor(cfg, offline=getattr(args, "offline", False))
+        if args.command == "setup":
+            if args.setup_command == "moomoo":
+                return cmd_setup_moomoo(cfg)
+            if args.setup_command == "mac":
+                return cmd_setup_mac(cfg)
         if args.command == "status":
             return cmd_status(cfg)
         if args.command == "run":
             return cmd_run(cfg)
         if args.command == "loop":
+            if getattr(args, "loop_command", None) == "brief":
+                return cmd_loop_brief(
+                    cfg, push=args.push, as_json=getattr(args, "json", False)
+                )
             return cmd_loop(cfg)
         if args.command == "assistant":
             return cmd_assistant(cfg)
@@ -1372,13 +1777,52 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.repair_command == "worktree":
                 return cmd_repair_worktree(cfg, item_id=getattr(args, "item_id", ""))
+        if args.command == "vault":
+            if args.vault_command == "sync":
+                return cmd_vault_sync(
+                    cfg,
+                    dry_run=getattr(args, "dry_run", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.vault_command == "status":
+                return cmd_vault_status(cfg, as_json=getattr(args, "json", False))
         if args.command == "tasks":
+            if args.tasks_command == "automations":
+                return cmd_tasks_automations()
             if args.tasks_command == "list":
                 return cmd_tasks_list()
             if args.tasks_command == "show":
                 return cmd_tasks_show(args.shortkey)
             if args.tasks_command == "run":
                 return cmd_tasks_run(args.task)
+            if args.tasks_command == "chain":
+                if args.chain_command == "status":
+                    return cmd_tasks_chain_status(as_json=getattr(args, "json", False))
+                if args.chain_command == "bootstrap":
+                    return cmd_tasks_chain_bootstrap()
+                if args.chain_command == "advance":
+                    return cmd_tasks_chain_advance(completed=args.complete)
+        if args.command == "attl":
+            if args.attl_command == "init":
+                return cmd_attl_init(cfg)
+            if args.attl_command == "status":
+                return cmd_attl_status(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "roster":
+                return cmd_attl_roster(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "propose":
+                return cmd_attl_propose(cfg)
+            if args.attl_command == "run":
+                return cmd_attl_run(
+                    cfg,
+                    dry_run=getattr(args, "dry_run", False),
+                    report=getattr(args, "report", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.attl_command == "report":
+                return cmd_attl_report(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "brain":
+                if args.brain_command == "sync":
+                    return cmd_attl_brain_sync(cfg, as_json=getattr(args, "json", False))
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

@@ -129,7 +129,9 @@ def evaluate(ticker: str, bars, *,
     closes = [b.close for b in bars]
     tech = TA.snapshot(bars).to_dict()
     fund = FA.score(fundamentals).to_dict()
-    fc = FC.forecast(closes, horizon_days=horizon).to_dict()
+    fc = FC.forecast(
+        closes, horizon_days=horizon, weights=config.forecast_weights
+    ).to_dict()
     rstate = regime_state or RG.classify(bars)
     regime = rstate.to_dict()
     sentiment = SENT.blended(stored_sentiment, S.log_returns(closes)[-21:])

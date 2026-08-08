@@ -84,7 +84,9 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 ### The agents
 
-The swarm is coordinated by a **five-member agent team** before trades are proposed.
+The swarm is coordinated by a **twelve-member meshed agent team** (trading + ATTL:
+Nova/Reed/Kai) before trades are proposed; coding loops use ATTL `auto-12` with
+critical-only review.
 **Bob**, **Julie**, and **Alan** also own code-health duties (shared helpers, lint,
 import integrity, and confidence adjustments when quality is degraded):
 
@@ -667,8 +669,11 @@ Example payload your webhook receives:
 }
 ```
 
-When `reason` is `needs_verification`, set `requires_response` to true in your app
-so the user can confirm before the swarm proceeds.
+When `reason` is `needs_verification`, `requires_response` is true and the payload
+carries a `notification_id`. Your app collects the user's reply and POSTs it to
+`/api/alerts/{notification_id}/respond` with `{"action": "approve"|"reject"|"ack"}`.
+The response router resolves a linked approval automatically and records everything
+else for human follow-up — it never edits `.env`, enables live trading, or merges.
 
 #### Alternatives
 
@@ -700,11 +705,29 @@ Open **http://localhost:8080/** for the dashboard. REST endpoints:
 | `/api/run` | POST | Trigger one team-coordinated swarm cycle |
 | `/api/loop/start` | POST | Start background loop |
 | `/api/loop/stop` | POST | Stop background loop |
+| `/api/loop/brief` | GET | Loop-aware user brief (Alex + STATE.md + repair queue) |
+| `/api/alerts/pending` | GET | Alerts awaiting the user's reply |
+| `/api/alerts/{id}/respond` | POST | Reply to an alert (`approve`/`reject`/`ack`) |
 | `/api/last-cycle` | GET | Most recent cycle result |
 | `/api/docs` | GET | OpenAPI interactive docs |
 
 Set `AOA_WEB_AUTO_LOOP=true` to run the team trading loop automatically in the
 background while the web server is up.
+
+Optional header shortcuts (same pattern as OpenStock):
+
+| Env | Dashboard link |
+|-----|----------------|
+| `AOA_OPENSTOCK_URL` | OpenStock ↗ |
+| `AOA_QM_URL` | QM ↗ |
+
+```bash
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+aoa serve
+```
+
+See [docs/how-to/qm-integration.md](docs/how-to/qm-integration.md).
 
 ---
 
@@ -826,7 +849,10 @@ loop-run-log.md            # loop run history
 loop-budget.md             # token/run caps
 .cursor/skills/            # loop-triage, minimal-fix, loop-verifier, …
 docs/safety.md             # agent safety policy
+docs/help.md               # related content (qm, OpenStock, loop-engineering, …)
+docs/how-to/qm-integration.md # QM sibling harness (AOA_QM_URL)
 docs/how-to/fresh-clone.md # first-time setup checklist
+vault/system/qm.md         # system companion note for QM
 examples/run_demo.py       # aoa_financial end-to-end demonstration
 deploy/                    # systemd unit files for production
 Dockerfile                 # container image
@@ -911,6 +937,19 @@ from aoa.swarm.stages import default_stages, PortfolioStage
 custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
 orch = Orchestrator(config, broker, llm, pipeline=custom)
 ```
+
+## Help — related content
+
+Companion tools that sit beside this repo (not vendored here):
+
+| Project | Why it helps |
+|---------|----------------|
+| **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
+| **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
+| **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
+
+Full catalog and clone notes: **[docs/help.md](docs/help.md)**.
 
 ## Disclaimer
 

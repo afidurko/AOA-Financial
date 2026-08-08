@@ -36,6 +36,7 @@ def discover_sources(config: Config, repo_root: Path | None = None) -> list[Lear
     _add_dir_source(sources, "agents", root / "src/aoa/agents", "Specialist agent implementations")
     _add_dir_source(sources, "swarm", root / "src/aoa/swarm", "Pipeline orchestration")
     _add_workloop_store(sources, config)
+    _add_vault_source(sources, config, root)
 
     for extra in config.workloop_extra_sources:
         path = Path(extra)
@@ -100,6 +101,24 @@ def _add_workloop_store(sources: list[LearningSource], config: Config) -> None:
             path=str(store_root),
             summary="Prior work-loop runs, learnings, and approvals",
             metadata={"file_count": len(files)},
+        )
+    )
+
+
+def _add_vault_source(sources: list[LearningSource], config: Config, root: Path) -> None:
+    vault_rel = getattr(config, "vault_path", "vault") or "vault"
+    vault_path = Path(vault_rel)
+    if not vault_path.is_absolute():
+        vault_path = root / vault_path
+    if not vault_path.is_dir():
+        return
+    files = [p for p in vault_path.rglob("*.md") if p.is_file() and not p.name.startswith("_")]
+    sources.append(
+        LearningSource(
+            kind="vault",
+            path=str(vault_path),
+            summary="Schema-driven knowledge vault with auto-synced properties",
+            metadata={"file_count": len(files), "exists": True},
         )
     )
 

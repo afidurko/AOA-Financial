@@ -11,6 +11,7 @@ from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, OptionContract, Side
 from aoa.data.market_data import PRIMARY_TIMEFRAME
 from aoa.execution.pricing import marketable_limit
+from aoa.plasticity.trust import notional_trust_multiplier
 from aoa.swarm.context import CycleContext
 from aoa.swarm.environment import MeshedView
 from aoa.swarm.pipeline import PipelineStage
@@ -232,7 +233,12 @@ class MaterializeStage(PipelineStage):
     def run(self, ctx: CycleContext) -> bool:
         bb = ctx.blackboard
         raw = ctx.portfolio_output.get("proposals", [])
-        bb.proposals = _materialize_proposals(raw, bb, journal=ctx.journal)
+        symbol_trust: dict[str, float] = {}
+        if ctx.plasticity is not None:
+            symbol_trust = dict(ctx.plasticity.memory.symbol_trust)
+        bb.proposals = _materialize_proposals(
+            raw, bb, journal=ctx.journal, symbol_trust=symbol_trust
+        )
         return True
 
 
@@ -355,6 +361,31 @@ class PlasticityStage(PipelineStage):
         return True
 
 
+@dataclass
+class VaultSyncStage(PipelineStage):
+    """Sync trading cycle results into the vault knowledge directory."""
+
+    name: str = "vault_sync"
+
+    def should_run(self, ctx: CycleContext) -> bool:
+        return ctx.config.vault_sync_enabled
+
+    def run(self, ctx: CycleContext) -> bool:
+        from aoa.vault.sync import sync_vault_from_cycle
+
+        dry_run = not ctx.config.vault_auto_write
+        result = sync_vault_from_cycle(ctx, dry_run=dry_run)
+        ctx.journal.record(
+            "vault.sync",
+            {
+                "dry_run": result.dry_run,
+                "notes_updated": result.notes_updated,
+                "properties_changed": result.properties_changed,
+            },
+        )
+        return True
+
+
 def default_stages() -> list[PipelineStage]:
     return [
         IntakeStage(),
@@ -367,6 +398,7 @@ def default_stages() -> list[PipelineStage]:
         FundManagerStage(),
         ExecuteStage(),
         PlasticityStage(),
+        VaultSyncStage(),
     ]
 
 
@@ -617,9 +649,14 @@ def _exit_review_candidates(bb) -> list[dict]:
 
 
 def _materialize_proposals(
-    raw: list[dict], bb, *, journal=None
+    raw: list[dict],
+    bb,
+    *,
+    journal=None,
+    symbol_trust: dict[str, float] | None = None,
 ) -> list[TradeProposal]:
     proposals: list[TradeProposal] = []
+    trust_map = symbol_trust or {}
     pos_by_symbol = {p.symbol: p for p in bb.positions}
     held_or_pending = {p.symbol for p in bb.positions if p.qty != 0}
     held_or_pending |= {o.symbol for o in bb.open_orders}
@@ -631,6 +668,8 @@ def _materialize_proposals(
         if side is None:
             continue
         target = float(item.get("target_notional", 0) or 0)
+        if target > 0:
+            target *= notional_trust_multiplier(trust_map.get(symbol, 0.0))
         if target <= 0 and side is Side.BUY:
             continue
 

@@ -238,6 +238,10 @@ reports/
 data/
 journal/*.jsonl
 
+# ATTL second-brain auto captures (keep directory via .gitkeep)
+brain/captures/run-*.md
+brain/captures/critical-*.md
+
 # Learned low-rank adapter state
 .aoa/
 
@@ -271,3 +275,6 @@ AOA-Vault/
 .cursor/skills/json-canvas
 .cursor/skills/obsidian-cli
 .cursor/skills/defuddle
+
+# QM sibling clone (multiplayer agent harness — not vendored)
+qm/

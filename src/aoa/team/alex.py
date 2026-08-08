@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from aoa.agents.base import Agent
@@ -85,11 +86,15 @@ class AlexAgent(Agent):
         cycle: TeamCycleResult | None = None,
         analytics_store: AnalyticsStore | None = None,
         market_open: bool = True,
+        loop_state_path: Path | None = None,
+        repair_path: Path | None = None,
     ) -> AssistantBrief:
         ctx = _gather_context(
             cycle=cycle,
             analytics_store=analytics_store,
             market_open=market_open,
+            loop_state_path=loop_state_path,
+            repair_path=repair_path,
         )
         baseline = _deterministic_brief(ctx)
         try:
@@ -111,8 +116,20 @@ def _gather_context(
     cycle: TeamCycleResult | None,
     analytics_store: AnalyticsStore | None,
     market_open: bool,
+    loop_state_path: Path | None = None,
+    repair_path: Path | None = None,
 ) -> dict[str, Any]:
     ctx: dict[str, Any] = {"market_open": market_open}
+    if loop_state_path is not None:
+        from aoa.loop.user_brief import parse_state_md
+
+        state = parse_state_md(loop_state_path)
+        ctx["loop_high_priority"] = state.high_priority
+        ctx["loop_watch"] = state.watch
+    if repair_path is not None:
+        from aoa.loop.user_brief import repair_queue_summary
+
+        ctx["repair_queue"] = repair_queue_summary(repair_path)
     if cycle:
         ctx.update(
             {
@@ -235,6 +252,40 @@ def _deterministic_brief(ctx: dict[str, Any]) -> AssistantBrief:
                 detail=f"Strategy {prop.get('strategy', '—')} · ~${prop.get('est_notional', 0):,.0f}",
                 source="swarm",
                 action_hint="Confirm execution in journal; verify dry-run vs paper mode.",
+            )
+        )
+
+    for item in ctx.get("loop_high_priority") or []:
+        must.append(
+            PriorityItem(
+                level=PriorityLevel.MUST,
+                title=item.get("title", "Loop high-priority item"),
+                detail=item.get("detail", ""),
+                source="loop",
+                action_hint="See STATE.md High Priority; loop is acting or waiting on you.",
+            )
+        )
+
+    for item in ctx.get("loop_watch") or []:
+        should.append(
+            PriorityItem(
+                level=PriorityLevel.SHOULD,
+                title=item.get("title", "Loop watch item"),
+                detail=item.get("detail", ""),
+                source="loop",
+                action_hint="Tracked on STATE.md Watch List; no action required yet.",
+            )
+        )
+
+    repair = ctx.get("repair_queue") or {}
+    if repair.get("fixable"):
+        should.append(
+            PriorityItem(
+                level=PriorityLevel.SHOULD,
+                title=f"Repair queue: {repair['fixable']} fixable item(s)",
+                detail=f"{repair.get('count', 0)} candidate(s) discovered by Fable 5 triage.",
+                source="repair",
+                action_hint="Run `aoa repair queue`; promote L2 to auto-fix (draft PR only).",
             )
         )
 

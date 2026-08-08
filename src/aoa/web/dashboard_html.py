@@ -49,6 +49,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     <div style="display:flex;align-items:center;gap:1rem">
       <a id="openstock-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">OpenStock ↗</a>
       <a id="obsidian-link" href="#" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">Second Brain ↗</a>
+      <a id="qm-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">QM ↗</a>
       <div id="market-status" class="stat-sm">Market: —</div>
     </div>
   </header>
@@ -167,6 +168,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         obsLink.style.display='inline';
       } else {
         obsLink.style.display='none';
+      }
+      const qmLink=document.getElementById('qm-link');
+      if(config.qm_url){
+        qmLink.href=config.qm_url;
+        qmLink.style.display='inline';
+      } else {
+        qmLink.style.display='none';
       }
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;

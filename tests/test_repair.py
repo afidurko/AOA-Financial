@@ -46,6 +46,29 @@ def test_discover_repairs_from_state(tmp_path, monkeypatch):
     assert "Docs drift" in titles
 
 
+def test_discover_repairs_marks_escalation(tmp_path, monkeypatch):
+    state = tmp_path / "STATE.md"
+    state.write_text(
+        "# Loop State\n\n## High Priority\n\n"
+        "- **Rotate exposed API keys** — revoke and regenerate in each console\n\n"
+        "## Watch List\n\n"
+        "- **Docs drift** — README outdated\n",
+        encoding="utf-8",
+    )
+    repo = Path(__file__).resolve().parents[1]
+    monkeypatch.setattr(
+        "aoa.repair.discovery.run_verify",
+        lambda _root, **kwargs: {"passed": True, "ruff": {"ok": True}, "pytest": {"ok": True}},
+    )
+    items = {i.title: i for i in discover_repairs(repo_root=repo, state_path=state)}
+    # High Priority items always need a human.
+    assert items["Rotate exposed API keys"].requires_escalation is True
+    # Deterministic code-health findings are auto-fixable.
+    for item in items.values():
+        if item.source == "code_audit":
+            assert item.requires_escalation is False
+
+
 def test_repair_triage_writes_queue(tmp_path, monkeypatch):
     repo = Path(__file__).resolve().parents[1]
     cfg = _config(tmp_path)

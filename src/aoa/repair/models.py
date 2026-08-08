@@ -16,6 +16,9 @@ class RepairItem:
     detail: str = ""
     suggested_skill: str = "minimal-fix"
     status: str = "queued"  # queued | in_progress | fixed | escalated | ignored
+    # True when a fix needs CEO (Aaron) approval, higher escalation, or a manual
+    # user notification. Such items are never auto-fixed by the L2 loop.
+    requires_escalation: bool = False
 
     def to_context(self) -> dict[str, Any]:
         return {
@@ -27,6 +30,7 @@ class RepairItem:
             "detail": self.detail,
             "suggested_skill": self.suggested_skill,
             "status": self.status,
+            "requires_escalation": self.requires_escalation,
         }
 
     @classmethod
@@ -40,6 +44,7 @@ class RepairItem:
             detail=str(data.get("detail", "")),
             suggested_skill=str(data.get("suggested_skill", "minimal-fix")),
             status=str(data.get("status", "queued")),
+            requires_escalation=bool(data.get("requires_escalation", False)),
         )
 
 

@@ -18,6 +18,7 @@ def _config(tmp_path, dry_run=False):
         universe=("AAPL",),
         dry_run=dry_run,
         state_path=str(tmp_path / "state.json"),
+        plasticity_path=tmp_path / "plasticity.json",
         risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
     )
 

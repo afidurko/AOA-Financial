@@ -1,0 +1,28 @@
+# Unofficial community OpenD image — NOT supported by Moomoo.
+# Copy to docker-compose.moomoo-opend.yml and fill credentials locally (never commit).
+# Source: https://github.com/chasenlab/opend
+#
+#   cp docker-compose.moomoo-opend.example.yml docker-compose.moomoo-opend.yml
+#   # edit MOOMOO_ACCOUNT + MOOMOO_PWD_MD5 in the copy
+#   docker compose -f docker-compose.moomoo-opend.yml up -d
+#
+# Then from AOA:
+#   export MOOMOO_OPEND_HOST=127.0.0.1
+#   aoa doctor
+
+services:
+  moomoo-opend:
+    image: ghcr.io/chasenlab/moomoo-opend:latest
+    container_name: moomoo-opend
+    restart: unless-stopped
+    ports:
+      - "11111:11111"
+      - "22222:22222"
+    command:
+      - /docker-entrypoint.sh
+      - -login_account=${MOOMOO_ACCOUNT:-REPLACE_ME}
+      - -login_pwd_md5=${MOOMOO_PWD_MD5:-REPLACE_ME}
+      - -api_port=11111
+      - -api_ip=0.0.0.0
+      - -telnet_port=22222
+      - -lang=en

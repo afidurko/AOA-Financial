@@ -24,6 +24,40 @@ def _env(name: str, default: str) -> str:
     return os.environ.get(f"AOA_{name}", default)
 
 
+_DEFAULT_SWARM_WEIGHTS: Dict[str, float] = {
+    "technical": 1.0,
+    "fundamental": 1.1,
+    "forecast": 1.0,
+    "regime": 0.9,
+    "sentiment": 0.6,
+    "llm": 1.3,
+}
+
+_DEFAULT_FORECAST_WEIGHTS: Dict[str, float] = {
+    "monte_carlo": 0.45,
+    "trend": 0.35,
+    "ewma": 0.20,
+}
+
+
+def _parse_weight_map(env_name: str, defaults: Dict[str, float]) -> Dict[str, float]:
+    """Parse ``AOA_<env_name>`` as ``key:val,key:val`` (comma-separated)."""
+    raw = os.environ.get(f"AOA_{env_name}")
+    if not raw:
+        return dict(defaults)
+    out = dict(defaults)
+    for part in raw.split(","):
+        if ":" not in part:
+            continue
+        key, val = part.split(":", 1)
+        key = key.strip()
+        try:
+            out[key] = float(val.strip())
+        except ValueError:
+            continue
+    return out
+
+
 @dataclass
 class Config:
     """Runtime configuration.
@@ -49,14 +83,10 @@ class Config:
     # Relative trust placed in each specialist agent before confidence
     # weighting. Tuned so no single agent dominates.
     swarm_weights: Dict[str, float] = field(
-        default_factory=lambda: {
-            "technical": 1.0,
-            "fundamental": 1.1,
-            "forecast": 1.0,
-            "regime": 0.9,
-            "sentiment": 0.6,
-            "llm": 1.3,
-        }
+        default_factory=lambda: _parse_weight_map("SWARM_WEIGHTS", _DEFAULT_SWARM_WEIGHTS)
+    )
+    forecast_weights: Dict[str, float] = field(
+        default_factory=lambda: _parse_weight_map("FORECAST_WEIGHTS", _DEFAULT_FORECAST_WEIGHTS)
     )
 
     # A small but representative default universe spanning sectors. Any other

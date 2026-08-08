@@ -36,8 +36,8 @@ all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca]"]
 [project.scripts]
 aoa = "aoa.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

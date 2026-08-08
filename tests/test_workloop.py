@@ -36,7 +36,7 @@ def _config(tmp_path: Path, **kwargs) -> Config:
     return Config(**defaults)
 
 
-def test_default_workloop_has_eleven_stages():
+def test_default_workloop_has_twelve_stages():
     names = [s.name for s in default_stages()]
     assert names == list(STAGE_ORDER)
     assert "team_review" in names

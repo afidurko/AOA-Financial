@@ -53,7 +53,10 @@ CREATE TABLE IF NOT EXISTS notification_log (
     message         TEXT NOT NULL,
     payload         TEXT,
     pushed          INTEGER NOT NULL DEFAULT 0,
-    created_at      TEXT NOT NULL
+    created_at      TEXT NOT NULL,
+    response_status TEXT NOT NULL DEFAULT 'none',
+    response_payload TEXT,
+    responded_at    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS approval_inbox (

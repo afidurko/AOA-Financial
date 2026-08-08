@@ -29,6 +29,8 @@ class StructuredNotification:
     journal_event: str = ""
     requires_response: bool = False
     priority: str = "normal"
+    notification_id: int | None = None
+    respond_url: str = ""
 
     def to_payload(self) -> dict[str, Any]:
         return {
@@ -46,6 +48,8 @@ class StructuredNotification:
             "requires_response": self.requires_response,
             "priority": self.priority,
             "reason": "needs_verification" if self.requires_response else "normal",
+            "notification_id": self.notification_id,
+            "respond_url": self.respond_url or None,
         }
 
     def concise_title(self) -> str:

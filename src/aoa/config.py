@@ -208,6 +208,7 @@ class Config:
     broker: str = "moomoo"
     moomoo_opend_host: str = "127.0.0.1"
     moomoo_opend_port: int = 11111
+    moomoo_connect_timeout: float = 3.0
     moomoo_unlock_password: str = ""
     moomoo_acc_id: int = 0
     moomoo_acc_index: int = 0
@@ -266,6 +267,7 @@ class Config:
     openstock_url: str = ""
     obsidian_vault_path: str = ""
     spine_enabled: bool = False
+    qm_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
     custom_app_webhook_url: str = ""
@@ -303,6 +305,18 @@ class Config:
     repair_sync_state: bool = True
     repair_worktrees_dir: str = ".aoa-worktrees"
 
+    # Vault knowledge directory (schema-driven property sync)
+    vault_path: str = "vault"
+    vault_sync_enabled: bool = True
+    vault_auto_write: bool = True
+
+    # Second brain + Agentic Task-Team Loop (auto-12, critical-only review)
+    brain_path: str = "brain"
+    brain_mesh_into_algorithms: bool = True
+    attl_enabled: bool = True
+    attl_mode: str = "auto-12"
+    attl_review_policy: str = "critical_only"
+
     trading_agents_enabled: bool = True
     trading_agents_debate_rounds: int = 1
 
@@ -314,6 +328,7 @@ class Config:
     adapt_rank: int = 4
     adapt_alpha: float = 8.0
     adapt_lr: float = 0.05
+    adapt_return_scale: float = 0.05
 
     @property
     def has_brokerage_creds(self) -> bool:
@@ -381,6 +396,7 @@ class Config:
             broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
             moomoo_opend_host=os.environ.get("MOOMOO_OPEND_HOST", "127.0.0.1").strip() or "127.0.0.1",
             moomoo_opend_port=_int("MOOMOO_OPEND_PORT", 11111),
+            moomoo_connect_timeout=_float("AOA_MOOMOO_CONNECT_TIMEOUT", 3.0),
             moomoo_unlock_password=os.environ.get("MOOMOO_UNLOCK_PASSWORD", ""),
             moomoo_acc_id=_int("MOOMOO_ACC_ID", 0),
             moomoo_acc_index=_int("MOOMOO_ACC_INDEX", 0),
@@ -428,6 +444,7 @@ class Config:
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),
             obsidian_vault_path=os.environ.get("AOA_OBSIDIAN_VAULT_PATH", "").strip(),
             spine_enabled=_bool("AOA_SPINE_ENABLED", False),
+            qm_url=os.environ.get("AOA_QM_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
             custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),
@@ -446,6 +463,7 @@ class Config:
             adapt_rank=_int("AOA_ADAPT_RANK", 4),
             adapt_alpha=_float("AOA_ADAPT_ALPHA", 8.0),
             adapt_lr=_float("AOA_ADAPT_LR", 0.05),
+            adapt_return_scale=_float("AOA_ADAPT_RETURN_SCALE", 0.05),
             workloop_enabled=_bool("AOA_WORKLOOP_ENABLED", True),
             workloop_approver=os.environ.get("AOA_WORKLOOP_APPROVER", "Aaron").strip() or "Aaron",
             workloop_user_approver=os.environ.get("AOA_WORKLOOP_USER_APPROVER", "user").strip() or "user",
@@ -464,6 +482,17 @@ class Config:
             repair_sync_state=_bool("AOA_REPAIR_SYNC_STATE", True),
             repair_worktrees_dir=os.environ.get("AOA_REPAIR_WORKTREES_DIR", ".aoa-worktrees").strip()
             or ".aoa-worktrees",
+            vault_path=os.environ.get("AOA_VAULT_PATH", "vault").strip() or "vault",
+            vault_sync_enabled=_bool("AOA_VAULT_SYNC_ENABLED", True),
+            vault_auto_write=_bool("AOA_VAULT_AUTO_WRITE", True),
+            brain_path=os.environ.get("AOA_BRAIN_PATH", "brain").strip() or "brain",
+            brain_mesh_into_algorithms=_bool("AOA_BRAIN_MESH_INTO_ALGORITHMS", True),
+            attl_enabled=_bool("AOA_ATTL_ENABLED", True),
+            attl_mode=os.environ.get("AOA_ATTL_MODE", "auto-12").strip() or "auto-12",
+            attl_review_policy=(
+                os.environ.get("AOA_ATTL_REVIEW_POLICY", "critical_only").strip()
+                or "critical_only"
+            ),
             trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
             trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(

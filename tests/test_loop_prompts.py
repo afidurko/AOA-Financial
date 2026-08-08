@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from aoa.loop.prompts import get_prompt, list_prompt_keys, load_tasks, run_task
+from aoa.loop.prompts import (
+    format_automations,
+    get_prompt,
+    list_automation_prompts,
+    list_prompt_keys,
+    load_tasks,
+    run_task,
+)
 from aoa.repair.schedule_gate import GateAction
 
 
@@ -11,6 +18,23 @@ def test_prompt_shortkeys_load():
     assert "L1" in keys
     assert "L2" in keys
     assert "GATE-A" in keys
+
+
+def test_automation_prompts_are_the_three_scheduled_ones():
+    keys = {p.key for p in list_automation_prompts()}
+    assert keys == {"L1", "L2", "BRIEF"}
+    for prompt in list_automation_prompts():
+        assert prompt.branch == "main"
+        assert prompt.automation
+
+
+def test_format_automations_renders_all_three():
+    rendered = format_automations()
+    assert "AOA daily triage" in rendered
+    assert "AOA fable repair L2" in rendered
+    assert "AOA user brief" in rendered
+    assert "Branch: main" in rendered
+    assert "loop brief --push" in rendered
 
 
 def test_get_prompt_l1_body():

@@ -2,7 +2,17 @@
 
 Use this checklist after cloning AOA-Financial for the first time.
 
-## 1. Environment file
+## 1. Environment file (automated on macOS)
+
+**macOS one-liner** (Python 3.10+, venv, install — no `aoa` required yet):
+
+```bash
+git clone https://github.com/afidurko/AOA-Financial.git
+cd AOA-Financial
+bash scripts/setup_mac.sh --moomoo
+```
+
+Or manually:
 
 ```bash
 cp .env.example .env
@@ -13,7 +23,7 @@ Edit `.env` and set at minimum:
 - `ANTHROPIC_API_KEY` — Claude API access for agent reasoning
 - **Moomoo OpenD** — install from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/), log in, keep running on `127.0.0.1:11111`
 
-See `SETUP-AWAITING-YOU.md` and run `bash scripts/setup_moomoo_auth.sh`.
+See `SETUP-AWAITING-YOU.md`, [moomoo-setup.md](moomoo-setup.md), and run `aoa setup moomoo` (or `bash scripts/setup_moomoo_auth.sh`).
 
 **Optional Alpaca:** set `AOA_BROKER=alpaca`, `pip install -e ".[alpaca]"`, and run `bash scripts/setup_alpaca_auth.sh`.
 
@@ -134,3 +144,16 @@ Or step by step:
 ```
 
 See [always-on-dashboard.md](always-on-dashboard.md).
+
+## 10. QM harness (optional)
+
+Link the multiplayer agent harness ([qm](https://github.com/afidurko/qm)) from
+the AOA dashboard header:
+
+```bash
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+```
+
+See [qm-integration.md](qm-integration.md). Other companions:
+[docs/help.md](../help.md).

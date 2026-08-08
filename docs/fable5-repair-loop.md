@@ -53,3 +53,13 @@ The critical rule (from Anthropic harness design): **the agent that implements a
 1. Week one: `loop-triage` only (no code).
 2. Enable `fable-repair` with worktree + verifier for fixable audit/verify items.
 3. Escalate architectural or denylist paths to human / workloop.
+
+## ATTL (auto-12, critical-only)
+
+The Agentic Task-Team Loop expands the roster to **12** (adds Nova, Reed, Kai),
+adds a `brain/` second-brain workspace meshed into algorithms, and runs coding
+task loops in **auto-12** mode. Kai reviews **only** on critical flaw, system
+failure, or `aoa attl report`.
+
+See [design/agentic-task-team-loop.md](design/agentic-task-team-loop.md).
+CLI: `aoa attl init|run|propose|brain sync`.

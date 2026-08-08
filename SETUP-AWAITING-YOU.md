@@ -2,11 +2,29 @@
 
 AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Complete the steps below in order.
 
-Run the helper anytime:
+**macOS automated bootstrap** (fixes Python 3.9 → 3.12, venv, `pip install`):
 
 ```bash
-bash scripts/setup_moomoo_auth.sh
+cd ~/AOA-Financial
+bash scripts/setup_mac.sh --moomoo
 ```
+
+Then edit `.env` for `ANTHROPIC_API_KEY` if the script flagged it.
+
+Manual helper:
+
+```bash
+aoa setup moomoo
+# or: bash scripts/setup_moomoo_auth.sh
+```
+
+| Platform | OpenD install |
+|----------|---------------|
+| macOS | `bash scripts/install_moomoo_opend_macos.sh` |
+| Linux | `bash scripts/install_moomoo_opend_linux.sh` |
+| Docker (unofficial) | `docker-compose.moomoo-opend.example.yml` |
+
+Full guide: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md)
 
 For **Alpaca** instead: set `AOA_BROKER=alpaca`, run `pip install -e ".[alpaca]"`, then `bash scripts/setup_alpaca_auth.sh`.
 

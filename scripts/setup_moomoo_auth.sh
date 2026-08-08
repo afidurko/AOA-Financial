@@ -9,6 +9,7 @@ ok() { printf '\033[0;32m✓\033[0m %s\n' "$*"; }
 need() { printf '\033[0;31m→ YOU:\033[0m %s\n' "$*"; }
 
 echo "=== AOA Financial — Moomoo setup ==="
+echo "(CLI: aoa setup moomoo)"
 echo
 
 if [[ ! -f .env ]]; then
@@ -51,6 +52,8 @@ then
 else
   echo
   need "Install and start Moomoo OpenD — https://www.moomoo.com/download/OpenAPI/"
+  echo "       macOS: bash scripts/install_moomoo_opend_macos.sh"
+  echo "       Linux: bash scripts/install_moomoo_opend_linux.sh"
   echo "       Log in with your Moomoo account. Default port: 11111"
   echo
 fi

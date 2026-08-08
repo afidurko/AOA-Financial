@@ -39,6 +39,27 @@ patterns:
     prompts: loop-prompts.yaml
     level: L1
 
+  - id: vault-sync
+    name: Vault Property Sync
+    file: vault/_schema.yaml
+    goal: Analyze and update every property in the vault knowledge directory
+    cadence: 1d
+    risk: low
+    skills: [loop-triage, loop-constraints]
+    state: vault/
+    cli: aoa vault sync
+    level: L1
+
+  - id: loop-task-chain
+    name: Loop Task Chain
+    file: docs/upgrade-backlog.json
+    goal: Auto-queue next L2 item from upgrade backlog after each completion
+    cadence: on-complete
+    risk: low
+    cli: aoa tasks chain advance
+    state: data/{AOA_ENV}/loop/task-chain.json
+    level: L2
+
   - id: workloop
     name: AOA Work Loop
     file: src/aoa/workloop/
@@ -58,3 +79,48 @@ patterns:
     cli: aoa loop
     human_gates: [live-ack, risk-guards]
     level: prod
+
+  - id: user-response-loop
+    name: User Response Loop
+    file: src/aoa/loop/user_brief.py
+    goal: Auto-brief user on loop state; route inbound responses to approvals
+    cadence: 1d-on-demand
+    risk: low
+    tools: [cursor]
+    skills: [loop-triage, coding-engineer]
+    state: STATE.md
+    cli: aoa loop brief
+    prompt_shortkey: BRIEF
+    human_gates: [denylist-paths, draft-only-sensitive]
+    level: L1
+
+  - id: attl
+    name: Agentic Task-Team Loop
+    file: docs/design/agentic-task-team-loop.md
+    goal: >-
+      Auto-12 meshed team task loops; second-brain workspace; critical-only
+      review (Kai); mesh into algorithms
+    cadence: auto
+    risk: medium
+    tools: [cursor, claude-code, fable-5]
+    skills: [fable-repair, minimal-fix, loop-verifier, coding-engineer]
+    state: STATE.md
+    queue: data/{AOA_ENV}/attl/
+    brain: brain/
+    phases: [brain-sync, propose, implement, critical-gate, capture]
+    human_gates: [denylist-paths, draft-pr-only, loop-pause-all, critical-report]
+    cli: aoa attl
+    level: L2-auto
+    status: active
+    roster_size: 12
+
+  - id: qm-companion
+    name: QM Multiplayer Harness
+    file: docs/how-to/qm-integration.md
+    goal: Optional sibling agent harness (Slack + web) linked via AOA_QM_URL
+    cadence: on-demand
+    risk: low
+    tools: [qm]
+    state: vault/system/qm.md
+    cli: ./scripts/qm-setup.sh
+    level: optional

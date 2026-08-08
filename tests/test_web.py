@@ -77,6 +77,7 @@ def test_api_config_team_mode(client):
     assert "openstock_url" in data
     assert "obsidian_vault_path" in data
     assert "spine_enabled" in data
+    assert "qm_url" in data
 
 
 def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
@@ -154,6 +155,30 @@ def test_api_config_spine_enabled(fake_broker, fake_llm, monkeypatch, tmp_path):
     assert data["obsidian_vault_path"] == "/home/user/AOA-Vault"
 
 
+def test_api_config_qm_url(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        qm_url="http://localhost:8081",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    assert r.json()["qm_url"] == "http://localhost:8081"
+
+
 def test_api_journal(client):
     client.post("/api/run")
     r = client.get("/api/journal?n=5")
@@ -190,6 +215,46 @@ def test_api_assistant_brief(client):
     assert r.status_code == 200
     assert "brief" in r.json()
     assert "must_do" in r.json()["brief"]
+
+
+def test_api_loop_brief(client):
+    r = client.get("/api/loop/brief")
+    assert r.status_code == 200
+    brief = r.json()["brief"]
+    assert "must_do" in brief
+    assert "repair_queue" in brief
+    assert "suggested_replies" in brief
+
+
+def test_api_alerts_pending_and_respond(client):
+    store = client.app.state.analytics_store
+    approval_id = store.add_approval(
+        kind="workloop", title="Approve run", summary="Confirm"
+    )
+    nid = store.log_notification(
+        kind="escalation",
+        title="Approve run",
+        message="Confirm",
+        payload={"approval_id": approval_id, "reason": "needs_verification"},
+    )
+    store.mark_awaiting_response(nid)
+
+    pending = client.get("/api/alerts/pending").json()["items"]
+    assert [p["id"] for p in pending] == [nid]
+
+    r = client.post(f"/api/alerts/{nid}/respond", json={"action": "approve"})
+    assert r.status_code == 200
+    assert r.json()["routed_to"] == "approval_inbox"
+    assert r.json()["applied"] is True
+    assert client.get("/api/alerts/pending").json()["items"] == []
+
+
+def test_api_alert_respond_invalid_action(client):
+    store = client.app.state.analytics_store
+    nid = store.log_notification(kind="alert", title="X", message="y")
+    store.mark_awaiting_response(nid)
+    r = client.post(f"/api/alerts/{nid}/respond", json={"action": "delete"})
+    assert r.status_code == 400
 
 
 def test_api_team_expansions_propose_and_resolve(client):

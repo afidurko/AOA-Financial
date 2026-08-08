@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -21,6 +22,7 @@ class LoopPrompt:
     tier: str = ""
     automation: str = ""
     cadence: str = ""
+    branch: str = "main"
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ def load_prompts(repo_root: Path | None = None) -> dict[str, LoopPrompt]:
             tier=str(block.get("tier", "")),
             automation=str(block.get("automation", "")),
             cadence=str(block.get("cadence", "")),
+            branch=str(block.get("branch", "main")),
         )
     return out
 
@@ -263,6 +266,57 @@ def run_task(
                 )
             continue
 
+        if step == "vault-sync":
+            from aoa.config import Config
+            from aoa.vault.analyzers import engineering_l2_enabled
+            from aoa.vault.sync import sync_vault_engineering
+
+            cfg = Config.from_env(load_dotenv=False)
+            dry = not engineering_l2_enabled(root)
+            sync_vault_engineering(
+                cfg,
+                repo_root=root,
+                dry_run=dry,
+                run_verify=False,
+            )
+            steps_run.append(f"vault-sync={'dry-run' if dry else 'write'}")
+            continue
+
+        if step == "chain-bootstrap":
+            from aoa.config import Config
+            from aoa.loop.task_chain import bootstrap_chain_from_state
+
+            env = Config.from_env(load_dotenv=False).env
+            bootstrap_chain_from_state(root, env=env)
+            steps_run.append("chain-bootstrap")
+            continue
+
+        if step == "chain-advance":
+            item_id = (os.environ.get("AOA_CHAIN_COMPLETED") or "").strip()
+            if not item_id:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    message="Set AOA_CHAIN_COMPLETED=upg-NNN for chain-advance step",
+                    exit_code=1,
+                )
+            from aoa.config import Config
+            from aoa.loop.task_chain import advance_chain, format_advance_result
+
+            env = Config.from_env(load_dotenv=False).env
+            result = advance_chain(item_id, repo_root=root, env=env)
+            steps_run.append(f"chain-advance={result.action.value}")
+            if result.action.value == "alert_human":
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=True,
+                    steps_run=steps_run,
+                    message=format_advance_result(result),
+                    exit_code=3,
+                )
+            continue
+
         if step == "log-triage":
             _append_run_log(
                 root,
@@ -292,6 +346,44 @@ def run_task(
     )
 
 
+def list_automation_prompts(*, repo_root: Path | None = None) -> list[LoopPrompt]:
+    """Prompts that define a scheduled Cursor automation (have an automation name)."""
+    prompts = load_prompts(repo_root)
+    autos = [p for p in prompts.values() if p.automation]
+    return sorted(autos, key=lambda p: p.key)
+
+
+def format_automations(repo_root: Path | None = None) -> str:
+    """Render ready-to-create specs for each scheduled Cursor automation."""
+    autos = list_automation_prompts(repo_root=repo_root)
+    if not autos:
+        return "No scheduled automations defined in loop-prompts.yaml."
+    lines = [
+        "Cursor Cloud automations to create (Dashboard → Agents → Automations → New):",
+        "",
+    ]
+    for prompt in autos:
+        lines.extend(
+            [
+                f"### {prompt.automation}  (shortkey {prompt.key})",
+                "- Repository: AOA-Financial",
+                f"- Branch: {prompt.branch}",
+                f"- Schedule: {prompt.cadence or 'choose a daily time'}",
+                "- Prompt:",
+                "",
+                prompt.body,
+                "",
+                "---",
+                "",
+            ]
+        )
+    lines.append(
+        "No API exists to register these automatically; paste each block into a new "
+        "automation. Copy one prompt at a time with: aoa tasks show <shortkey>."
+    )
+    return "\n".join(lines)
+
+
 def format_prompt_list(repo_root: Path | None = None) -> str:
     prompts = load_prompts(repo_root)
     tasks = load_tasks(repo_root)
@@ -304,4 +396,14 @@ def format_prompt_list(repo_root: Path | None = None) -> str:
     for key in sorted(tasks):
         t = tasks[key]
         lines.append(f"  {key:14}  {t.title}  → {', '.join(t.steps)}")
+    lines.extend(
+        [
+            "",
+            "Task chain (docs/upgrade-backlog.json):",
+            "  aoa tasks chain bootstrap   — seed + queue next automatable item",
+            "  aoa tasks chain status      — show current / completed / alerts",
+            "  aoa tasks chain advance --complete upg-NNN",
+            "  AOA_CHAIN_COMPLETED=upg-NNN aoa tasks run chain-advance",
+        ]
+    )
     return "\n".join(lines)
