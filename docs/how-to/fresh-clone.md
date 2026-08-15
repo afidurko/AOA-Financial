@@ -98,12 +98,13 @@ See [openstock-integration.md](openstock-integration.md) for Docker and env deta
 
 ## 7. Obsidian second brain + Spine (optional)
 
-Full knowledge stack (obsidian-second-brain + Spine + shared vault):
+Full knowledge stack (obsidian-second-brain + Spine + shared vault + Moomoo skills + multi-root workspace):
 
 ```bash
 ./scripts/knowledge-stack-setup.sh
 export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
 export AOA_SPINE_ENABLED=true
+# Open AOA.code-workspace in Cursor for multi-root folders
 ```
 
 Or obsidian-second-brain only:
@@ -114,7 +115,8 @@ Or obsidian-second-brain only:
 export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
 ```
 
-See [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md) and
+See [workspace-mesh.md](workspace-mesh.md),
+[obsidian-second-brain-integration.md](obsidian-second-brain-integration.md), and
 [spine-integration.md](spine-integration.md).
 
 ## 8. obsidian-skills (optional)

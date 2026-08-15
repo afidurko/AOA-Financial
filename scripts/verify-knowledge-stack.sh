@@ -41,6 +41,9 @@ check "OSB spine bridge" test -f "$ROOT/obsidian-second-brain/integrations/spine
 check "OSB skills bridge" test -f "$ROOT/obsidian-second-brain/integrations/obsidian-skills/setup.sh"
 check "Cursor MCP config" test -f "$ROOT/.cursor/mcp.json"
 check "Cursor skill obsidian-second-brain" test -e "$ROOT/.cursor/skills/obsidian-second-brain"
+check "Cursor skill moomooapi" test -f "$ROOT/.cursor/skills/moomooapi/SKILL.md"
+check "Cursor skill install-moomoo-opend" test -f "$ROOT/.cursor/skills/install-moomoo-opend/SKILL.md"
+check "AOA.code-workspace" test -f "$ROOT/AOA.code-workspace"
 
 echo ""
 echo "Result: $pass passed, $fail failed"
