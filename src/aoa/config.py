@@ -178,6 +178,13 @@ def repair_path_for(env: str) -> Path:
     return data_dir_for(env) / "repair"
 
 
+def study_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_STUDY_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "study" / "mastery.json"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -198,6 +205,7 @@ class Config:
     workloop_path: Path = field(default_factory=lambda: workloop_path_for("paper-dry"))
     analytics_db_path: Path = field(default_factory=lambda: analytics_db_path_for("paper-dry"))
     repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
+    study_path: Path = field(default_factory=lambda: study_path_for("paper-dry"))
 
     # LLM
     anthropic_api_key: str = ""
@@ -308,6 +316,11 @@ class Config:
     vault_sync_enabled: bool = True
     vault_auto_write: bool = True
 
+    # Study cortex (learn → use → optional LoRA/sLM distill). Always on by default.
+    study_usage_enabled: bool = True
+    study_usage_limit: int = 8
+    study_usage_baseline: bool = True  # inject bridge meshes even before mastery
+
     # Second brain + Agentic Task-Team Loop (auto-12, critical-only review)
     brain_path: str = "brain"
     brain_mesh_into_algorithms: bool = True
@@ -388,6 +401,7 @@ class Config:
             workloop_path=workloop_path_for(env),
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
+            study_path=study_path_for(env),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
             model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
             effort=os.environ.get("AOA_EFFORT", "high"),
@@ -481,6 +495,9 @@ class Config:
             vault_path=os.environ.get("AOA_VAULT_PATH", "vault").strip() or "vault",
             vault_sync_enabled=_bool("AOA_VAULT_SYNC_ENABLED", True),
             vault_auto_write=_bool("AOA_VAULT_AUTO_WRITE", True),
+            study_usage_enabled=_bool("AOA_STUDY_USAGE_ENABLED", True),
+            study_usage_limit=max(1, _int("AOA_STUDY_USAGE_LIMIT", 8)),
+            study_usage_baseline=_bool("AOA_STUDY_USAGE_BASELINE", True),
             brain_path=os.environ.get("AOA_BRAIN_PATH", "brain").strip() or "brain",
             brain_mesh_into_algorithms=_bool("AOA_BRAIN_MESH_INTO_ALGORITHMS", True),
             attl_enabled=_bool("AOA_ATTL_ENABLED", True),
