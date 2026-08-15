@@ -60,6 +60,8 @@ L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 
 | Skill | Purpose |
 |-------|---------|
+| `moomooapi` | Moomoo OpenAPI — quotes, klines, orders, positions, subscriptions (official OpenD Skills) |
+| `install-moomoo-opend` | Install/upgrade Moomoo OpenD + `moomoo-api` SDK (official OpenD Skills) |
 | `loop-constraints` | Hard floor + auto-12 (runs first) |
 | `loop-budget` | Token caps and run-log enforcement |
 | `loop-triage` | Daily engineering triage → `STATE.md` |
@@ -67,3 +69,5 @@ L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 | `minimal-fix` | Maker — smallest coding fix |
 | `loop-verifier` | Checker when verifying a PR / Kai path |
 | `coding-engineer` | Twelve-member code-health patterns |
+
+Official Moomoo skill packs are vendored under `.cursor/skills/{moomooapi,install-moomoo-opend}/` and mirrored in `.claude/skills/` (Claude Code). Source: [opend-skills.zip](https://openapi.moomoo.com/skills/opend-skills.zip). Use `/moomooapi` or natural language about quotes/orders; use `/install-moomoo-opend` to install OpenD on a local machine.
