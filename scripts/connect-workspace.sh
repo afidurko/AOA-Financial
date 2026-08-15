@@ -77,35 +77,43 @@ if [[ -d "$SKILLS_DIR" ]]; then
   echo "Linked $n obsidian-skills → $SKILLS_DST"
 fi
 
-# 2. Point the target's MCP server at the shared vault (absolute paths so it
-#    resolves regardless of the workspace's own working directory).
+# 2. Merge shared vault MCP into the target's config (preserve other servers).
 TARGET_MCP="$TARGET/.cursor/mcp.json"
-if [[ -f "$TARGET_MCP" ]]; then
-  cp "$TARGET_MCP" "$TARGET_MCP.bak.$(date +%s)"
-  echo "Backed up existing $TARGET_MCP"
-fi
-cat >"$TARGET_MCP" <<EOF
-{
-  "mcpServers": {
-    "obsidian-second-brain": {
-      "command": "uv",
-      "args": [
+mkdir -p "$TARGET/.cursor"
+python3 - "$TARGET_MCP" "$OSB_DIR" "$VAULT_DIR" <<'PY'
+import json, sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+osb_dir = sys.argv[2]
+vault_dir = sys.argv[3]
+existing: dict = {}
+if path.is_file():
+    bak = path.with_suffix(path.suffix + f".bak.{int(__import__('time').time())}")
+    bak.write_text(path.read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"Backed up existing {path} → {bak}")
+    try:
+        existing = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        existing = {}
+servers = dict(existing.get("mcpServers") or {})
+servers["obsidian-second-brain"] = {
+    "command": "uv",
+    "args": [
         "run",
         "--directory",
-        "$OSB_DIR",
+        osb_dir,
         "--with",
         "mcp",
         "python",
-        "integrations/obsidian-mcp-server/server.py"
-      ],
-      "env": {
-        "OBSIDIAN_VAULT_PATH": "$VAULT_DIR"
-      }
-    }
-  }
+        "integrations/obsidian-mcp-server/server.py",
+    ],
+    "env": {"OBSIDIAN_VAULT_PATH": vault_dir},
 }
-EOF
-echo "Wrote $TARGET_MCP (shared vault)"
+doc = {**existing, "mcpServers": servers}
+path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+print(f"Merged obsidian-second-brain into {path} (shared vault)")
+PY
 
 # 3. Record the shared vault in the target's .env (absolute path).
 TARGET_ENV="$TARGET/.env"

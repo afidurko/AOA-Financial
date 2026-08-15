@@ -535,7 +535,7 @@ Configuration loads in this order (lowest → highest priority):
 cp .env.example .env
 export AOA_PROFILE=paper-dry    # recommended starting point (Moomoo + dry-run)
 # Start Moomoo OpenD on 127.0.0.1:11111 (see docs/how-to/moomoo-setup.md)
-# Start local WASTE serve on :8000 (see docs/how-to/waste-local-llm.md)
+# Optional LLM: local WASTE (docs/how-to/waste-local-llm.md), Ollama, or ANTHROPIC_API_KEY.
 aoa setup moomoo
 aoa doctor && aoa run
 ```
@@ -549,7 +549,6 @@ aoa doctor && aoa run
 | `moomoo-paper` / `paper` | Moomoo simulate | enabled | Paper fills via OpenD |
 | `live` | Moomoo live | enabled | Real money — `AOA_LIVE_ACK` + `MOOMOO_UNLOCK_PASSWORD` |
 | *(optional)* `AOA_BROKER=alpaca` | Alpaca paper/live | per env | See `scripts/setup_alpaca_auth.sh` |
-
 Runtime state (journal, daily-loss baseline) is isolated under `data/{AOA_ENV}/`.
 
 Profiles live in `profiles/` — e.g. `profiles/paper-dry.env`, `profiles/moomoo-paper.env`.
@@ -955,12 +954,16 @@ Companion tools that sit beside this repo (not vendored here):
 |---------|----------------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)) |
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT strategy reference — [hft-reference.md](docs/how-to/hft-reference.md) + `aoa.research.hft_patterns` |
 | **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full-LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |
 | **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
+| **[SGX-Full-OrderBook-…](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
+| **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | AS reservation-price MM sim — `aoa avellaneda` research lane |
 
 Companion mesh guide: [docs/how-to/workspaces.md](docs/how-to/workspaces.md).
 

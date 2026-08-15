@@ -351,3 +351,26 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
         "module": "aoa.research.hftish_patterns",
         "companion": "example-hftish",
     }
+
+__all__ = [
+    "BookDiagnosis",
+    "FollowSignal",
+    "LevelChange",
+    "Side",
+    "TopOfBook",
+    "arms_after_level_change",
+    "book_imbalance_side",
+    "book_width",
+    "detect_level_change",
+    "diagnose_quote_book",
+    "diagnose_snapshot_quote",
+    "follow_print_signal",
+    "imbalance_ratio",
+    "is_penny_spread",
+    "position_allows_buy",
+    "position_allows_sell",
+    "prices_match",
+    "snapshot_book_context",
+    "synthetic_smoke",
+    "trade_follows_quote",
+]
