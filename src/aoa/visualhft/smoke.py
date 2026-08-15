@@ -24,7 +24,7 @@ class SmokeResult:
     mid_price: float
     n_trades: int
     seed: int
-    vpin_buckets: int = 0
+    vpin_buckets: int
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

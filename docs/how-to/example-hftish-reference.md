@@ -43,12 +43,14 @@ The sibling directory `example-hftish/` is gitignored.
 from aoa.research.hftish_patterns import (
     TopOfBook,
     detect_level_change,
+    diagnose_quote_book,
     follow_print_signal,
 )
 
 prev = TopOfBook(10.00, 10.01, bid_size=200, ask_size=100, timestamp_ms=0)
 curr = TopOfBook(10.01, 10.02, bid_size=500, ask_size=100, timestamp_ms=100)
 change = detect_level_change(prev, curr)
+diag = diagnose_quote_book(curr.bid, curr.ask, curr.bid_size, curr.ask_size)
 sig = follow_print_signal(
     curr,
     trade_price=10.02,
@@ -57,6 +59,25 @@ sig = follow_print_signal(
     armed=True,
 )  # research signal only — never an AOA order
 ```
+
+## Runtime wiring (AOA systems)
+
+| System | Hook |
+|--------|------|
+| Quotes | `SymbolSnapshot.to_context()` includes `bid_size` / `ask_size` |
+| Julie | `refine()` injects `diagnose_snapshot_quote` hints + optional `book_imbalance:*` signal |
+| Morgan | `analyze_symbol()` injects the same hints into liquidity context |
+| Study | Curriculum card `bridge-hftish-imbalance` (swarm usage block) |
+| CLI | `aoa hftish status` · `aoa hftish smoke` |
+| Mesh | `algo.hftish_patterns` · vault `system-companion` |
+| Patterns | `example-hftish-companion` in `patterns/registry.yaml` |
+
+```bash
+aoa hftish status
+aoa hftish smoke --json
+```
+
+Helpers never call a broker. Sibling `tick_taker.py` is not started by AOA.
 
 ## Map to Julie / study cortex
 

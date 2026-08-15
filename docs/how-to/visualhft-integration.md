@@ -16,10 +16,17 @@ It does **not** replace:
 
 No extra pip dependency — the research lane is pure Python (stdlib only).
 
-Desktop VisualHFT (Windows):
+Desktop VisualHFT (Windows) — prefer the setup script (clones fork + oxyplot):
+
+```bash
+./scripts/visualhft-setup.sh
+export AOA_VISUALHFT_URL=https://github.com/afidurko/VisualHFT
+aoa workspaces status
+```
+
+Or manually (both repos must sit in the same parent folder):
 
 ```powershell
-# Both repositories must sit in the same parent folder.
 git clone https://github.com/visualHFT/oxyplot.git
 git clone https://github.com/afidurko/VisualHFT.git
 # Open VisualHFT/VisualHFT.sln in Visual Studio (.NET 10), F5
@@ -68,6 +75,9 @@ print(run_synthetic_smoke(n_trades=100, seed=1).to_dict())
 | VisualHFT desktop | Live crypto L2 books, tiles, triggers, REST alerts |
 | `aoa visualhft` | Offline Python ports of study math for AOA research |
 | `aoa hft` | Optional hftbacktest tick replay (when that PR/extra is installed) |
+| `aoa workspaces` | Mesh status across OpenStock, QM, VisualHFT, hftbacktest |
+
+See [workspaces.md](workspaces.md) for the full companion map.
 
 ## Safety
 

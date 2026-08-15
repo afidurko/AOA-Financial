@@ -18,10 +18,12 @@ Commands:
   aoa visualhft  Offline VisualHFT microstructure studies (research lane).
   aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
   aoa microstructure  Mesh status for all offline HFT/LOB research lanes.
+  aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
+  aoa hftish     Order-book imbalance research lane (example-hftish patterns).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
@@ -442,6 +444,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         print(f"  ✓ OpenStock link: {cfg.openstock_url}")
     if cfg.qm_url:
         print(f"  ✓ QM harness link: {cfg.qm_url}")
+    if cfg.visualhft_url:
+        print(f"  ✓ VisualHFT link: {cfg.visualhft_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
@@ -1067,6 +1071,31 @@ def cmd_visualhft_studies(*, as_json: bool, ported_only: bool) -> int:
     return 0
 
 
+def cmd_workspaces_status(*, as_json: bool) -> int:
+    from aoa.workspaces import workspaces_report
+
+    # Offline mesh probe — Config without creating .env side effects.
+    cfg = Config.from_env(load_dotenv=False)
+    report = workspaces_report(cfg)
+    if as_json:
+        print(json.dumps(report, indent=2))
+        return 0
+    print("=== Companion workspaces ===")
+    print(f"  linked:  {report['linked']}/{report['count']}")
+    print(f"  present: {report['present']}/{report['count']}")
+    print("  live:    never (mesh is link/status only)")
+    for row in report["workspaces"]:
+        link = "linked" if row["linked"] else "unlinked"
+        path = "present" if row["present"] else "missing"
+        print(f"  · {row['id']:12} [{link}, {path}] {row['title']}")
+        print(f"      {row['role']}")
+        if row["url"]:
+            print(f"      url: {row['url']}")
+        print(f"      path: {row['local_path']}")
+        print(f"      docs: {row['docs']}")
+    return 0
+
+
 def cmd_journal(cfg: Config, n: int) -> int:
     entries = Journal(cfg.journal_path).tail(n)
     if not entries:
@@ -1208,6 +1237,26 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     for e in entries:
         print(f"{e.get('ts', '')}  {e.get('event', '')}")
     return 0
+
+
+def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
+    from aoa.workloop.upgrade import run_upgrade_pipeline
+
+    _ = cfg  # Config required for CLI consistency; pipeline uses repo cwd.
+    result = run_upgrade_pipeline(Path.cwd(), dry_run=dry_run)
+    flag = "OK" if result.get("ok") else "FAIL"
+    mode = "dry-run" if dry_run else "upgrade"
+    print(f"Workloop upgrade pipeline [{mode}]: {flag}")
+    print(f"phase: {result.get('phase', '')}")
+    if result.get("ok"):
+        return 0
+    upgrade = result.get("upgrade") or {}
+    if upgrade.get("output"):
+        print(upgrade["output"][-500:])
+    reverify = result.get("reverify") or {}
+    if reverify and not reverify.get("passed"):
+        print("Reverify failed after upgrade.")
+    return 1
 
 
 def _print_repair_result(result) -> None:
@@ -1599,6 +1648,64 @@ def cmd_study_sync(cfg: Config, *, as_json: bool) -> int:
         return 1
     print(f"Study vault sync: wrote {result['notes_written']} notes under {result['study_dir']}")
     return 0
+
+
+def cmd_hftish_status(*, as_json: bool) -> int:
+    """Show example-hftish companion wiring (research-only)."""
+    root = _repo_root()
+    sibling = root / "example-hftish"
+    status = {
+        "available": True,
+        "module": "aoa.research.hftish_patterns",
+        "companion": "example-hftish",
+        "sibling_present": (sibling / ".git").is_dir()
+        or (sibling / "tick_taker.py").is_file(),
+        "sibling_path": str(sibling),
+        "setup": "scripts/example-hftish-setup.sh",
+        "docs": "docs/how-to/example-hftish-reference.md",
+        "study_card": "bridge-hftish-imbalance",
+        "mesh_algo": "algo.hftish_patterns",
+        "consumers": [
+            "julie.refine",
+            "morgan.analyze_symbol",
+            "SymbolSnapshot.to_context",
+        ],
+        "never_live": True,
+        "hint": "aoa hftish smoke — offline follow/imbalance check (no broker)",
+    }
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== example-hftish research lane ===")
+    print(f"  module:    {status['module']}")
+    print(
+        f"  sibling:   {'present' if status['sibling_present'] else 'missing'} ({sibling})"
+    )
+    print(f"  mesh:      {status['mesh_algo']}")
+    print(f"  study:     {status['study_card']}")
+    print(f"  consumers: {', '.join(status['consumers'])}")
+    print(f"  never_live:{status['never_live']}")
+    print(f"  next:      {status['hint']}")
+    return 0
+
+
+def cmd_hftish_smoke(*, seed: int, as_json: bool) -> int:
+    from aoa.research.hftish_patterns import synthetic_smoke
+
+    result = synthetic_smoke(seed=seed)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== example-hftish synthetic smoke ===")
+        print(f"  ok:           {result['ok']}")
+        print(f"  level_change: {result['level_change']}")
+        print(f"  armed:        {result['armed']}")
+        print(f"  follow:       {result['follow']}")
+        diag = result.get("diagnosis") or {}
+        print(f"  side:         {diag.get('side')}")
+        print(f"  note:         {diag.get('note')}")
+        print(f"  never_live:   {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
 
 
 def _attl_orchestrator(cfg: Config):
@@ -2267,7 +2374,12 @@ def main(argv: list[str] | None = None) -> int:
         "smoke",
         help="Run LOB imbalance / VPIN / OTR on a synthetic tape.",
     )
-    vh_smoke.add_argument("--trades", type=int, default=200, help="Synthetic trade count.")
+    vh_smoke.add_argument(
+        "--trades",
+        type=int,
+        default=200,
+        help="Synthetic trade count (minimum 20 so VPIN can complete a bucket).",
+    )
     vh_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
     vh_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
     vh_studies = vh_sub.add_parser("studies", help="List VisualHFT studies and port status.")
@@ -2285,6 +2397,17 @@ def main(argv: list[str] | None = None) -> int:
     ms_sub = ms.add_subparsers(dest="microstructure_command", required=True)
     ms_status = ms_sub.add_parser("status", help="Show aggregated lane availability.")
     ms_status.add_argument("--json", action="store_true", help="Emit JSON.")
+
+    ws = sub.add_parser(
+        "workspaces",
+        help="Companion workspace mesh (OpenStock, QM, VisualHFT, hftbacktest).",
+    )
+    ws_sub = ws.add_subparsers(dest="workspaces_command", required=True)
+    ws_status = ws_sub.add_parser(
+        "status",
+        help="Show sibling workspace link/path status (never live).",
+    )
+    ws_status.add_argument("--json", action="store_true", help="Emit JSON.")
 
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
@@ -2324,6 +2447,15 @@ def main(argv: list[str] | None = None) -> int:
     wl_approve.add_argument("--note", default="", help="Optional approval note.")
     wl_log = wl_sub.add_parser("log", help="Tail the work-loop audit log.")
     wl_log.add_argument("-n", type=int, default=20, help="Number of entries to show.")
+    wl_up = wl_sub.add_parser(
+        "upgrade",
+        help="Dependency upgrade pipeline: verify → pip upgrade → reverify.",
+    )
+    wl_up.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run baseline verify only; skip pip upgrade.",
+    )
 
     rp = sub.add_parser(
         "repair",
@@ -2409,6 +2541,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     st_sync = st_sub.add_parser("sync", help="Write vault/study notes from curriculum + mastery.")
     st_sync.add_argument("--json", action="store_true", help="Emit JSON.")
+
+    hf = sub.add_parser(
+        "hftish",
+        help="example-hftish order-book imbalance research lane (no orders).",
+    )
+    hf_sub = hf.add_subparsers(dest="hftish_command", required=True)
+    hf_status = hf_sub.add_parser("status", help="Show companion wiring + consumers.")
+    hf_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    hf_smoke = hf_sub.add_parser(
+        "smoke",
+        help="Offline synthetic level-change / imbalance / follow check.",
+    )
+    hf_smoke.add_argument("--seed", type=int, default=7, help="Reserved for future RNG.")
+    hf_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
 
     tk = sub.add_parser(
         "tasks",
@@ -2521,9 +2667,9 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_hft_status(as_json=getattr(args, "json", False))
         if args.hft_command == "smoke":
             return cmd_hft_smoke(
-                n_events=args.events,
-                steps=args.steps,
-                seed=args.seed,
+                n_events=getattr(args, "events", 400),
+                steps=getattr(args, "steps", 20),
+                seed=getattr(args, "seed", 1),
                 as_json=getattr(args, "json", False),
             )
         if args.hft_command == "book-smoke":
@@ -2533,8 +2679,8 @@ def main(argv: list[str] | None = None) -> int:
                 data=args.data,
                 tick_size=args.tick_size,
                 lot_size=args.lot_size,
-                steps=args.steps,
-                step_ns=args.step_ns,
+                steps=getattr(args, "steps", 20),
+                step_ns=getattr(args, "step_ns", 50_000_000),
                 as_json=getattr(args, "json", False),
             )
         return 2
@@ -2561,6 +2707,19 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "microstructure":
         if args.microstructure_command == "status":
             return cmd_microstructure_status(as_json=getattr(args, "json", False))
+        return 2
+    if args.command == "workspaces":
+        if args.workspaces_command == "status":
+            return cmd_workspaces_status(as_json=getattr(args, "json", False))
+        return 2
+    if args.command == "hftish":
+        if args.hftish_command == "status":
+            return cmd_hftish_status(as_json=getattr(args, "json", False))
+        if args.hftish_command == "smoke":
+            return cmd_hftish_smoke(
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
         return 2
 
     _ensure_env_template()
@@ -2641,6 +2800,10 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_workloop_approve(cfg, approver=approver, note=args.note)
             if args.workloop_command == "log":
                 return cmd_workloop_log(cfg, args.n)
+            if args.workloop_command == "upgrade":
+                return cmd_workloop_upgrade(
+                    cfg, dry_run=getattr(args, "dry_run", False)
+                )
         if args.command == "repair":
             if args.repair_command == "triage":
                 return cmd_repair_triage(cfg, no_sync=getattr(args, "no_sync", False))

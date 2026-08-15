@@ -38,7 +38,8 @@ futures HFT strategies. Distilled Python helpers live in
 
 Sibling [afidurko/example-hftish](https://github.com/afidurko/example-hftish)
 documents Alpaca's 1¢ level-change / book-imbalance tick-taker. Distilled Python
-helpers live in `aoa.research.hftish_patterns` (no broker calls). Study bridge:
+helpers live in `aoa.research.hftish_patterns` (no broker calls). Julie/Morgan
+inject `diagnose_snapshot_quote` into prompts; CLI `aoa hftish`. Study bridge:
 `bridge-hftish-imbalance`. Setup: `./scripts/example-hftish-setup.sh` ·
 [docs/how-to/example-hftish-reference.md](../../docs/how-to/example-hftish-reference.md).
 

@@ -55,6 +55,8 @@ class SymbolSnapshot:
                 {
                     "bid": q.bid,
                     "ask": q.ask,
+                    "bid_size": q.bid_size,
+                    "ask_size": q.ask_size,
                     "mid": q.mid,
                     "spread": q.spread,
                 }

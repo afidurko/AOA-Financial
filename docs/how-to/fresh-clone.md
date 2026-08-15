@@ -158,7 +158,7 @@ export AOA_QM_URL=http://localhost:8081
 ```
 
 See [qm-integration.md](qm-integration.md). Other companions:
-[docs/help.md](../help.md).
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
 
 ## 8. HFT strategy reference (optional)
 
@@ -173,6 +173,19 @@ See [hft-reference.md](hft-reference.md). Python idea ports:
 `aoa.research.hft_patterns`.
 
 ## 9. example-hftish reference (optional)
+## 11. VisualHFT (optional)
+Clone the microstructure desktop workspace and enable the dashboard link:
+./scripts/visualhft-setup.sh
+export AOA_VISUALHFT_URL=https://github.com/afidurko/VisualHFT
+aoa visualhft status
+aoa workspaces status
+See [visualhft-integration.md](visualhft-integration.md).
+## 12. Workspaces (optional)
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+See [workspace-mesh.md](workspace-mesh.md).
+## 13. example-hftish reference (optional)
 
 Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
 reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
@@ -197,3 +210,4 @@ AOA does not run the notebooks:
 
 See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
 `aoa.research.sgx_orderbook_patterns`.
+`aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.

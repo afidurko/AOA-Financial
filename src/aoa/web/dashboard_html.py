@@ -50,6 +50,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <a id="openstock-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">OpenStock ↗</a>
       <a id="obsidian-link" href="#" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">Second Brain ↗</a>
       <a id="qm-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">QM ↗</a>
+      <a id="visualhft-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">VisualHFT ↗</a>
       <div id="market-status" class="stat-sm">Market: —</div>
     </div>
   </header>
@@ -189,6 +190,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         qmLink.style.display='inline';
       } else {
         qmLink.style.display='none';
+      }
+      const vhLink=document.getElementById('visualhft-link');
+      if(config.visualhft_url){
+        vhLink.href=config.visualhft_url;
+        vhLink.style.display='inline';
+      } else {
+        vhLink.style.display='none';
       }
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;

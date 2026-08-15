@@ -11,12 +11,14 @@ from aoa.research.hftish_patterns import (
     TopOfBook,
     arms_after_level_change,
     book_imbalance_side,
+    book_width,
     detect_level_change,
     follow_print_signal,
     imbalance_ratio,
     is_penny_spread,
     position_allows_buy,
     position_allows_sell,
+    prices_match,
     trade_follows_quote,
 )
 
@@ -24,6 +26,7 @@ from aoa.research.hftish_patterns import (
 def test_penny_spread_and_level_change():
     assert is_penny_spread(10.00, 10.01)
     assert not is_penny_spread(10.00, 10.02)
+    assert book_width(10.00, 10.01) == pytest.approx(0.01)
 
     prev = TopOfBook(10.00, 10.01, bid_size=200, ask_size=100, timestamp_ms=1_000.0)
     # Both sides move to a new penny spread → level change
@@ -63,6 +66,7 @@ def test_follow_print_buy_and_sell():
     quote = TopOfBook(10.01, 10.02, bid_size=500, ask_size=100, timestamp_ms=1_000.0)
     assert trade_follows_quote(1_000.0, 1_060.0, min_lag_ms=50.0)
     assert not trade_follows_quote(1_000.0, 1_040.0, min_lag_ms=50.0)
+    assert prices_match(10.02, 10.0200001)
 
     buy = follow_print_signal(
         quote,

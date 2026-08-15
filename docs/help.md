@@ -30,6 +30,14 @@ aoa serve
 Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md) ·
 [how-to/visualhft-integration.md](how-to/visualhft-integration.md).
 
+Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest):
+
+```bash
+aoa workspaces status
+```
+
+Guide: [how-to/workspaces.md](how-to/workspaces.md).
+
 ## Engineering loop
 
 | Resource | Role |
@@ -54,6 +62,7 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 [how-to/hft-reference.md](how-to/hft-reference.md),
 [how-to/example-hftish-reference.md](how-to/example-hftish-reference.md),
 [how-to/sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md).
+Julie/Morgan consume research-only book hints; CLI: `aoa hftish status|smoke` when available.
 Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)

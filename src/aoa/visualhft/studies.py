@@ -30,8 +30,8 @@ def lob_imbalance(
     depth = book_depth if book_depth is not None else max(len(bid_sizes), len(ask_sizes))
     if depth <= 0:
         return 0.0
-    total_bid = sum(float(bid_sizes[i]) for i in range(min(depth, len(bid_sizes))))
-    total_ask = sum(float(ask_sizes[i]) for i in range(min(depth, len(ask_sizes))))
+    total_bid = sum(float(size) for size in bid_sizes[:depth])
+    total_ask = sum(float(size) for size in ask_sizes[:depth])
     denom = total_bid + total_ask
     if denom == 0:
         return 0.0
