@@ -14,11 +14,8 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
-<<<<<<< HEAD
-  aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
-=======
   aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
->>>>>>> origin/cursor/hftbacktest-framework-f466
+  aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
