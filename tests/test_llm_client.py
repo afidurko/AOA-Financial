@@ -160,6 +160,12 @@ def test_build_llm_openai_compatible():
     assert client.effort == "medium"
 
 
+def test_build_llm_rejects_unknown_provider():
+    cfg = Config(llm_provider="ollama", llm_base_url="http://127.0.0.1:11434")
+    with pytest.raises(LLMError, match="Unsupported AOA_LLM_PROVIDER"):
+        build_llm(cfg)
+
+
 def test_build_llm_anthropic_opt_in():
     cfg = Config(
         llm_provider="anthropic",
@@ -169,3 +175,16 @@ def test_build_llm_anthropic_opt_in():
     client = build_llm(cfg)
     assert client.provider == "anthropic"
     assert client.model == "claude-sonnet-4-6"
+
+
+def test_llm_from_config_openai_compatible():
+    from aoa.llm.client import llm_from_config
+
+    cfg = Config(
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+        model="k3",
+    )
+    client = llm_from_config(cfg)
+    assert client.provider == "openai_compatible"
+    assert client.model == "k3"

@@ -31,8 +31,8 @@ else
   need 'Run: pip install moomoo-api  (or pip install -e ".[dev]")'
 fi
 
-if grep -q '^AOA_LLM_PROVIDER=openai_compatible' .env 2>/dev/null \
-  || grep -q '^AOA_LLM_BASE_URL=' .env 2>/dev/null; then
+if grep -qE '^AOA_LLM_PROVIDER=openai_compatible[[:space:]]*$' .env 2>/dev/null \
+  && grep -qE '^AOA_LLM_BASE_URL=https?://[^[:space:]]+' .env 2>/dev/null; then
   ok "Local LLM (WASTE / openai_compatible) configured in .env"
 elif grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
   ok "ANTHROPIC_API_KEY looks set (opt-in Claude provider)"

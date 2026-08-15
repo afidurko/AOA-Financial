@@ -105,6 +105,12 @@ class ClaudeAnalyst:
                 return offline
         return self._analyze_offline(ticker, evidence)
 
+    def _anthropic_api_key(self) -> str:
+        key = (self.config.llm_api_key or "").strip()
+        if key and key != "local":
+            return key
+        return (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
+
     def _can_use_live(self) -> bool:
         if os.environ.get("AOA_FORCE_OFFLINE") == "1":
             return False
@@ -112,7 +118,7 @@ class ClaudeAnalyst:
         if provider == "openai_compatible":
             return bool(self.config.llm_base_url)
         if provider == "anthropic":
-            if not os.environ.get("ANTHROPIC_API_KEY") and not self.config.llm_api_key:
+            if not self._anthropic_api_key():
                 return False
             try:
                 import anthropic  # noqa: F401
@@ -125,7 +131,9 @@ class ClaudeAnalyst:
         provider = (self.config.llm_provider or "openai_compatible").lower()
         if provider == "openai_compatible":
             return self._analyze_openai(ticker, evidence)
-        return self._analyze_anthropic(ticker, evidence)
+        if provider == "anthropic":
+            return self._analyze_anthropic(ticker, evidence)
+        raise RuntimeError(f"Unsupported LLM provider: {provider!r}")
 
     def _analyze_openai(self, ticker: str, evidence: dict[str, Any]) -> AnalystResult:
         user_content = (
@@ -189,7 +197,7 @@ class ClaudeAnalyst:
     def _analyze_anthropic(self, ticker: str, evidence: dict[str, Any]) -> AnalystResult:
         import anthropic
 
-        client = anthropic.Anthropic(api_key=self.config.llm_api_key or None)
+        client = anthropic.Anthropic(api_key=self._anthropic_api_key() or None)
         user_content = (
             "Quantitative evidence packet (JSON):\n\n"
             + json.dumps(evidence, indent=2)

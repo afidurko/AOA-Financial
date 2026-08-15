@@ -1,7 +1,7 @@
 """Command-line interface for the AOA Financial swarm.
 
 Commands:
-  aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
+  aoa bars       Fetch recent OHLCV bars (Moomoo OpenD or Alpaca).
   aoa doctor     Validate configuration & connectivity.
   aoa setup      One-time setup (mac, moomoo, …).
   aoa status     Show account, positions, and market clock.
@@ -42,7 +42,7 @@ from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
 from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
-from aoa.llm.client import LLMClient, LLMError
+from aoa.llm.client import LLMClient, LLMError, llm_from_config
 from aoa.repair.orchestrator import RepairOrchestrator
 from aoa.reporting import position_pnl, summarize_journal
 from aoa.simulation.live import LiveMarketTracker
@@ -73,20 +73,7 @@ def build_broker(cfg: Config) -> Broker:
 
 
 def build_llm(cfg: Config) -> LLMClient:
-    if cfg.llm_provider == "openai_compatible":
-        return LLMClient(
-            cfg.llm_api_key or cfg.anthropic_api_key or "local",
-            provider="openai_compatible",
-            model=cfg.model,
-            effort=cfg.effort,
-            base_url=cfg.llm_base_url,
-        )
-    return LLMClient(
-        cfg.anthropic_api_key,
-        provider="anthropic",
-        model=cfg.model,
-        effort=cfg.effort,
-    )
+    return llm_from_config(cfg)
 
 
 def build_news(cfg: Config) -> NewsFeed:
@@ -345,6 +332,26 @@ def cmd_bars(
         print("Provide at least one symbol, e.g. BTC/USD or AAPL.", file=sys.stderr)
         return 1
 
+    if cfg.broker == "moomoo":
+        if crypto:
+            print(
+                "Crypto pairs are not available via Moomoo OpenD in AOA; "
+                "omit them or set AOA_BROKER=alpaca for crypto bars.",
+                file=sys.stderr,
+            )
+            if not stocks:
+                return 1
+        if stocks:
+            try:
+                broker = build_broker(cfg)
+                for sym in stocks:
+                    bars = broker.get_bars(sym, timeframe=timeframe, limit=limit)
+                    _print_bars_table(sym, bars, asset="Stock")
+            except BrokerError as exc:
+                print(f"Moomoo bars failed: {exc}", file=sys.stderr)
+                return 1
+        return 0
+
     fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
     try:
         if crypto:
@@ -389,6 +396,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
             f"({cfg.moomoo_market}, {'live' if cfg.moomoo_live else 'simulate'})"
         )
+        if cfg.news_enabled:
+            print("  · News feed: Moomoo headlines not wired yet (NullNewsFeed).")
     elif cfg.alpaca_auth_source:
         label = cfg.alpaca_auth_source
         if cfg.alpaca_cli_profile:

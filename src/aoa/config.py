@@ -393,12 +393,13 @@ class Config:
                 os.environ.get("AOA_LLM_BASE_URL", "http://127.0.0.1:8000/v1")
                 .strip()
                 .rstrip("/")
+                or "http://127.0.0.1:8000/v1"
             ),
             llm_api_key=os.environ.get("AOA_LLM_API_KEY", "").strip(),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            model=os.environ.get(
-                "AOA_MODEL",
-                (
+            model=(
+                os.environ.get("AOA_MODEL", "").strip()
+                or (
                     "claude-sonnet-4-6"
                     if (
                         os.environ.get("AOA_LLM_PROVIDER", "openai_compatible")
@@ -407,7 +408,7 @@ class Config:
                         == "anthropic"
                     )
                     else "kimi-linear"
-                ),
+                )
             ),
             effort=os.environ.get("AOA_EFFORT", "high"),
             broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
@@ -529,6 +530,8 @@ class Config:
                 f"AOA_LLM_PROVIDER must be one of {sorted(VALID_LLM_PROVIDERS)} "
                 f"(got {self.llm_provider!r})."
             )
+        if not (self.model or "").strip():
+            problems.append("AOA_MODEL must be a non-empty model id.")
         if self.env != "test":
             if self.llm_provider == "anthropic" and not self.anthropic_api_key:
                 problems.append(

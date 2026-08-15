@@ -334,3 +334,25 @@ def test_workloop_escalated_changes_require_user_approval(tmp_path, monkeypatch)
     assert done.halted is False
     assert done.run.status == "completed"
 
+
+
+def test_optional_llm_uses_waste_without_anthropic_key(tmp_path):
+    from aoa.workloop.stages import _optional_llm
+
+    cfg = _config(
+        tmp_path,
+        anthropic_api_key="",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+        model="kimi-linear",
+    )
+    llm = _optional_llm(cfg)
+    assert llm is not None
+    assert llm.provider == "openai_compatible"
+
+
+def test_optional_llm_none_for_anthropic_without_key(tmp_path):
+    from aoa.workloop.stages import _optional_llm
+
+    cfg = _config(tmp_path, anthropic_api_key="", llm_provider="anthropic")
+    assert _optional_llm(cfg) is None

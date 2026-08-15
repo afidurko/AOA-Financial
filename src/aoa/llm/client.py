@@ -283,3 +283,35 @@ def _openai_first_text(payload: dict[str, Any]) -> str:
         if text:
             return text
     raise LLMError(f"OpenAI-compatible response contained no text: {payload!r}")
+
+
+def llm_from_config(cfg: Any) -> LLMClient:
+    """Build an :class:`LLMClient` from an AOA ``Config``-like object.
+
+    Shared by the CLI, workloop, and smoke scripts so provider/base_url
+    selection cannot drift.
+    """
+    provider = getattr(cfg, "llm_provider", "openai_compatible")
+    model = getattr(cfg, "model", "kimi-linear")
+    effort = getattr(cfg, "effort", "high")
+    if provider == "openai_compatible":
+        return LLMClient(
+            getattr(cfg, "llm_api_key", "")
+            or getattr(cfg, "anthropic_api_key", "")
+            or "local",
+            provider="openai_compatible",
+            model=model,
+            effort=effort,
+            base_url=getattr(cfg, "llm_base_url", None) or _DEFAULT_BASE_URL,
+        )
+    if provider == "anthropic":
+        return LLMClient(
+            getattr(cfg, "anthropic_api_key", ""),
+            provider="anthropic",
+            model=model,
+            effort=effort,
+        )
+    raise LLMError(
+        f"Unsupported AOA_LLM_PROVIDER {provider!r}; expected one of "
+        f"{sorted(_VALID_PROVIDERS)}."
+    )

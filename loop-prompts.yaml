@@ -110,11 +110,11 @@ prompts:
     tier: human
     body: |
       Walk me through SETUP-AWAITING-YOU.md for AOA-Financial in paper-dry mode:
-      1. ANTHROPIC_API_KEY in .env
-      2. alpaca profile login (paper) or PK keys
-      3. pip install -e ".[dev]" && python3 -m aoa.cli doctor
+      1. Local WASTE serve on :8000 (AOA_LLM_PROVIDER=openai_compatible — docs/how-to/waste-local-llm.md)
+      2. Moomoo OpenD on 127.0.0.1:11111 (aoa setup moomoo)
+      3. pip install -e ".[dev,web]" && python3 -m aoa.cli doctor
       4. python3 -m aoa.cli run (single paper-dry cycle)
-      Do not enable live trading. Do not paste secrets into chat.
+      Do not enable live trading. Do not paste secrets into chat. Claude/Alpaca are optional.
 
   REVIEW:
     title: Weekly loop review (Max 5×)
