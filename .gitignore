@@ -280,3 +280,4 @@ AOA-Vault/
 qm/
 # example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
 example-hftish/
+loop-state/
