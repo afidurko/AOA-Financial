@@ -15,6 +15,8 @@ Commands:
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
+  aoa visualhft  Offline VisualHFT microstructure studies (research lane).
+  aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
@@ -439,6 +441,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         print(f"  ✓ OpenStock link: {cfg.openstock_url}")
     if cfg.qm_url:
         print(f"  ✓ QM harness link: {cfg.qm_url}")
+    if cfg.visualhft_url:
+        print(f"  ✓ VisualHFT link: {cfg.visualhft_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
@@ -999,6 +1003,93 @@ def cmd_watch(
         )
     except KeyboardInterrupt:
         print("\nStopped.")
+    return 0
+
+
+def cmd_visualhft_status(*, as_json: bool) -> int:
+    from aoa.visualhft import probe_status
+
+    status = probe_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== VisualHFT research lane ===")
+    print(f"  available:  {status['available']}")
+    print(f"  runtime:    {status['runtime']}")
+    print(f"  desktop:    {status['desktop_host']}")
+    print(f"  studies:    {', '.join(status['studies_ported'])}")
+    print(f"  offline:    {status.get('offline_only', True)}")
+    print(f"  never_live: {status.get('never_live', True)}")
+    print(f"  fork:       {status['fork']}")
+    print(f"  upstream:   {status['upstream']}")
+    print(f"  next:       {status.get('hint')}")
+    return 0
+
+
+def cmd_visualhft_smoke(*, n_trades: int, seed: int, as_json: bool) -> int:
+    from aoa.visualhft import run_synthetic_smoke
+
+    try:
+        result = run_synthetic_smoke(n_trades=n_trades, seed=seed)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+        else:
+            print(str(exc), file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== VisualHFT synthetic smoke ===")
+        print(f"  ok:        {result.ok}")
+        print(f"  lob imb:   {result.lob_imbalance:.4f}")
+        print(f"  vpin:      {result.vpin:.4f}")
+        print(f"  otr:       {result.order_to_trade_ratio:.4f}")
+        print(f"  mid:       {result.mid_price}")
+        print(f"  trades:    {result.n_trades}")
+        print(f"  buckets:   {result.vpin_buckets}")
+        print(f"  seed:      {result.seed}")
+    return 0 if result.ok else 1
+
+
+def cmd_visualhft_studies(*, as_json: bool, ported_only: bool) -> int:
+    from aoa.visualhft import list_studies
+
+    rows = list_studies(ported_only=ported_only)
+    payload = {"studies": rows, "count": len(rows), "ported_only": ported_only}
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print("=== VisualHFT studies ===")
+    for row in rows:
+        flag = "ported" if row.get("ported") else "desktop-only"
+        print(f"  {row['id']:24} [{flag}] {row['title']}")
+        print(f"    {row['summary']}")
+    return 0
+
+
+def cmd_workspaces_status(*, as_json: bool) -> int:
+    from aoa.workspaces import workspaces_report
+
+    # Offline mesh probe — Config without creating .env side effects.
+    cfg = Config.from_env(load_dotenv=False)
+    report = workspaces_report(cfg)
+    if as_json:
+        print(json.dumps(report, indent=2))
+        return 0
+    print("=== Companion workspaces ===")
+    print(f"  linked:  {report['linked']}/{report['count']}")
+    print(f"  present: {report['present']}/{report['count']}")
+    print("  live:    never (mesh is link/status only)")
+    for row in report["workspaces"]:
+        link = "linked" if row["linked"] else "unlinked"
+        path = "present" if row["present"] else "missing"
+        print(f"  · {row['id']:12} [{link}, {path}] {row['title']}")
+        print(f"      {row['role']}")
+        if row["url"]:
+            print(f"      url: {row['url']}")
+        print(f"      path: {row['local_path']}")
+        print(f"      docs: {row['docs']}")
     return 0
 
 
@@ -2048,6 +2139,44 @@ def main(argv: list[str] | None = None) -> int:
         "--halflife", type=int, default=63, help="Recency half-life (bars) for adaptation."
     )
 
+    vh = sub.add_parser(
+        "visualhft",
+        help="Offline VisualHFT microstructure studies (never live).",
+    )
+    vh_sub = vh.add_subparsers(dest="visualhft_command", required=True)
+    vh_status = vh_sub.add_parser("status", help="Show VisualHFT research-lane status.")
+    vh_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_smoke = vh_sub.add_parser(
+        "smoke",
+        help="Run LOB imbalance / VPIN / OTR on a synthetic tape.",
+    )
+    vh_smoke.add_argument(
+        "--trades",
+        type=int,
+        default=200,
+        help="Synthetic trade count (minimum 20 so VPIN can complete a bucket).",
+    )
+    vh_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
+    vh_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_studies = vh_sub.add_parser("studies", help="List VisualHFT studies and port status.")
+    vh_studies.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_studies.add_argument(
+        "--ported-only",
+        action="store_true",
+        help="Only list studies with a Python port.",
+    )
+
+    ws = sub.add_parser(
+        "workspaces",
+        help="Companion workspace mesh (OpenStock, QM, VisualHFT, hftbacktest).",
+    )
+    ws_sub = ws.add_subparsers(dest="workspaces_command", required=True)
+    ws_status = ws_sub.add_parser(
+        "status",
+        help="Show sibling workspace link/path status (never live).",
+    )
+    ws_status.add_argument("--json", action="store_true", help="Emit JSON.")
+
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
     wl_run = wl_sub.add_parser("run", help="Run the work loop.")
@@ -2261,6 +2390,27 @@ def main(argv: list[str] | None = None) -> int:
     ship_ready.add_argument("--json", action="store_true", help="Emit JSON.")
 
     args = parser.parse_args(argv)
+
+    # Offline research lane — no .env template and no Config/broker side effects.
+    if args.command == "visualhft":
+        if args.visualhft_command == "status":
+            return cmd_visualhft_status(as_json=getattr(args, "json", False))
+        if args.visualhft_command == "smoke":
+            return cmd_visualhft_smoke(
+                n_trades=getattr(args, "trades", 200),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.visualhft_command == "studies":
+            return cmd_visualhft_studies(
+                as_json=getattr(args, "json", False),
+                ported_only=getattr(args, "ported_only", False),
+            )
+
+    if args.command == "workspaces":
+        if args.workspaces_command == "status":
+            return cmd_workspaces_status(as_json=getattr(args, "json", False))
+
     _ensure_env_template()
     cfg = Config.from_env()
 

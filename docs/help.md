@@ -25,8 +25,18 @@ aoa serve
 | Resource | Role |
 |----------|------|
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Sibling market dashboard (charts, watchlists). Link from the AOA header via `AOA_OPENSTOCK_URL`. |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live Level-2 microstructure desktop app (Windows/.NET). AOA ports LOB imbalance, VPIN, and OTR offline via `aoa visualhft`. |
 
-Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md).
+Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md) ·
+[how-to/visualhft-integration.md](how-to/visualhft-integration.md).
+
+Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest):
+
+```bash
+aoa workspaces status
+```
+
+Guide: [how-to/workspaces.md](how-to/workspaces.md).
 
 ## Engineering loop
 
