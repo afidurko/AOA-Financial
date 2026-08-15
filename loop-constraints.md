@@ -65,17 +65,19 @@ Meshed control plane: **brain/** + **12-member team** + **repair/task factory** 
 
 ## Canonical run order (meshed)
 
+**Coding, fixing, and simplifying MUST use the ATTL loop** (`aoa team code` or
+`aoa attl run`) — not ad-hoc edits outside maker/checker.
+
 ```
 loop-constraints → loop-budget (start)
-  → aoa attl brain sync          # Nova
-  → aoa repair triage            # discover
-  → aoa integrity run            # Integrity Ten (notify if corrective needs approve)
-  → aoa attl run                 # Reed + critical Kai gate
-  → (if coding) maker → tests → draft PR
-  → brain capture + loop-run-log → loop-budget (end)
+  → aoa team code / aoa attl run   # health+triage+Nova+Reed+Kai (+ worktree)
+  → aoa integrity run              # Integrity Ten (notify if corrective needs approve)
+  → (if coding) maker (minimal-fix / coding-engineer) → tests → draft PR
+  → loop-verifier when verifying → brain capture + loop-run-log → loop-budget (end)
 ```
 
-Shortcut: `aoa attl run` performs the meshed auto cycle (pause/gate/brain/propose/critical).
+Shortcut: `aoa attl run` / `aoa team code` performs the meshed auto cycle
+(pause/gate/brain/propose/critical).
 Integrity Ten: `aoa integrity run` / `aoa integrity watch` — implant only via `aoa integrity approve`.
 
 ## Docs
