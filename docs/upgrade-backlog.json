@@ -22,7 +22,7 @@
       "title": "Default paper profiles to Alpaca broker",
       "skill": "minimal-fix",
       "automatable": true,
-      "detail": "Set AOA_BROKER=alpaca in profiles/paper-dry.env and profiles/paper.env.",
+      "detail": "Revised: paper-dry stays Moomoo (local OpenD); cloud/CI use AOA_BROKER=alpaca or doctor --offline. paper.env may use alpaca.",
       "files": ["profiles/paper-dry.env", "profiles/paper.env"]
     },
     "upg-002": {
