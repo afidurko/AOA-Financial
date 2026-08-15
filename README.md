@@ -596,6 +596,11 @@ aoa simulate AAPL --paths 5000 --seed 1   # Monte-Carlo forward paths + scenario
 aoa simulate AAPL --method bootstrap   # block-bootstrap (keeps fat tails) instead of GBM
 aoa scenarios                          # list the built-in stress-scenario library
 aoa watch AAPL MSFT --interval 30      # LIVE: re-analyze & re-simulate as prices move
+
+# Optional HFT/L2 backtest (pip install -e ".[hftbacktest]"; offline only):
+aoa hft status
+aoa hft smoke                           # synthetic L2 depth smoke (no orders)
+# See docs/how-to/hftbacktest-integration.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,

@@ -14,6 +14,7 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
+  aoa hft        Offline HFT/L2 backtest lane (optional hftbacktest extra).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
@@ -763,6 +764,119 @@ def cmd_scenarios(cfg: Config) -> int:
             f"{s.max_drawdown_pct:>8.1f}%  {s.description}"
         )
     return 0
+
+
+def cmd_hft_status(*, as_json: bool) -> int:
+    from aoa.hftbacktest import probe_status
+
+    status = probe_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0 if status["installed"] else 1
+    print("=== HFT backtest (hftbacktest) ===")
+    print(f"  installed: {status['installed']}")
+    print(f"  version:   {status.get('version') or '—'}")
+    print(f"  engine:    {status.get('engine') or '—'}")
+    print(f"  offline:   {status.get('offline_only', True)}")
+    print(f"  upstream:  {status.get('upstream')}")
+    if not status["installed"]:
+        print(f"  install:   {status.get('hint')}")
+        return 1
+    print(f"  next:      {status.get('hint')}")
+    return 0
+
+
+def cmd_hft_smoke(
+    *,
+    n_events: int,
+    steps: int,
+    seed: int,
+    as_json: bool,
+) -> int:
+    from aoa.hftbacktest import HAS_HFTBACKTEST, run_npz_smoke
+
+    if not HAS_HFTBACKTEST:
+        msg = 'hftbacktest not installed. Run: pip install -e ".[hftbacktest]"'
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    result = run_npz_smoke(n_events=n_events, steps=steps, seed=seed)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== HFT synthetic L2 smoke ===")
+        print(f"  ok:        {result.ok}")
+        print(f"  steps:     {result.steps}")
+        print(f"  best bid:  {result.best_bid}")
+        print(f"  best ask:  {result.best_ask}")
+        print(f"  position:  {result.position}")
+        print(f"  events:    {result.n_events}  seed={result.seed}")
+        print(f"  detail:    {result.detail}")
+    return 0 if result.ok else 1
+
+
+def cmd_hft_run(
+    *,
+    data: str,
+    tick_size: float,
+    lot_size: float,
+    steps: int,
+    step_ns: int,
+    as_json: bool,
+) -> int:
+    """Advance an on-disk hftbacktest feed without placing orders (offline probe)."""
+    from aoa.hftbacktest import HAS_HFTBACKTEST
+    from aoa.hftbacktest.runner import load_npz_from_npz
+
+    if not HAS_HFTBACKTEST:
+        msg = 'hftbacktest not installed. Run: pip install -e ".[hftbacktest]"'
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    path = Path(data)
+    if not path.exists():
+        msg = f"data file not found: {path}"
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+
+    hbt = load_npz_from_npz(
+        str(path), tick_size=tick_size, lot_size=lot_size
+    )
+    try:
+        advanced = 0
+        for _ in range(steps):
+            if hbt.elapse(step_ns) != 0:
+                break
+            advanced += 1
+        depth = hbt.depth(0)
+        payload = {
+            "ok": advanced > 0,
+            "data": str(path),
+            "steps": advanced,
+            "best_bid": float(depth.best_bid),
+            "best_ask": float(depth.best_ask),
+            "position": float(hbt.position(0)),
+            "offline_only": True,
+        }
+    finally:
+        hbt.close()
+
+    if as_json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"=== HFT feed probe: {path.name} ===")
+        print(f"  steps:     {payload['steps']}")
+        print(f"  best bid:  {payload['best_bid']}")
+        print(f"  best ask:  {payload['best_ask']}")
+        print(f"  position:  {payload['position']}")
+    return 0 if payload["ok"] else 1
 
 
 def cmd_watch(
@@ -1534,6 +1648,33 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("scenarios", help="List the built-in stress-scenario library.")
 
+    hft = sub.add_parser(
+        "hft",
+        help="Offline HFT/L2 backtest via optional hftbacktest (never live).",
+    )
+    hft_sub = hft.add_subparsers(dest="hft_command", required=True)
+    hft_status = hft_sub.add_parser("status", help="Show whether hftbacktest is installed.")
+    hft_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_smoke = hft_sub.add_parser(
+        "smoke", help="Run a synthetic L2 depth smoke backtest (no orders)."
+    )
+    hft_smoke.add_argument("--events", type=int, default=400, help="Synthetic depth events.")
+    hft_smoke.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
+    hft_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
+    hft_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_run = hft_sub.add_parser(
+        "run",
+        help="Probe an on-disk hftbacktest feed (advance time; no order submission).",
+    )
+    hft_run.add_argument("data", help="Path to hftbacktest NPZ/feed file.")
+    hft_run.add_argument("--tick-size", type=float, required=True, help="Instrument tick size.")
+    hft_run.add_argument("--lot-size", type=float, required=True, help="Instrument lot size.")
+    hft_run.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
+    hft_run.add_argument(
+        "--step-ns", type=int, default=50_000_000, help="Nanoseconds per elapse step."
+    )
+    hft_run.add_argument("--json", action="store_true", help="Emit JSON.")
+
     wp = sub.add_parser("watch", help="Live-track symbols: re-analyze & re-simulate.")
     wp.add_argument("symbols", nargs="+", help="One or more tickers, e.g. AAPL MSFT.")
     wp.add_argument("--interval", type=float, default=60.0, help="Seconds between refreshes.")
@@ -1737,6 +1878,25 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
+        if args.command == "hft":
+            if args.hft_command == "status":
+                return cmd_hft_status(as_json=getattr(args, "json", False))
+            if args.hft_command == "smoke":
+                return cmd_hft_smoke(
+                    n_events=args.events,
+                    steps=args.steps,
+                    seed=args.seed,
+                    as_json=getattr(args, "json", False),
+                )
+            if args.hft_command == "run":
+                return cmd_hft_run(
+                    data=args.data,
+                    tick_size=args.tick_size,
+                    lot_size=args.lot_size,
+                    steps=args.steps,
+                    step_ns=args.step_ns,
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
