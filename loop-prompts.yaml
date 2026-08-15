@@ -131,6 +131,21 @@ prompts:
       - Run: python3 -m aoa.cli tasks run tier1-check
       - Recommend merge, pause, or L2 promotion actions only — no auto-merge.
 
+  SHIP:
+    title: Ship-ready task loop (proofread → ready)
+    tier: "2"
+    body: |
+      Run the Ship task-looping agent on the current feature PR/branch.
+      Read loop-constraints.md and .cursor/skills/ship-loop/SKILL.md.
+
+      1. python3 -m aoa.cli ship discover --pr <N>
+      2. While open issues: python3 -m aoa.cli ship next → fix ONE → ship fixed <id>
+      3. python3 -m aoa.cli ship proofread  (must PASS — re-run ruff+pytest)
+      4. python3 -m aoa.cli ship ready
+      5. Mark PR ready for review (draft=false). Never auto-merge to main.
+
+      Max 3 attempts per issue; escalate blocked items. Denylist unchanged.
+
 tasks:
   tier1-check:
     title: Tier 1 preflight (no LLM)
@@ -177,3 +192,11 @@ tasks:
     title: Local verify only
     steps:
       - verify-quick
+
+  ship-ready:
+    title: Ship discover + proofread gate (no LLM)
+    steps:
+      - ship-discover
+      - ship-proofread
+    on_skip: log
+    on_pause: exit

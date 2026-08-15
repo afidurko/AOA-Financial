@@ -204,6 +204,32 @@ class FakeLLM:
             "impact_score",
         }
     )
+    _JIM = frozenset(
+        {
+            "direction",
+            "conviction",
+            "horizon_bars",
+            "rationale",
+            "indicator_flags",
+            "support",
+            "resistance",
+            "stop",
+            "expected_return",
+        }
+    )
+    _CINDY = frozenset(
+        {
+            "quality_score",
+            "fair_value",
+            "upside_price",
+            "downside_price",
+            "expected_return",
+            "conviction",
+            "thesis",
+            "math_notes",
+            "profitability_grade",
+        }
+    )
     _ANDREA = frozenset(
         {
             "summary",
@@ -371,7 +397,7 @@ class FakeLLM:
                         "rationale": "Tom and Julie aligned on bullish swing setup",
                     }
                 ],
-                "summary": "One high-quality corroborated long candidate",
+                "summary": "One high-quality corroborated long candidate (Jim/Cindy aligned)",
                 "confidence": 0.72,
             }
         if required == self._AARON:
@@ -422,6 +448,30 @@ class FakeLLM:
                 "key_events": ["Sector rotation"],
                 "macro_note": "Fed speakers quiet this week.",
                 "impact_score": 0.25,
+            }
+        if required == self._JIM:
+            return {
+                "direction": "up",
+                "conviction": 0.7,
+                "horizon_bars": 5,
+                "rationale": "Short-term EMA stack bullish with RSI reset.",
+                "indicator_flags": ["ema_stack_bull", "rsi_reset", "macd_hist_up"],
+                "support": 98.0,
+                "resistance": 108.0,
+                "stop": 96.0,
+                "expected_return": 0.025,
+            }
+        if required == self._CINDY:
+            return {
+                "quality_score": 0.35,
+                "fair_value": 105.0,
+                "upside_price": 112.0,
+                "downside_price": 94.0,
+                "expected_return": 0.04,
+                "conviction": 0.65,
+                "thesis": "Quality composite constructive; fair value above mark.",
+                "math_notes": ["OLS fair anchored", "Risk-adjusted drift positive"],
+                "profitability_grade": "B",
             }
         if required == self._ANDREA:
             return {

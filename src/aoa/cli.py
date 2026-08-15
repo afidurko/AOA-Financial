@@ -14,6 +14,7 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
+  aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
   aoa visualhft  Offline VisualHFT microstructure studies (research lane).
   aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
   aoa workloop   Run the autonomous discover→merge improvement loop.
@@ -268,6 +269,20 @@ def _print_team(result: TeamCycleResult) -> None:
             print(
                 f"  {c.symbol:<6} risk={c.event_risk:<6} sentiment={c.headline_sentiment:<8}  "
                 f"{c.catalyst_summary[:50]}"
+            )
+    if result.short_term:
+        print("\n=== Jim — short-term technical overlays ===")
+        for j in result.short_term:
+            print(
+                f"  {j.symbol:<6} {j.direction.value:<8} conv={j.conviction:.2f}  "
+                f"ret={j.expected_return:+.2%}  {j.rationale[:50]}"
+            )
+    if result.company_analyses:
+        print("\n=== Cindy — company profitability ===")
+        for c in result.company_analyses:
+            print(
+                f"  {c.symbol:<6} grade={c.profitability_grade:<3} q={c.quality_score:+.2f}  "
+                f"fv={c.fair_value}  {c.thesis[:50]}"
             )
     if result.risk_plans:
         print("\n=== Andrea — pre-execution risk plans ===")
@@ -808,6 +823,147 @@ def cmd_scenarios(cfg: Config) -> int:
             f"{s.max_drawdown_pct:>8.1f}%  {s.description}"
         )
     return 0
+
+
+def cmd_hft_status(*, as_json: bool) -> int:
+    from aoa.hftbacktest import probe_status as probe_hft
+    from aoa.orderbook import probe_status as probe_book
+
+    hft = probe_hft()
+    book = probe_book()
+    payload = {"hftbacktest": hft, "orderbook": book, "offline_only": True}
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        # Book lane is vendored and must be healthy; hftbacktest remains optional.
+        return 0 if book.get("ok") else 1
+    print("=== HFT research lanes (offline) ===")
+    print("--- hftbacktest ---")
+    print(f"  installed: {hft['installed']}")
+    print(f"  version:   {hft.get('version') or '—'}")
+    print(f"  engine:    {hft.get('engine') or '—'}")
+    print(f"  upstream:  {hft.get('upstream')}")
+    if not hft["installed"]:
+        print(f"  install:   {hft.get('hint')}")
+    else:
+        print(f"  next:      {hft.get('hint')}")
+    print("--- orderbook (HFT-Orderbook) ---")
+    print(f"  ok:        {book.get('ok')}")
+    print(f"  engine:    {book.get('engine')}")
+    print(f"  impl:      {book.get('implementation')}")
+    print(f"  upstream:  {book.get('upstream')}")
+    print(f"  next:      {book.get('hint')}")
+    return 0 if book.get("ok") else 1
+
+
+def cmd_hft_book_smoke(*, as_json: bool) -> int:
+    from aoa.orderbook import run_book_smoke
+
+    result = run_book_smoke()
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== HFT orderbook smoke (vendored LOB) ===")
+        print(f"  ok:         {result.ok}")
+        print(f"  best bid:   {result.best_bid}")
+        print(f"  best ask:   {result.best_ask}")
+        print(f"  bid volume: {result.bid_volume}")
+        print(f"  ask volume: {result.ask_volume}")
+        print(f"  orders:     {result.order_count}  levels={result.levels}")
+        print(f"  detail:     {result.detail}")
+    return 0 if result.ok else 1
+
+
+def cmd_hft_smoke(
+    *,
+    n_events: int,
+    steps: int,
+    seed: int,
+    as_json: bool,
+) -> int:
+    from aoa.hftbacktest import HAS_HFTBACKTEST, run_npz_smoke
+
+    if not HAS_HFTBACKTEST:
+        msg = 'hftbacktest not installed. Run: pip install -e ".[hftbacktest]"'
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    result = run_npz_smoke(n_events=n_events, steps=steps, seed=seed)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== HFT synthetic L2 smoke ===")
+        print(f"  ok:        {result.ok}")
+        print(f"  steps:     {result.steps}")
+        print(f"  best bid:  {result.best_bid}")
+        print(f"  best ask:  {result.best_ask}")
+        print(f"  position:  {result.position}")
+        print(f"  events:    {result.n_events}  seed={result.seed}")
+        print(f"  detail:    {result.detail}")
+    return 0 if result.ok else 1
+
+
+def cmd_hft_run(
+    *,
+    data: str,
+    tick_size: float,
+    lot_size: float,
+    steps: int,
+    step_ns: int,
+    as_json: bool,
+) -> int:
+    """Advance an on-disk hftbacktest feed without placing orders (offline probe)."""
+    from aoa.hftbacktest import HAS_HFTBACKTEST
+    from aoa.hftbacktest.runner import load_npz_from_npz
+
+    if not HAS_HFTBACKTEST:
+        msg = 'hftbacktest not installed. Run: pip install -e ".[hftbacktest]"'
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    path = Path(data)
+    if not path.exists():
+        msg = f"data file not found: {path}"
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+
+    hbt = load_npz_from_npz(
+        str(path), tick_size=tick_size, lot_size=lot_size
+    )
+    try:
+        advanced = 0
+        for _ in range(steps):
+            if hbt.elapse(step_ns) != 0:
+                break
+            advanced += 1
+        depth = hbt.depth(0)
+        payload = {
+            "ok": advanced > 0,
+            "data": str(path),
+            "steps": advanced,
+            "best_bid": float(depth.best_bid),
+            "best_ask": float(depth.best_ask),
+            "position": float(hbt.position(0)),
+            "offline_only": True,
+        }
+    finally:
+        hbt.close()
+
+    if as_json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"=== HFT feed probe: {path.name} ===")
+        print(f"  steps:     {payload['steps']}")
+        print(f"  best bid:  {payload['best_bid']}")
+        print(f"  best ask:  {payload['best_ask']}")
+        print(f"  position:  {payload['position']}")
+    return 0 if payload["ok"] else 1
 
 
 def cmd_watch(
@@ -1439,6 +1595,120 @@ def cmd_attl_brain_sync(cfg: Config, *, as_json: bool = False) -> int:
     return 0 if result.get("ok") else 1
 
 
+def _ship_agent():
+    from aoa.loop.prompts import find_repo_root
+    from aoa.ship.loop import ShipLoopAgent
+
+    return ShipLoopAgent(find_repo_root())
+
+
+def cmd_ship_discover(*, pr: int | None = None, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    state = agent.discover(pr_number=pr)
+    if as_json:
+        print(json.dumps(state.to_dict(), indent=2))
+        return 0
+    print(f"Ship discover — branch={state.branch} pr={state.pr_number}")
+    open_issues = state.open_issues()
+    print(f"Open issues: {len(open_issues)}")
+    for issue in state.issues:
+        print(f"  [{issue.status.value}] {issue.id}: {issue.title}")
+        if issue.fix_hint:
+            print(f"           hint: {issue.fix_hint}")
+    return 0
+
+
+def cmd_ship_status(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    status = agent.status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Branch: {status.get('branch')}  PR: {status.get('pr_number')}")
+    print(f"Open: {status.get('open_count')}  ready_for_merge={status.get('ready_for_merge')}")
+    print(f"Can mark ready: {status.get('can_mark_ready')} — {status.get('ready_message')}")
+    for issue in status.get("issues") or []:
+        print(f"  [{issue['status']}] {issue['id']}: {issue['title']}")
+    return 0
+
+
+def cmd_ship_fixed(issue_id: str, *, note: str = "") -> int:
+    agent = _ship_agent()
+    state = agent.mark_fixed(issue_id, note=note)
+    print(f"Marked fixed: {issue_id}")
+    print(f"Open remaining: {len(state.open_issues())}")
+    return 0
+
+
+def cmd_ship_attempt(issue_id: str, *, blocked: bool = False, detail: str = "") -> int:
+    agent = _ship_agent()
+    state = agent.mark_attempt(issue_id, blocked=blocked, detail=detail)
+    for issue in state.issues:
+        if issue.id == issue_id:
+            print(f"{issue_id}: attempts={issue.attempts} status={issue.status.value}")
+            break
+    return 0
+
+
+def cmd_ship_proofread(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    report = agent.proofread()
+    if as_json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(f"Proofread: {'PASS' if report.ok else 'FAIL'}")
+        print(f"  ruff={report.ruff_ok}  pytest={report.pytest_ok}")
+        for note in report.notes:
+            print(f"  · {note}")
+    return 0 if report.ok else 1
+
+
+def cmd_ship_ready(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    try:
+        state = agent.mark_ready()
+    except RuntimeError as exc:
+        print(f"Not ready: {exc}", file=sys.stderr)
+        return 1
+    payload = {
+        "ready_for_merge": state.ready_for_merge,
+        "branch": state.branch,
+        "pr_number": state.pr_number,
+        "message": (
+            "Ship gates passed — mark PR ready for review; "
+            "human merges (no auto-merge)."
+        ),
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print("READY FOR HUMAN MERGE")
+        print(payload["message"])
+        print(f"Branch: {state.branch}  PR: {state.pr_number}")
+    return 0
+
+
+def cmd_ship_next(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    issue = agent.next_issue()
+    if issue is None:
+        if as_json:
+            print(json.dumps({"next": None}))
+        else:
+            print("No open issues — run: aoa ship proofread && aoa ship ready")
+        return 0
+    if as_json:
+        print(json.dumps({"next": issue.to_dict()}, indent=2))
+    else:
+        print(f"Next: {issue.id} — {issue.title}")
+        print(f"Kind: {issue.kind.value}")
+        if issue.fix_hint:
+            print(f"Hint: {issue.fix_hint}")
+        if issue.detail:
+            print(f"Detail: {issue.detail[:400]}")
+    return 0
+
+
 def cmd_attl_run(
     cfg: Config,
     *,
@@ -1825,6 +2095,38 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("scenarios", help="List the built-in stress-scenario library.")
 
+    hft = sub.add_parser(
+        "hft",
+        help="Offline HFT/L2 backtest via optional hftbacktest (never live).",
+    )
+    hft_sub = hft.add_subparsers(dest="hft_command", required=True)
+    hft_status = hft_sub.add_parser("status", help="Show hftbacktest + orderbook lane status.")
+    hft_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_smoke = hft_sub.add_parser(
+        "smoke", help="Run a synthetic L2 depth smoke backtest (no orders)."
+    )
+    hft_smoke.add_argument("--events", type=int, default=400, help="Synthetic depth events.")
+    hft_smoke.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
+    hft_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
+    hft_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_book = hft_sub.add_parser(
+        "book-smoke",
+        help="Smoke the vendored HFT-Orderbook LOB (add/update/cancel; offline).",
+    )
+    hft_book.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_run = hft_sub.add_parser(
+        "run",
+        help="Probe an on-disk hftbacktest feed (advance time; no order submission).",
+    )
+    hft_run.add_argument("data", help="Path to hftbacktest NPZ/feed file.")
+    hft_run.add_argument("--tick-size", type=float, required=True, help="Instrument tick size.")
+    hft_run.add_argument("--lot-size", type=float, required=True, help="Instrument lot size.")
+    hft_run.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
+    hft_run.add_argument(
+        "--step-ns", type=int, default=50_000_000, help="Nanoseconds per elapse step."
+    )
+    hft_run.add_argument("--json", action="store_true", help="Emit JSON.")
+
     wp = sub.add_parser("watch", help="Live-track symbols: re-analyze & re-simulate.")
     wp.add_argument("symbols", nargs="+", help="One or more tickers, e.g. AAPL MSFT.")
     wp.add_argument("--interval", type=float, default=60.0, help="Seconds between refreshes.")
@@ -2060,6 +2362,33 @@ def main(argv: list[str] | None = None) -> int:
     at_brain_sync = at_brain_sub.add_parser("sync", help="Nova: refresh mesh + capture.")
     at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    ship = sub.add_parser(
+        "ship",
+        help="Ship-ready task loop — discover issues, proofread, mark ready (no auto-merge).",
+    )
+    ship_sub = ship.add_subparsers(dest="ship_command", required=True)
+    ship_disc = ship_sub.add_parser("discover", help="Scan branch and seed the ship issue queue.")
+    ship_disc.add_argument("--pr", type=int, default=None, help="PR number to associate.")
+    ship_disc.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_status = ship_sub.add_parser("status", help="Show ship-loop queue and readiness.")
+    ship_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_next = ship_sub.add_parser("next", help="Print the next open ship issue.")
+    ship_next.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_fixed = ship_sub.add_parser("fixed", help="Mark an issue fixed.")
+    ship_fixed.add_argument("issue_id", help="Issue id from ship discover/status.")
+    ship_fixed.add_argument("--note", default="", help="Optional note.")
+    ship_attempt = ship_sub.add_parser("attempt", help="Record a fix attempt (blocks after 3).")
+    ship_attempt.add_argument("issue_id", help="Issue id.")
+    ship_attempt.add_argument("--blocked", action="store_true", help="Force blocked status.")
+    ship_attempt.add_argument("--detail", default="", help="Attempt detail.")
+    ship_proof = ship_sub.add_parser("proofread", help="Independent ruff+pytest proofread gate.")
+    ship_proof.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_ready = ship_sub.add_parser(
+        "ready",
+        help="Mark ready for human merge after all gates pass (never auto-merges).",
+    )
+    ship_ready.add_argument("--json", action="store_true", help="Emit JSON.")
+
     args = parser.parse_args(argv)
 
     # Offline research lane — no .env template and no Config/broker side effects.
@@ -2133,6 +2462,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
+        if args.command == "hft":
+            if args.hft_command == "status":
+                return cmd_hft_status(as_json=getattr(args, "json", False))
+            if args.hft_command == "smoke":
+                return cmd_hft_smoke(
+                    n_events=args.events,
+                    steps=args.steps,
+                    seed=args.seed,
+                    as_json=getattr(args, "json", False),
+                )
+            if args.hft_command == "book-smoke":
+                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
+            if args.hft_command == "run":
+                return cmd_hft_run(
+                    data=args.data,
+                    tick_size=args.tick_size,
+                    lot_size=args.lot_size,
+                    steps=args.steps,
+                    step_ns=args.step_ns,
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
@@ -2248,6 +2598,28 @@ def main(argv: list[str] | None = None) -> int:
             if args.attl_command == "brain":
                 if args.brain_command == "sync":
                     return cmd_attl_brain_sync(cfg, as_json=getattr(args, "json", False))
+        if args.command == "ship":
+            if args.ship_command == "discover":
+                return cmd_ship_discover(
+                    pr=getattr(args, "pr", None),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.ship_command == "status":
+                return cmd_ship_status(as_json=getattr(args, "json", False))
+            if args.ship_command == "next":
+                return cmd_ship_next(as_json=getattr(args, "json", False))
+            if args.ship_command == "fixed":
+                return cmd_ship_fixed(args.issue_id, note=getattr(args, "note", "") or "")
+            if args.ship_command == "attempt":
+                return cmd_ship_attempt(
+                    args.issue_id,
+                    blocked=getattr(args, "blocked", False),
+                    detail=getattr(args, "detail", "") or "",
+                )
+            if args.ship_command == "proofread":
+                return cmd_ship_proofread(as_json=getattr(args, "json", False))
+            if args.ship_command == "ready":
+                return cmd_ship_ready(as_json=getattr(args, "json", False))
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
