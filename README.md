@@ -946,6 +946,7 @@ Companion tools that sit beside this repo (not vendored here):
 |---------|----------------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
 
