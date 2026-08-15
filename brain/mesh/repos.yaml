@@ -24,3 +24,6 @@ repos:
   - name: qm
     url: https://github.com/afidurko/qm
     role: multiplayer agent harness (Slack + web); AOA_QM_URL companion
+  - name: hft
+    url: https://github.com/afidurko/hft
+    role: C++ HFT strategy reference (simplearb/maker/MA); Python ideas in aoa.research.hft_patterns

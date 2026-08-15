@@ -41,6 +41,11 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 | Resource | Role |
 |----------|------|
 | **[Finance](https://github.com/shashankvemuri/Finance)** | Reference library of quantitative finance Python programs (used in Tom’s knowledge context). |
+| **[hft](https://github.com/afidurko/hft)** | C++ HFT futures strategies (pairs arb, hedged maker, MA cross) as a sibling reference. Pure-Python idea ports: `aoa.research.hft_patterns`. Upstream fork of [keyianpai/hft](https://github.com/keyianpai/hft). |
+
+**In-system wiring:** clone with `./scripts/hft-setup.sh` (gitignored sibling).
+Vault note: `vault/system/hft.md`. Guide: [how-to/hft-reference.md](how-to/hft-reference.md).
+Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)
 

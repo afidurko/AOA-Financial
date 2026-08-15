@@ -256,3 +256,5 @@ OpenStock/
 
 # QM sibling clone (multiplayer agent harness — not vendored)
 qm/
+# HFT sibling clone (C++ strategy reference — not vendored)
+hft/

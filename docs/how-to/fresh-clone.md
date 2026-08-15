@@ -108,3 +108,15 @@ export AOA_QM_URL=http://localhost:8081
 
 See [qm-integration.md](qm-integration.md). Other companions:
 [docs/help.md](../help.md).
+
+## 8. HFT strategy reference (optional)
+
+Clone the C++ HFT sibling for pairs-arb / maker / MA strategy reading
+([hft](https://github.com/afidurko/hft)). AOA does not run it:
+
+```bash
+./scripts/hft-setup.sh
+```
+
+See [hft-reference.md](hft-reference.md). Python idea ports:
+`aoa.research.hft_patterns`.
