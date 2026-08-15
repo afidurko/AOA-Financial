@@ -84,27 +84,26 @@ if [[ -f "$TARGET_MCP" ]]; then
   cp "$TARGET_MCP" "$TARGET_MCP.bak.$(date +%s)"
   echo "Backed up existing $TARGET_MCP"
 fi
-cat >"$TARGET_MCP" <<EOF
-{
-  "mcpServers": {
-    "obsidian-second-brain": {
-      "command": "uv",
-      "args": [
-        "run",
-        "--directory",
-        "$OSB_DIR",
-        "--with",
-        "mcp",
-        "python",
-        "integrations/obsidian-mcp-server/server.py"
-      ],
-      "env": {
-        "OBSIDIAN_VAULT_PATH": "$VAULT_DIR"
-      }
+OSB_DIR="$OSB_DIR" VAULT_DIR="$VAULT_DIR" python3 - "$TARGET_MCP" <<'PY'
+import json, os, sys
+out = sys.argv[1]
+doc = {
+    "mcpServers": {
+        "obsidian-second-brain": {
+            "command": "uv",
+            "args": [
+                "run", "--directory", os.environ["OSB_DIR"],
+                "--with", "mcp", "python",
+                "integrations/obsidian-mcp-server/server.py",
+            ],
+            "env": {"OBSIDIAN_VAULT_PATH": os.environ["VAULT_DIR"]},
+        }
     }
-  }
 }
-EOF
+with open(out, "w", encoding="utf-8") as f:
+    json.dump(doc, f, indent=2)
+    f.write("\n")
+PY
 echo "Wrote $TARGET_MCP (shared vault)"
 
 # 3. Record the shared vault in the target's .env (absolute path).
