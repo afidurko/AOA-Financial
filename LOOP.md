@@ -134,7 +134,7 @@ Design + runtime: [docs/design/agentic-task-team-loop.md](docs/design/agentic-ta
 - **Second brain:** `brain/` meshed into vault + Julie algorithms
 - **CLI:** `aoa attl init|status|roster|propose|run|report|brain sync`
 
-Cross-repo aids: loop-engineering, spine, obsidian-second-brain, AutoHedge, example-hftish.
+Cross-repo aids: loop-engineering, spine, obsidian-second-brain, AutoHedge, sgx-orderbook, example-hftish.
 
 ## Links
 

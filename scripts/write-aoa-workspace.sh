@@ -31,6 +31,10 @@ add_folder "spine" "spine" "$ROOT/spine"
 add_folder "obsidian-skills" "obsidian-skills" "$ROOT/obsidian-skills"
 add_folder "qm" "qm" "$ROOT/qm"
 add_folder "py-moomoo-api" "py-moomoo-api" "$ROOT/py-moomoo-api"
+add_folder "SGX-OrderBook" "SGX-Full-OrderBook-Tick-Data-Trading-Strategy" \
+  "$ROOT/SGX-Full-OrderBook-Tick-Data-Trading-Strategy"
+add_folder "example-hftish" "example-hftish" "$ROOT/example-hftish"
+add_folder "VisualHFT" "VisualHFT" "$ROOT/VisualHFT"
 
 # External roots (absolute paths) — e.g. repos connected via connect-workspace.sh.
 for extra in "${EXTRA_ROOTS[@]}"; do

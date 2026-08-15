@@ -601,6 +601,8 @@ aoa hft status
 aoa hft smoke                           # synthetic L2 depth smoke (no orders)
 aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # See docs/how-to/hftbacktest-integration.md
+# SGX LOB features: docs/how-to/sgx-orderbook-reference.md · examples/sgx_orderbook_smoke.py
+# Companion map: docs/how-to/hft-research-lane.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -952,6 +954,7 @@ Companion tools that sit beside this repo (not vendored here):
 |---------|----------------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full-LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |
 | **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
