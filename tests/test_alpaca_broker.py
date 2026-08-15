@@ -126,3 +126,21 @@ def test_cmd_doctor_reports_stock_bars_check(monkeypatch):
     fetcher.verify_crypto.assert_called_once_with("BTC/USD", limit=1)
     fetcher.close.assert_called_once()
     broker.verify_stock_bars.assert_called_once_with("SPY", limit=1)
+
+
+def test_cmd_doctor_moomoo_skips_alpaca_crypto(monkeypatch, capsys):
+    cfg = Config(broker="moomoo", anthropic_api_key="x")
+    broker = MagicMock()
+    broker.name = "moomoo-paper"
+    broker.get_account.return_value.equity = 10_000.0
+    broker.verify_stock_bars.return_value = _sample_bar()
+    fetcher = MagicMock()
+    monkeypatch.setattr("aoa.cli.AlpacaBarsFetcher", lambda _cfg: fetcher)
+    monkeypatch.setattr("aoa.cli.build_broker", lambda _cfg: broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda _cfg: MagicMock())
+
+    assert cmd_doctor(cfg) == 0
+    fetcher.verify_crypto.assert_not_called()
+    out = capsys.readouterr().out
+    assert "Moomoo OpenD get_search_news" in out
+    assert "Crypto bars" not in out
