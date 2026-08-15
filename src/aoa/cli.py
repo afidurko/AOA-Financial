@@ -48,7 +48,7 @@ from aoa.brokerage.alpaca_bars import (
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
-from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
+from aoa.data.news import AlpacaNewsFeed, MoomooNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError, llm_from_config
 from aoa.repair.orchestrator import RepairOrchestrator
@@ -61,6 +61,7 @@ from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
 from aoa.vault.sync import sync_vault_engineering, vault_status
+from aoa.version import package_version
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
 from aoa.workloop.scheduler import build_scheduler
@@ -88,8 +89,15 @@ def build_news(cfg: Config) -> NewsFeed:
     if not cfg.news_enabled:
         return NullNewsFeed()
     if cfg.broker == "moomoo":
-        # Headlines via Moomoo OpenAPI can be wired later; keep agents running without news.
-        return NullNewsFeed()
+        try:
+            return MoomooNewsFeed(
+                host=cfg.moomoo_opend_host,
+                port=cfg.moomoo_opend_port,
+                connect_timeout=cfg.moomoo_connect_timeout,
+            )
+        except BrokerError:
+            # OpenD down — keep the swarm running without headlines.
+            return NullNewsFeed()
     if not cfg.has_brokerage_creds:
         return NullNewsFeed()
     return AlpacaNewsFeed(
@@ -449,7 +457,7 @@ def cmd_bars(
 
 
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
-    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
+    print(f"AOA Financial v{package_version()} — trading mode: {cfg.trading_mode.upper()}")
     _print_environment(cfg)
     problems = cfg.validate()
     if problems:
@@ -484,7 +492,6 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
         return 0
-
     if cfg.broker == "alpaca":
         fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
         try:
@@ -505,7 +512,6 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
             )
             print("  · Skipping broker account and stock-bar checks until keys are set.")
             return 0
-
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
@@ -516,6 +522,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
                 f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
                 f"({latest.timestamp.date()})."
             )
+            print("  · News: Moomoo OpenD get_search_news (moomooapi skill).")
         else:
             feed = cfg.alpaca_data_feed or cfg.bar_feed
             print(
@@ -1269,8 +1276,8 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
 def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
     from aoa.workloop.upgrade import run_upgrade_pipeline
 
-    _ = cfg  # Config required for CLI consistency; pipeline uses repo cwd.
-    result = run_upgrade_pipeline(Path.cwd(), dry_run=dry_run)
+    _ = cfg  # Config required for CLI consistency; pipeline uses repo root.
+    result = run_upgrade_pipeline(_repo_root(), dry_run=dry_run)
     flag = "OK" if result.get("ok") else "FAIL"
     mode = "dry-run" if dry_run else "upgrade"
     print(f"Workloop upgrade pipeline [{mode}]: {flag}")
@@ -2202,6 +2209,8 @@ def cmd_setup_moomoo(cfg: Config) -> int:
         return 1
     print("Running Moomoo setup helper…")
     print(f"  Broker: {cfg.broker} | OpenD: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port}")
+    print("  Skills: .cursor/skills/moomooapi + install-moomoo-opend (official OpenD pack)")
+    print("  Install OpenD via agent skill `/install-moomoo-opend` or scripts/install_moomoo_opend_*.sh")
     result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
     return int(result.returncode)
 
@@ -2688,7 +2697,25 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
                 ported_only=getattr(args, "ported_only", False),
             )
+<<<<<<< HEAD
         return 2
+=======
+
+    if args.command == "workspaces":
+        if args.workspaces_command == "status":
+            return cmd_workspaces_status(as_json=getattr(args, "json", False))
+
+    # Offline research lane — no .env template and no Config/broker side effects.
+    if args.command == "hftish":
+        if args.hftish_command == "status":
+            return cmd_hftish_status(as_json=getattr(args, "json", False))
+        if args.hftish_command == "smoke":
+            return cmd_hftish_smoke(
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+
+>>>>>>> origin/main
     if args.command == "hft":
         if args.hft_command == "status":
             return cmd_hft_status(as_json=getattr(args, "json", False))

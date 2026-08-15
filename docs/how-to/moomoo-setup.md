@@ -9,8 +9,23 @@ hits WASTE on `:8000`.
 ```bash
 pip install -e ".[dev,web]"    # includes moomoo-api
 cp .env.example .env           # Moomoo + WASTE defaults
-# Start OpenD (127.0.0.1:11111) and WASTE serve (:8000)
-aoa setup moomoo               # guided OpenD checks
+aoa setup moomoo               # guided OpenD checks (+ OpenD skills)
+```
+
+Agent skills (official OpenD pack, vendored under `.cursor/skills/`):
+
+| Skill | Use when |
+|-------|----------|
+| `/moomooapi` | Quotes, klines, news, orders, positions via OpenD scripts |
+| `/install-moomoo-opend` | Download/install OpenD + upgrade `moomoo-api` |
+
+AOA runtime wires the same OpenAPI surface into `MoomooBroker` and `MoomooNewsFeed`
+(`get_search_news`, `OrderType.MARKET` / `STOP`, `average_cost` / `unrealized_pl`,
+`get_top_movers_rank`).
+
+With OpenD running (and WASTE on `:8000`):
+
+```bash
 aoa doctor
 aoa run                        # paper-dry: no orders submitted
 ```

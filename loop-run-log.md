@@ -29,4 +29,8 @@
 | 2026-07-08 02:32 | maintenance | — | integrated | Task chain automation: docs/upgrade-backlog.json + aoa tasks chain. Bootstrapped upg-009. 359 tests pass. tokens_estimate=9000 |
 | 2026-08-15 20:40 | avellaneda-stoikov | L2 | integrated | Offline AS research lane (`aoa avellaneda`); 6 unit tests + smoke green. tokens_estimate=25000 |
 | 2026-08-15 20:50 | microstructure-mesh | L2 | integrated | Merged HFT sibling lanes + aoa microstructure catalog; 7/7 lanes available. tokens_estimate=45000 |
+| 2026-08-15 20:31 | advisor-verify | L1 | report-only | Re-verified failure: OpenD ECONNREFUSED (doctor fail-fast), template Anthropic key. STATE updated. tier1-check OK. tokens_estimate=6000 |
+| 2026-08-15 20:35 | moomoo-path | L1 | report-only | User chose Moomoo. Locked docs/STATE to OpenD path; setup moomoo OK; OpenD still down. tokens_estimate=5000 |
+| 2026-08-15 20:50 | moomoo-skills | L2 | acted | Integrated moomooapi skills into MoomooBroker/NewsFeed; doctor Moomoo path; 423 tests pass. tokens_estimate=25000 |
 | 2026-08-15 21:05 | fable-repair | L2 | fixed+workspaces | upg-009 pipeline + upg-001 alpaca paper + httpx2; knowledge-stack verify OK; env.json + VS Code tasks. 430 tests. tokens_estimate=12000 |
+| 2026-08-15 22:05 | ship-loop | L2 | proofread | Simplified Moomoo helpers; merge-base catch-up; 466+ tests pass; Moomoo kept as paper default. tokens_estimate=15000 |
