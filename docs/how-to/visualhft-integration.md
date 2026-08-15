@@ -89,3 +89,7 @@ Positions/Orders tab empty on Windows? See
 - Hard safety floor still applies: no live order submission from loops
 - VisualHFT REST trigger payloads may be pointed at a local AOA webhook later;
   this package does not auto-execute trades from alerts
+
+## Workspace mesh
+
+All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

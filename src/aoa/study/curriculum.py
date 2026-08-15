@@ -476,38 +476,128 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         check_keywords=("integrating factor", "mean", "variance", "theta", "stationary"),
     ),
     KnowledgeCard(
-        id="bridge-hftish-imbalance",
+        id="bridge-as-reservation",
         field="bridge",
-        title="Order-book imbalance ↔ level-change follow",
+        title="Avellaneda–Stoikov reservation price ↔ inventory risk",
         statement=(
-            "After both bid and ask jump onto a new 1¢ spread, a large print that "
-            "hits the ask (bid) with bid (ask) size ≥ 1.8× the far side is a discrete "
-            "follow signal — inventory-capped, lag-gated microstructure control."
+            "A market maker's indifference (reservation) price skews linearly with "
+            "inventory and remaining horizon: r = s − q γ σ² (T − t), with optimal "
+            "half-spread (1/γ) log(1 + γ/k) from exponential utility vs Poisson fills."
         ),
         proof_sketch=(
-            "1) State Q_t = (bid, ask, bid_size, ask_size). Level change when both "
-            "prices move and ask−bid = 0.01.\n"
-            "2) Arm only if the prior spread was also 0.01 (penny-to-penny).\n"
-            "3) On a trade: require size ≥ 100 and timestamp ≥ quote_time + 50ms.\n"
-            "4) Follow ask when price = ask and bid_size > 1.8 ask_size (room under "
-            "max shares); follow bid symmetrically when selling inventory."
+            "1) Mid follows diffusion dS = σ dW; inventory q is controlled by posted bid/ask.\n"
+            "2) Exponential utility + intensity λ(δ)=A e^{−kδ} ⇒ HJB for value u(t,x,q,s).\n"
+            "3) Ansatz reduces to reservation price r and reservation spread independent of q.\n"
+            "4) Long inventory (q>0) lowers r so the ask is likelier / bid less aggressive."
         ),
         applications=(
-            "Research signals for high-volume names with frequent 1¢ moves",
-            "Inventory / pending-lot capacity checks before any hypothetical follow",
+            "Offline AS Monte-Carlo (aoa avellaneda simulate)",
+            "Inventory-aware quote skew diagnostics for microstructure study",
         ),
         aoa_mesh=(
-            "Julie may cite aoa.research.hftish_patterns for imbalance diagnostics; "
-            "sibling afidurko/example-hftish is reference-only — never an AOA order path."
+            "Julie may cite aoa.avellaneda_stoikov for reservation/skew math; sibling "
+            "afidurko/avellaneda-stoikov is reference-only — never an AOA order path."
         ),
-        bridges=("bridge-ou-meanrev", "phys-diffusion", "bridge-sdf-martingale"),
+        bridges=("bridge-ou-meanrev", "econ-hjb", "phys-diffusion"),
         drill_prompt=(
-            "Given two consecutive penny-spread quotes and a print on the ask, state "
-            "whether the follow signal is buy, sell, or flat and name the blocking "
-            "gate if flat."
+            "Given mid s, inventory q, risk aversion γ, volatility σ, and time-to-horizon "
+            "T−t, write r and state how positive inventory moves the ask relative to flat."
         ),
-        check_keywords=("imbalance", "penny", "level", "ask", "bid", "follow"),
+        check_keywords=("reservation", "inventory", "gamma", "spread", "intensity"),
     ),
+    KnowledgeCard(
+        id="bridge-hft-spread",
+        field="bridge",
+        title="HFT pair mid-diff ↔ OU mean reversion",
+        statement=(
+            "A trailing mean/std of main−hedge mid defines open bands "
+            "(up/down = μ ± max(kσ, min_range) + fee). Open outside the band, "
+            "exit when the diff returns to μ — discrete OU-style pairs control."
+        ),
+        proof_sketch=(
+            "1) State X_t = mid_main − mid_hedge (simplearb map_vector).\n"
+            "2) Estimate μ, σ on a trailing window (CalParams).\n"
+            "3) Enter when X > μ+m or X < μ−m; HitMean closes when X crosses μ "
+            "in the position's favor; outer stops at μ ± (1+λ)m.\n"
+            "4) Same structure as OU threshold policies with discrete samples."
+        ),
+        applications=(
+            "Pairs / calendar spread research signals",
+            "Hedged maker mid-diff thresholds (simplemaker)",
+        ),
+        aoa_mesh=(
+            "Julie may cite aoa.research.hft_patterns for band/cross diagnostics; "
+            "sibling afidurko/hft is reference-only — never an AOA order path."
+        ),
+        bridges=("bridge-ou-meanrev", "de-lyapunov", "phys-diffusion"),
+        drill_prompt=(
+            "Given a trailing window of pair mid diffs, write the open bands and "
+            "state the HitMean exit rule for long vs short."
+        ),
+        check_keywords=("mid", "band", "mean", "std", "hitmean", "pairs"),
+    ),
+    KnowledgeCard(
+            id="bridge-hftish-imbalance",
+            field="bridge",
+            title="Order-book imbalance ↔ level-change follow",
+            statement=(
+                "After both bid and ask jump onto a new 1¢ spread, a large print that "
+                "hits the ask (bid) with bid (ask) size ≥ 1.8× the far side is a discrete "
+                "follow signal — inventory-capped, lag-gated microstructure control."
+            ),
+            proof_sketch=(
+                "1) State Q_t = (bid, ask, bid_size, ask_size). Level change when both "
+                "prices move and ask−bid = 0.01.\n"
+                "2) Arm only if the prior spread was also 0.01 (penny-to-penny).\n"
+                "3) On a trade: require size ≥ 100 and timestamp ≥ quote_time + 50ms.\n"
+                "4) Follow ask when price = ask and bid_size > 1.8 ask_size (room under "
+                "max shares); follow bid symmetrically when selling inventory."
+            ),
+            applications=(
+                "Research signals for high-volume names with frequent 1¢ moves",
+                "Inventory / pending-lot capacity checks before any hypothetical follow",
+            ),
+            aoa_mesh=(
+                "Julie may cite aoa.research.hftish_patterns for imbalance diagnostics; "
+                "sibling afidurko/example-hftish is reference-only — never an AOA order path."
+            ),
+            bridges=("bridge-ou-meanrev", "phys-diffusion", "bridge-sdf-martingale"),
+            drill_prompt=(
+                "Given two consecutive penny-spread quotes and a print on the ask, state "
+                "whether the follow signal is buy, sell, or flat and name the blocking "
+                "gate if flat."
+            ),
+            check_keywords=("imbalance", "penny", "level", "ask", "bid", "follow"),
+        ),
+    KnowledgeCard(
+            id="bridge-sgx-depth-rise",
+            field="bridge",
+            title="LOB depth imbalance ↔ short-horizon rise",
+            statement=(
+                "Weighted ask/bid depth imbalance and a trailing rise ratio are classical "
+                "full-order-book features; agreeing signs are a short-horizon pressure cue, "
+                "while a forward bid-lifts-ask label is a research hit-rate target only."
+            ),
+            proof_sketch=(
+                "1) W_a, W_b aggregate multi-level sizes; imbalance=(W_a−W_b)/(W_a+W_b).\n"
+                "2) Rise ratio is percent change vs the first print in [t−Δ, t].\n"
+                "3) Label bid[i] > min(ask[i:i+h]) scores foresight — not an AOA fill model."
+            ),
+            applications=(
+                "Offline LOB feature engineering (SGX notebook companion)",
+                "Julie microstructure study context alongside VisualHFT / orderbook lanes",
+            ),
+            aoa_mesh=(
+                "aoa.research.sgx_orderbook_patterns never calls a broker; swarm stays "
+                "bar/L1. Mesh companion sgx-orderbook is reference-only under the hard floor."
+            ),
+            bridges=("bridge-ou-meanrev", "bridge-sdf-martingale"),
+            drill_prompt=(
+                "Define weighted depth imbalance and rise ratio; explain why AOA treats "
+                "a forward tradeable label as research-only."
+            ),
+            check_keywords=("depth", "imbalance", "rise", "order book", "research"),
+        ),
     KnowledgeCard(
         id="bridge-free-energy",
         field="bridge",

@@ -88,3 +88,7 @@ SGX-.../Graph/                 pipeline + prediction figures
 
 AOA agents should read the notebooks for feature ideas; they should not treat
 the 2014 SGX sample CSVs as live market data or wire them into `aoa loop`.
+
+## Workspace mesh
+
+All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

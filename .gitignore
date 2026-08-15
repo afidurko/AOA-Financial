@@ -278,6 +278,8 @@ AOA-Vault/
 
 # QM sibling clone (multiplayer agent harness — not vendored)
 qm/
+# HFT sibling clone (C++ strategy reference — not vendored)
+hft/
 # SGX full-order-book ML strategy sibling (notebooks — not vendored)
 SGX-Full-OrderBook-Tick-Data-Trading-Strategy/
 # example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
@@ -287,4 +289,8 @@ VisualHFT/
 oxyplot/
 # hftbacktest research fork sibling (optional — not vendored)
 hftbacktest/
+# SGX order-book sibling alias (reference — not vendored)
+sgx-orderbook/
+# Avellaneda–Stoikov sibling clone (reference — not vendored)
+avellaneda-stoikov/
 loop-state/

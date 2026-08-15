@@ -162,7 +162,19 @@ export AOA_QM_URL=http://localhost:8081
 See [qm-integration.md](qm-integration.md). Other companions:
 [docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
 
-## 11. VisualHFT (optional)
+## 11. HFT strategy reference (optional)
+
+Clone the C++ HFT sibling for pairs-arb / maker / MA strategy reading
+([hft](https://github.com/afidurko/hft)). AOA does not run it:
+
+```bash
+./scripts/hft-setup.sh
+```
+
+See [hft-reference.md](hft-reference.md). Python idea ports:
+`aoa.research.hft_patterns`.
+
+## 12. VisualHFT (optional)
 
 Clone the microstructure desktop workspace and enable the dashboard link:
 
@@ -175,7 +187,7 @@ aoa workspaces status
 
 See [visualhft-integration.md](visualhft-integration.md).
 
-## 12. Workspaces (optional)
+## 13. Workspaces (optional)
 
 Open the whole stack in one Cursor window, and share the vault with your other repos:
 
@@ -186,7 +198,7 @@ Open the whole stack in one Cursor window, and share the vault with your other r
 
 See [workspace-mesh.md](workspace-mesh.md).
 
-## 13. example-hftish reference (optional)
+## 14. example-hftish reference (optional)
 
 Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
 reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
@@ -199,7 +211,7 @@ not run it:
 See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
 `aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.
 
-## 14. SGX order-book strategy reference (optional)
+## 15. SGX order-book reference (optional)
 
 Clone the SGX A50 full-LOB ML sibling for rise-ratio / weighted-depth reading
 ([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
@@ -212,3 +224,15 @@ AOA does not run the notebooks:
 See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
 `aoa.research.sgx_orderbook_patterns`. Companion map:
 [hft-research-lane.md](hft-research-lane.md).
+
+## 16. Avellaneda–Stoikov (optional)
+
+No sibling clone required for the headless lane:
+
+```bash
+aoa avellaneda status
+aoa avellaneda smoke
+aoa microstructure status
+```
+
+See [avellaneda-stoikov.md](avellaneda-stoikov.md) · [microstructure-lanes.md](microstructure-lanes.md).
