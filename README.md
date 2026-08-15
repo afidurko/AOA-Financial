@@ -107,7 +107,7 @@ portfolio sizing, risk, and execution:
 |-------|------|
 | **Scanner** | Narrows the universe to a shortlist of the strongest setups. |
 | **Technical** | Multi-timeframe indicators (1m→yearly: SMA/EMA/RSI/MACD/Bollinger/ATR/vol) → signal. |
-| **Fundamental** | Alpaca news headlines + catalyst/event-risk view (never fabricates news). |
+| **Fundamental** | Moomoo `get_search_news` (or Alpaca news when `AOA_BROKER=alpaca`) + catalyst/event-risk view (never fabricates news). |
 | **Meshing** | Synthesizes specialist signals into a cohesive, editable per-symbol view. |
 | **Options strategist** | Proposes a cash-account-appropriate options structure from the live chain. |
 | **Portfolio manager** | Synthesizes all signals + team brief + positions + account into target trades. |

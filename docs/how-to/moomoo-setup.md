@@ -7,8 +7,19 @@ AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Stock quotes and orders flow t
 ```bash
 pip install -e ".[dev,web]"    # includes moomoo-api
 cp .env.example .env           # set ANTHROPIC_API_KEY
-aoa setup moomoo               # guided checks
+aoa setup moomoo               # guided checks (+ points at OpenD skills)
 ```
+
+Agent skills (official OpenD pack, vendored under `.cursor/skills/`):
+
+| Skill | Use when |
+|-------|----------|
+| `/moomooapi` | Quotes, klines, news, orders, positions via OpenD scripts |
+| `/install-moomoo-opend` | Download/install OpenD + upgrade `moomoo-api` |
+
+AOA runtime wires the same OpenAPI surface into `MoomooBroker` and `MoomooNewsFeed`
+(`get_search_news`, `OrderType.MARKET` / `STOP`, `average_cost` / `unrealized_pl`,
+`get_top_movers_rank`).
 
 With OpenD running:
 

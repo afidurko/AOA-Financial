@@ -117,6 +117,62 @@ def _row_value(row: Any, key: str, default: Any = "") -> Any:
         return default
 
 
+def _snapshot_price(row: Any, key: str) -> float:
+    """Read bid/ask from a snapshot row (scalar or first list element).
+
+    Official moomooapi ``get_snapshot`` treats ``bid_price`` / ``ask_price`` as
+    scalars; older snapshots may return lists.
+    """
+    raw = _row_value(row, key, 0)
+    if isinstance(raw, (list, tuple)):
+        return _f(raw[0] if raw else 0)
+    return _f(raw)
+
+
+def _position_avg_cost(row: Any) -> float:
+    """Prefer ``average_cost`` over diluted ``cost_price`` (FIELD_MAPPING.md)."""
+    avg = _f(_row_value(row, "average_cost", 0))
+    if avg > 0:
+        return avg
+    return _f(_row_value(row, "cost_price", 0))
+
+
+def _position_unrealized_pl(row: Any) -> float:
+    """Prefer ``unrealized_pl`` over diluted ``pl_val`` (FIELD_MAPPING.md)."""
+    if _row_has_key(row, "unrealized_pl"):
+        return _f(_row_value(row, "unrealized_pl", 0))
+    return _f(_row_value(row, "pl_val", 0))
+
+
+def _row_has_key(row: Any, key: str) -> bool:
+    try:
+        index = getattr(row, "index", None)
+        if index is not None and key in index:
+            return True
+    except TypeError:
+        pass
+    if hasattr(row, "keys"):
+        try:
+            return key in row.keys()
+        except TypeError:
+            pass
+    if isinstance(row, dict):
+        return key in row
+    return False
+
+
+def _rank_codes(ret: int, data: Any, *, sdk: Any, limit: int) -> list[str]:
+    if ret != sdk.RET_OK or data is None or len(data) == 0:
+        return []
+    columns = list(getattr(data, "columns", []))
+    for col in ("code", "security", "stock_code"):
+        if col in columns:
+            return [from_moomoo_code(str(v)) for v in data[col].tolist()[:limit]]
+    if columns:
+        return [from_moomoo_code(str(v)) for v in data[columns[0]].tolist()[:limit]]
+    return []
+
+
 def _check_ret(ret: int, data: Any, *, action: str) -> Any:
     sdk = _require_sdk()
     if ret == sdk.RET_OK:
@@ -287,9 +343,9 @@ class MoomooBroker(Broker):
                     symbol=symbol,
                     asset_class=asset_class,
                     qty=_f(_row_value(row, "qty", 0)),
-                    avg_entry_price=_f(_row_value(row, "cost_price", 0)),
+                    avg_entry_price=_position_avg_cost(row),
                     market_value=_f(_row_value(row, "market_val", 0)),
-                    unrealized_pl=_f(_row_value(row, "pl_val", 0)),
+                    unrealized_pl=_position_unrealized_pl(row),
                     current_price=_f(_row_value(row, "nominal_price", 0)),
                 )
             )
@@ -310,10 +366,8 @@ class MoomooBroker(Broker):
         for _, row in data.iterrows():
             code = str(_row_value(row, "code", ""))
             sym = from_moomoo_code(code)
-            bid_prices = _row_value(row, "bid_price", [])
-            ask_prices = _row_value(row, "ask_price", [])
-            bid = _f(bid_prices[0] if isinstance(bid_prices, (list, tuple)) and bid_prices else 0)
-            ask = _f(ask_prices[0] if isinstance(ask_prices, (list, tuple)) and ask_prices else 0)
+            bid = _snapshot_price(row, "bid_price")
+            ask = _snapshot_price(row, "ask_price")
             last = _f(_row_value(row, "last_price", 0))
             if bid <= 0 and last > 0:
                 bid = last
@@ -380,12 +434,25 @@ class MoomooBroker(Broker):
         return bars[-1]
 
     def get_most_active(self, limit: int = 25) -> list[str]:
+        """Prefer RTH top-movers (moomooapi skill), then pre-market rank, then snapshot."""
         sdk = _require_sdk()
-        ret, data = self._quote_ctx.get_us_pre_market_rank(count=max(1, limit))
-        if ret == sdk.RET_OK and data is not None and len(data) > 0:
-            code_col = "code" if "code" in data.columns else data.columns[0]
-            return [from_moomoo_code(str(v)) for v in data[code_col].tolist()[:limit]]
-        # Fallback when rank API is empty outside extended hours.
+        count = max(1, limit)
+        market = getattr(sdk.Market, self._market, sdk.Market.US)
+        sort_dir = getattr(sdk.RankSortDir, "DESCENDING", 0)
+        try:
+            ret, data = self._quote_ctx.get_top_movers_rank(
+                market, sort_dir=sort_dir, count=count
+            )
+            symbols = _rank_codes(ret, data, sdk=sdk, limit=limit)
+            if symbols:
+                return symbols
+        except Exception:  # noqa: BLE001 — fall through to other rank sources
+            pass
+        ret, data = self._quote_ctx.get_us_pre_market_rank(count=count)
+        symbols = _rank_codes(ret, data, sdk=sdk, limit=limit)
+        if symbols:
+            return symbols
+        # Fallback when rank APIs are empty outside market hours.
         ret2, snap = self._quote_ctx.get_market_snapshot(
             [to_moomoo_code(s, market=self._market) for s in ("AAPL", "MSFT", "NVDA", "SPY", "QQQ")]
         )
@@ -434,10 +501,8 @@ class MoomooBroker(Broker):
             else:
                 otype, strike, expiry = parsed
             snap = snapshots.get(occ_code, {})
-            bid_prices = _row_value(snap, "bid_price", [])
-            ask_prices = _row_value(snap, "ask_price", [])
-            bid = _f(bid_prices[0] if isinstance(bid_prices, (list, tuple)) and bid_prices else 0)
-            ask = _f(ask_prices[0] if isinstance(ask_prices, (list, tuple)) and ask_prices else 0)
+            bid = _snapshot_price(snap, "bid_price")
+            ask = _snapshot_price(snap, "ask_price")
             last = _f(_row_value(snap, "last_price", 0))
             contracts.append(
                 OptionContract(
@@ -459,22 +524,21 @@ class MoomooBroker(Broker):
         return contracts
 
     def submit_order(self, request: OrderRequest) -> Order:
-        if request.is_protected:
-            raise BrokerError(
-                "Moomoo broker does not support bracket/OTO protective orders yet."
-            )
+        """Place equity/option orders; protective stops via Moomoo STOP/LIMIT legs.
+
+        Aligns with moomooapi ``place_order`` skill: ``OrderType.MARKET`` for market
+        entries, ``aux_price`` for stop-loss, limit sells for take-profit.
+        Moomoo has no native Alpaca-style bracket class, so protective legs are
+        submitted as resting sell orders after the entry.
+        """
         self._ensure_unlocked()
         sdk = _require_sdk()
         code = to_moomoo_code(request.symbol, market=self._market)
         side = sdk.TrdSide.BUY if request.side is Side.BUY else sdk.TrdSide.SELL
-        order_type = sdk.OrderType.NORMAL
-        price = 0.0
-        if request.order_type is OrderType.LIMIT:
-            order_type = sdk.OrderType.NORMAL
-            price = float(request.limit_price or 0)
+        order_type, price, aux_price = self._entry_order_params(sdk, request)
         tif = (
             sdk.TimeInForce.GTC
-            if request.time_in_force is TimeInForce.GTC
+            if request.is_protected or request.time_in_force is TimeInForce.GTC
             else sdk.TimeInForce.DAY
         )
         ret, data = self._trade_ctx.place_order(
@@ -487,20 +551,87 @@ class MoomooBroker(Broker):
             acc_id=self._acc_id,
             acc_index=self._acc_index,
             time_in_force=tif,
+            aux_price=aux_price,
+            remark="AOA",
         )
         _check_ret(ret, data, action="place_order")
         if data is None or len(data) == 0:
             raise BrokerError("Moomoo place_order returned no order id.")
         row = data.iloc[0]
+        entry_id = str(_row_value(row, "order_id", ""))
+        protective: list[dict[str, str]] = []
+        if (
+            request.is_protected
+            and request.asset_class is AssetClass.EQUITY
+            and request.side is Side.BUY
+        ):
+            protective = self._place_protective_legs(sdk, request, code=code)
         return Order(
-            id=str(_row_value(row, "order_id", "")),
+            id=entry_id,
             symbol=request.symbol.upper(),
             qty=float(request.qty),
             side=request.side,
             status="submitted",
             asset_class=request.asset_class,
-            raw={"order_id": str(_row_value(row, "order_id", ""))},
+            raw={
+                "order_id": entry_id,
+                "protective_legs": protective,
+            },
         )
+
+    @staticmethod
+    def _entry_order_params(sdk: Any, request: OrderRequest) -> tuple[Any, float, float | None]:
+        if request.order_type is OrderType.LIMIT:
+            return sdk.OrderType.NORMAL, float(request.limit_price or 0), None
+        # Market orders still require a price argument per Moomoo skill docs.
+        market_type = getattr(sdk.OrderType, "MARKET", sdk.OrderType.NORMAL)
+        return market_type, float(request.limit_price or 0.0), None
+
+    def _place_protective_legs(
+        self, sdk: Any, request: OrderRequest, *, code: str
+    ) -> list[dict[str, str]]:
+        legs: list[dict[str, str]] = []
+        qty = float(request.qty)
+        tif = sdk.TimeInForce.GTC
+        if request.stop_loss_price is not None:
+            stop_px = float(request.stop_loss_price)
+            stop_type = getattr(sdk.OrderType, "STOP", None)
+            if stop_type is None:
+                raise BrokerError("Moomoo SDK lacks OrderType.STOP for protective exits.")
+            ret, data = self._trade_ctx.place_order(
+                price=stop_px,
+                qty=qty,
+                code=code,
+                trd_side=sdk.TrdSide.SELL,
+                order_type=stop_type,
+                trd_env=self._trd_env,
+                acc_id=self._acc_id,
+                acc_index=self._acc_index,
+                time_in_force=tif,
+                aux_price=stop_px,
+                remark="AOA-SL",
+            )
+            _check_ret(ret, data, action="place_order(stop_loss)")
+            oid = str(_row_value(data.iloc[0], "order_id", "")) if data is not None and len(data) else ""
+            legs.append({"kind": "stop_loss", "order_id": oid, "price": str(stop_px)})
+        if request.take_profit_price is not None:
+            tp_px = float(request.take_profit_price)
+            ret, data = self._trade_ctx.place_order(
+                price=tp_px,
+                qty=qty,
+                code=code,
+                trd_side=sdk.TrdSide.SELL,
+                order_type=sdk.OrderType.NORMAL,
+                trd_env=self._trd_env,
+                acc_id=self._acc_id,
+                acc_index=self._acc_index,
+                time_in_force=tif,
+                remark="AOA-TP",
+            )
+            _check_ret(ret, data, action="place_order(take_profit)")
+            oid = str(_row_value(data.iloc[0], "order_id", "")) if data is not None and len(data) else ""
+            legs.append({"kind": "take_profit", "order_id": oid, "price": str(tp_px)})
+        return legs
 
     def list_orders(self, status: str = "open") -> list[Order]:
         self._ensure_unlocked()
@@ -555,14 +686,16 @@ class MoomooBroker(Broker):
         _check_ret(ret, data, action="cancel_order")
 
     def is_market_open(self) -> bool:
+        """True during US RTH sessions (MORNING / AFTERNOON), not extended hours."""
         sdk = _require_sdk()
+        open_states = {"MORNING", "AFTERNOON", "TRADE_AT_LAST"}
         code = to_moomoo_code("SPY", market=self._market)
         ret, data = self._quote_ctx.get_market_state([code])
-        if ret != sdk.RET_OK or data is None or len(data) == 0:
-            ret2, state = self._quote_ctx.get_global_state()
-            if ret2 != sdk.RET_OK or state is None or len(state) == 0:
-                return False
-            market_state = str(state.iloc[0].get("market_us", ""))
-            return "AFTER_HOURS" in market_state or "MORNING" in market_state or "TRADING" in market_state
-        market_state = str(data.iloc[0].get("market_state", ""))
-        return market_state not in {"CLOSED", "REST", "AFTER_HOURS_END", "NONE"}
+        if ret == sdk.RET_OK and data is not None and len(data) > 0:
+            market_state = str(_row_value(data.iloc[0], "market_state", "")).upper()
+            return any(s in market_state for s in open_states)
+        ret2, state = self._quote_ctx.get_global_state()
+        if ret2 != sdk.RET_OK or state is None or len(state) == 0:
+            return False
+        market_state = str(state.iloc[0].get("market_us", "")).upper()
+        return any(s in market_state for s in open_states)

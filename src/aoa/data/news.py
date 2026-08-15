@@ -1,8 +1,9 @@
 """News feed abstraction — headlines for the fundamental agent.
 
-The default provider uses Alpaca's market-data news endpoint (included with
-standard Alpaca data credentials). When news is unavailable the feed returns
-empty lists and the fundamental agent falls back to qualitative reasoning.
+Providers:
+- ``AlpacaNewsFeed`` — Alpaca market-data news (when ``AOA_BROKER=alpaca``)
+- ``MoomooNewsFeed`` — OpenD ``get_search_news`` (moomooapi skill; default broker)
+- ``NullNewsFeed`` — empty headlines when news is disabled or unreachable
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from alpaca.common.exceptions import APIError
 from alpaca.data.historical.news import NewsClient
@@ -43,6 +45,7 @@ class NewsFeed(ABC):
 
     def clear_cache(self) -> None:
         """No-op unless a concrete feed caches per-cycle results."""
+        return None
 
 
 class NullNewsFeed(NewsFeed):
@@ -119,6 +122,70 @@ class AlpacaNewsFeed(NewsFeed):
         return {s: list(self._cache.get(s, [])) for s in normalized}
 
 
+class MoomooNewsFeed(NewsFeed):
+    """Fetch headlines via OpenD ``get_search_news`` (moomooapi skill)."""
+
+    def __init__(
+        self,
+        *,
+        host: str = "127.0.0.1",
+        port: int = 11111,
+        connect_timeout: float = 3.0,
+        market: str = "US",
+    ) -> None:
+        from aoa.brokerage.moomoo import probe_opend
+
+        self._host = host
+        self._port = int(port)
+        self._connect_timeout = float(connect_timeout)
+        self._market = market.upper()
+        self._cache: dict[str, list[NewsItem]] = {}
+        probe_opend(self._host, self._port, timeout=self._connect_timeout)
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+    def headlines(self, symbols: list[str], *, limit: int = 5) -> dict[str, list[NewsItem]]:
+        if not symbols:
+            return {}
+        try:
+            import moomoo as ft
+        except ImportError as exc:  # pragma: no cover
+            raise BrokerError("moomoo-api is not installed. Run: pip install moomoo-api") from exc
+
+        normalized = [s.upper() for s in symbols if s]
+        missing = [s for s in normalized if s not in self._cache]
+        if not missing:
+            return {s: list(self._cache.get(s, [])) for s in normalized}
+
+        news_sub = getattr(getattr(ft, "NewsSubType", None), "NEWS", "NEWS")
+        ctx = ft.OpenQuoteContext(host=self._host, port=self._port)
+        try:
+            for sym in missing:
+                try:
+                    ret, data = ctx.get_search_news(
+                        sym, max(1, min(limit, 100)), news_sub_type=news_sub
+                    )
+                    if ret != ft.RET_OK or data is None or len(data) == 0:
+                        self._cache[sym] = []
+                        continue
+                    items: list[NewsItem] = []
+                    for _, row in data.iterrows():
+                        item = _parse_moomoo_news_row(row, default_symbol=sym)
+                        if item is not None:
+                            items.append(item)
+                        if len(items) >= limit:
+                            break
+                    self._cache[sym] = items
+                except Exception:  # noqa: BLE001 — per-symbol soft fail
+                    self._cache[sym] = []
+        finally:
+            close = getattr(ctx, "close", None)
+            if callable(close):
+                close()
+        return {s: list(self._cache.get(s, [])) for s in normalized}
+
+
 def _parse_news_row(row: dict) -> NewsItem | None:
     headline = (row.get("headline") or "").strip()
     if not headline:
@@ -140,4 +207,51 @@ def _parse_news_row(row: dict) -> NewsItem | None:
         source=str(row.get("source") or row.get("author") or "unknown"),
         created_at=str(created),
         symbols=symbols,
+    )
+
+
+def _parse_moomoo_news_row(row: Any, *, default_symbol: str) -> NewsItem | None:
+    """Map moomooapi ``get_search_news`` fields → ``NewsItem``."""
+
+    def _get(key: str, default: Any = "") -> Any:
+        if hasattr(row, "get"):
+            return row.get(key, default)
+        try:
+            return row[key]
+        except (KeyError, TypeError, IndexError):
+            return default
+
+    headline = str(_get("title") or _get("headline") or "").strip()
+    if not headline:
+        return None
+    summary = str(_get("content") or _get("summary") or "").strip()
+    if len(summary) > 500:
+        summary = summary[:497] + "..."
+    created = _get("publish_time") or _get("created_at") or ""
+    if isinstance(created, datetime):
+        created = created.isoformat()
+    related = _get("related_securities", None)
+    symbols: list[str] = []
+    if isinstance(related, str) and related.strip():
+        for part in related.replace(";", ",").split(","):
+            token = part.strip().upper()
+            if "." in token:
+                token = token.split(".", 1)[1]
+            if token:
+                symbols.append(token)
+    elif isinstance(related, (list, tuple)):
+        for part in related:
+            token = str(part).strip().upper()
+            if "." in token:
+                token = token.split(".", 1)[1]
+            if token:
+                symbols.append(token)
+    if not symbols:
+        symbols = [default_symbol.upper()]
+    return NewsItem(
+        headline=headline,
+        summary=summary,
+        source=str(_get("source") or "moomoo"),
+        created_at=str(created),
+        symbols=tuple(symbols),
     )

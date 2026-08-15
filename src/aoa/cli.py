@@ -82,8 +82,18 @@ def build_news(cfg: Config) -> NewsFeed:
     if not cfg.news_enabled:
         return NullNewsFeed()
     if cfg.broker == "moomoo":
-        # Headlines via Moomoo OpenAPI can be wired later; keep agents running without news.
-        return NullNewsFeed()
+        try:
+            from aoa.data.news import MoomooNewsFeed
+
+            return MoomooNewsFeed(
+                host=cfg.moomoo_opend_host,
+                port=cfg.moomoo_opend_port,
+                connect_timeout=cfg.moomoo_connect_timeout,
+                market=cfg.moomoo_market,
+            )
+        except BrokerError:
+            # OpenD down — keep the swarm running without headlines.
+            return NullNewsFeed()
     if not cfg.has_brokerage_creds:
         return NullNewsFeed()
     return AlpacaNewsFeed(
@@ -453,25 +463,26 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
         return 0
-    fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
-    try:
-        crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
-        print(
-            f"  ✓ Crypto bars API (no keys); BTC/USD last close "
-            f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
-        )
-    except BrokerError as exc:
-        print(f"  ✗ Crypto bars check failed: {exc}")
-        return 1
-    finally:
-        fetcher.close()
-    if not cfg.has_brokerage_creds:
-        print(
-            "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
-            "(crypto already works)."
-        )
-        print("  · Skipping broker account and stock-bar checks until keys are set.")
-        return 0
+    if cfg.broker != "moomoo":
+        fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
+        try:
+            crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
+            print(
+                f"  ✓ Crypto bars API (no keys); BTC/USD last close "
+                f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
+            )
+        except BrokerError as exc:
+            print(f"  ✗ Crypto bars check failed: {exc}")
+            return 1
+        finally:
+            fetcher.close()
+        if not cfg.has_brokerage_creds:
+            print(
+                "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
+                "(crypto already works)."
+            )
+            print("  · Skipping broker account and stock-bar checks until keys are set.")
+            return 0
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
@@ -482,6 +493,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
                 f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
                 f"({latest.timestamp.date()})."
             )
+            print("  · News: Moomoo OpenD get_search_news (moomooapi skill).")
         else:
             feed = cfg.alpaca_data_feed or cfg.bar_feed
             print(
@@ -1749,6 +1761,8 @@ def cmd_setup_moomoo(cfg: Config) -> int:
         return 1
     print("Running Moomoo setup helper…")
     print(f"  Broker: {cfg.broker} | OpenD: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port}")
+    print("  Skills: .cursor/skills/moomooapi + install-moomoo-opend (official OpenD pack)")
+    print("  Install OpenD via agent skill `/install-moomoo-opend` or scripts/install_moomoo_opend_*.sh")
     result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
     return int(result.returncode)
 
