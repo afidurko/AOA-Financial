@@ -52,32 +52,42 @@ def _sibling(name: str, env_key: str) -> tuple[str, bool]:
     return str(path), present
 
 
-def _hftbacktest_detail() -> dict[str, Any]:
+def _hft_detail() -> dict[str, Any]:
+    """Probe optional hftbacktest extra + vendored orderbook lane."""
     try:
-        from aoa.hftbacktest import HAS_HFTBACKTEST, probe_status
+        from aoa.hftbacktest import HAS_HFTBACKTEST
+        from aoa.hftbacktest import probe_status as probe_hft
 
-        status = probe_status()
-        return {
-            "installed": bool(HAS_HFTBACKTEST and status.get("installed")),
-            "probe": status,
-        }
+        hft = probe_hft()
+        hft_installed = bool(HAS_HFTBACKTEST and hft.get("installed"))
     except ImportError:
-        return {
+        hft = {
             "installed": False,
-            "probe": {
-                "installed": False,
-                "hint": 'pip install -e ".[hftbacktest]" (optional PR/extra)',
-                "upstream": HFTBACKTEST_URL,
-                "offline_only": True,
-            },
+            "hint": 'pip install -e ".[hftbacktest]"',
+            "upstream": HFTBACKTEST_URL,
+            "offline_only": True,
         }
+        hft_installed = False
+
+    try:
+        from aoa.orderbook import probe_status as probe_book
+
+        book = probe_book()
+    except ImportError:
+        book = {"installed": False, "ok": False, "offline_only": True}
+
+    return {
+        "installed": hft_installed or bool(book.get("ok")),
+        "hftbacktest": hft,
+        "orderbook": book,
+    }
 
 
 def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
     """Return status for each companion workspace."""
     cfg = cfg or Config.from_env(load_dotenv=False)
     vh_probe = visualhft_probe()
-    hft = _hftbacktest_detail()
+    hft = _hft_detail()
     os_path, os_ok = _sibling("OpenStock", "OPENSTOCK_DIR")
     qm_path, qm_ok = _sibling("qm", "QM_DIR")
     vh_path, vh_ok = _sibling("VisualHFT", "VISUALHFT_DIR")
@@ -137,13 +147,13 @@ def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
         WorkspaceInfo(
             id="hftbacktest",
             title="hftbacktest",
-            role="Optional offline tick L2/L3 backtest engine",
+            role="Optional tick L2/L3 engine + vendored orderbook (offline)",
             linked=bool(hft.get("installed")),
             url=HFTBACKTEST_URL,
             local_path=hft_path,
-            present=hft_ok,
+            present=hft_ok or bool((hft.get("orderbook") or {}).get("ok")),
             docs="docs/how-to/hftbacktest-integration.md",
-            setup='pip install -e ".[hftbacktest]"',
+            setup='pip install -e ".[hftbacktest]"  # orderbook is vendored',
             offline_only=True,
             never_live=True,
             detail=hft,

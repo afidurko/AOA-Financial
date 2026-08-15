@@ -2391,7 +2391,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    # Offline research lane — no .env template and no Config/broker side effects.
+    # Offline research lanes — no .env template and no Config/broker side effects.
     if args.command == "visualhft":
         if args.visualhft_command == "status":
             return cmd_visualhft_status(as_json=getattr(args, "json", False))
@@ -2410,6 +2410,28 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "workspaces":
         if args.workspaces_command == "status":
             return cmd_workspaces_status(as_json=getattr(args, "json", False))
+
+    if args.command == "hft":
+        if args.hft_command == "status":
+            return cmd_hft_status(as_json=getattr(args, "json", False))
+        if args.hft_command == "smoke":
+            return cmd_hft_smoke(
+                n_events=getattr(args, "events", 400),
+                steps=getattr(args, "steps", 20),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.hft_command == "book-smoke":
+            return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
+        if args.hft_command == "run":
+            return cmd_hft_run(
+                data=args.data,
+                tick_size=args.tick_size,
+                lot_size=args.lot_size,
+                steps=getattr(args, "steps", 20),
+                step_ns=getattr(args, "step_ns", 50_000_000),
+                as_json=getattr(args, "json", False),
+            )
 
     _ensure_env_template()
     cfg = Config.from_env()
@@ -2462,27 +2484,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
-        if args.command == "hft":
-            if args.hft_command == "status":
-                return cmd_hft_status(as_json=getattr(args, "json", False))
-            if args.hft_command == "smoke":
-                return cmd_hft_smoke(
-                    n_events=args.events,
-                    steps=args.steps,
-                    seed=args.seed,
-                    as_json=getattr(args, "json", False),
-                )
-            if args.hft_command == "book-smoke":
-                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
-            if args.hft_command == "run":
-                return cmd_hft_run(
-                    data=args.data,
-                    tick_size=args.tick_size,
-                    lot_size=args.lot_size,
-                    steps=args.steps,
-                    step_ns=args.step_ns,
-                    as_json=getattr(args, "json", False),
-                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
