@@ -137,3 +137,14 @@ patterns:
     state: vault/system/qm.md
     cli: ./scripts/qm-setup.sh
     level: optional
+
+  - id: example-hftish-companion
+    name: example-hftish Order-Book Imbalance
+    file: docs/how-to/example-hftish-reference.md
+    goal: Research-only OB imbalance helpers for Julie/Morgan + aoa hftish CLI
+    cadence: on-demand
+    risk: low
+    tools: [example-hftish]
+    state: vault/system/example-hftish.md
+    cli: aoa hftish status
+    level: optional

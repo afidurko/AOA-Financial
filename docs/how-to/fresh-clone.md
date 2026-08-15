@@ -183,3 +183,16 @@ Open the whole stack in one Cursor window, and share the vault with your other r
 ```
 
 See [workspace-mesh.md](workspace-mesh.md).
+
+## 13. example-hftish reference (optional)
+
+Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
+reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
+not run it:
+
+```bash
+./scripts/example-hftish-setup.sh
+```
+
+See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
+`aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.
