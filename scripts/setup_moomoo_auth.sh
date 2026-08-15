@@ -55,6 +55,7 @@ then
 else
   echo
   need "Install and start Moomoo OpenD — https://www.moomoo.com/download/OpenAPI/"
+  echo "       Agent skill: /install-moomoo-opend (Cursor/Claude)"
   echo "       macOS: bash scripts/install_moomoo_opend_macos.sh"
   echo "       Linux: bash scripts/install_moomoo_opend_linux.sh"
   echo "       Log in with your Moomoo account. Default port: 11111"
