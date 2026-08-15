@@ -31,10 +31,13 @@ else
   need 'Run: pip install moomoo-api  (or pip install -e ".[dev]")'
 fi
 
-if grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
-  ok "ANTHROPIC_API_KEY looks set"
+if grep -q '^AOA_LLM_PROVIDER=openai_compatible' .env 2>/dev/null \
+  || grep -q '^AOA_LLM_BASE_URL=' .env 2>/dev/null; then
+  ok "Local LLM (WASTE / openai_compatible) configured in .env"
+elif grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
+  ok "ANTHROPIC_API_KEY looks set (opt-in Claude provider)"
 else
-  need "Edit .env — set ANTHROPIC_API_KEY=sk-ant-..."
+  need "Start WASTE serve and keep AOA_LLM_PROVIDER=openai_compatible — docs/how-to/waste-local-llm.md"
 fi
 
 HOST="${MOOMOO_OPEND_HOST:-127.0.0.1}"

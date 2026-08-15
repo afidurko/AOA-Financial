@@ -200,14 +200,13 @@ class Config:
     analytics_db_path: Path = field(default_factory=lambda: analytics_db_path_for("paper-dry"))
     repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
 
-    # LLM
-    # provider: anthropic (default) or openai_compatible (local WASTE / any
-    # OpenAI chat-completions server — speeds opportunity decision loops).
-    llm_provider: str = "anthropic"
-    llm_base_url: str = ""
+    # LLM — default is local OpenAI-compatible (WASTE). Claude/Anthropic is opt-in.
+    # provider: openai_compatible | anthropic
+    llm_provider: str = "openai_compatible"
+    llm_base_url: str = "http://127.0.0.1:8000/v1"
     llm_api_key: str = ""
     anthropic_api_key: str = ""
-    model: str = "claude-sonnet-4-6"
+    model: str = "kimi-linear"
     effort: str = "high"
 
     # Broker selection (default: Moomoo via OpenD)
@@ -387,13 +386,29 @@ class Config:
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
             llm_provider=(
-                os.environ.get("AOA_LLM_PROVIDER", "anthropic").strip().lower()
-                or "anthropic"
+                os.environ.get("AOA_LLM_PROVIDER", "openai_compatible").strip().lower()
+                or "openai_compatible"
             ),
-            llm_base_url=os.environ.get("AOA_LLM_BASE_URL", "").strip().rstrip("/"),
+            llm_base_url=(
+                os.environ.get("AOA_LLM_BASE_URL", "http://127.0.0.1:8000/v1")
+                .strip()
+                .rstrip("/")
+            ),
             llm_api_key=os.environ.get("AOA_LLM_API_KEY", "").strip(),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
+            model=os.environ.get(
+                "AOA_MODEL",
+                (
+                    "claude-sonnet-4-6"
+                    if (
+                        os.environ.get("AOA_LLM_PROVIDER", "openai_compatible")
+                        .strip()
+                        .lower()
+                        == "anthropic"
+                    )
+                    else "kimi-linear"
+                ),
+            ),
             effort=os.environ.get("AOA_EFFORT", "high"),
             broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
             moomoo_opend_host=os.environ.get("MOOMOO_OPEND_HOST", "127.0.0.1").strip() or "127.0.0.1",
@@ -516,11 +531,15 @@ class Config:
             )
         if self.env != "test":
             if self.llm_provider == "anthropic" and not self.anthropic_api_key:
-                problems.append("ANTHROPIC_API_KEY is not set — the agents cannot reason.")
+                problems.append(
+                    "ANTHROPIC_API_KEY is not set — required only when "
+                    "AOA_LLM_PROVIDER=anthropic (default is local WASTE)."
+                )
             if self.llm_provider == "openai_compatible" and not self.llm_base_url:
                 problems.append(
                     "AOA_LLM_BASE_URL is required when AOA_LLM_PROVIDER=openai_compatible "
-                    "(e.g. http://127.0.0.1:8000/v1 for a local WASTE serve)."
+                    "(default http://127.0.0.1:8000/v1 — start WASTE with "
+                    "`python3 -m serve MODEL --port 8000`)."
                 )
             if self.broker == "alpaca" and not self.has_brokerage_creds:
                 problems.append(

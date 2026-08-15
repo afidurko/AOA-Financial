@@ -25,7 +25,7 @@ def _text_response(text: str) -> MagicMock:
 
 def test_invalid_effort_rejected():
     with pytest.raises(LLMError, match="Invalid effort"):
-        LLMClient("sk-test", effort="turbo")
+        LLMClient("sk-test", provider="anthropic", effort="turbo")
 
 
 def test_invalid_provider_rejected():
@@ -33,13 +33,25 @@ def test_invalid_provider_rejected():
         LLMClient("sk-test", provider="ollama")
 
 
+def test_default_provider_is_openai_compatible():
+    client = LLMClient()
+    assert client.provider == "openai_compatible"
+    assert client.base_url == "http://127.0.0.1:8000/v1"
+    assert client.model == "kimi-linear"
+
+
 def test_openai_compatible_requires_base_url():
     with pytest.raises(LLMError, match="AOA_LLM_BASE_URL"):
-        LLMClient(provider="openai_compatible", model="k3")
+        LLMClient(provider="openai_compatible", model="k3", base_url="")
+
+
+def test_openai_compatible_defaults_base_url_when_omitted():
+    client = LLMClient(provider="openai_compatible", model="k3")
+    assert client.base_url == "http://127.0.0.1:8000/v1"
 
 
 def test_structured_falls_back_when_advanced_call_fails():
-    client = LLMClient("sk-test")
+    client = LLMClient("sk-test", provider="anthropic")
     with patch.object(
         client._client.messages,
         "create",
@@ -59,7 +71,7 @@ def test_structured_falls_back_when_advanced_call_fails():
 
 
 def test_ping_requires_ok_true():
-    client = LLMClient("sk-test")
+    client = LLMClient("sk-test", provider="anthropic")
     with patch.object(
         client,
         "structured",
@@ -125,6 +137,14 @@ def test_openai_compatible_http_error_surfaces_detail():
             client.complete("sys", "prompt", max_tokens=16)
 
 
+def test_build_llm_defaults_to_openai_compatible():
+    cfg = Config()
+    client = build_llm(cfg)
+    assert client.provider == "openai_compatible"
+    assert client.base_url == "http://127.0.0.1:8000/v1"
+    assert client.model == "kimi-linear"
+
+
 def test_build_llm_openai_compatible():
     cfg = Config(
         llm_provider="openai_compatible",
@@ -138,3 +158,14 @@ def test_build_llm_openai_compatible():
     assert client.base_url == "http://127.0.0.1:8000/v1"
     assert client.model == "kimi-linear"
     assert client.effort == "medium"
+
+
+def test_build_llm_anthropic_opt_in():
+    cfg = Config(
+        llm_provider="anthropic",
+        anthropic_api_key="sk-test",
+        model="claude-sonnet-4-6",
+    )
+    client = build_llm(cfg)
+    assert client.provider == "anthropic"
+    assert client.model == "claude-sonnet-4-6"

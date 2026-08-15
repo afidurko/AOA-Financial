@@ -6,7 +6,7 @@ AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Stock quotes and orders flow t
 
 ```bash
 pip install -e ".[dev,web]"    # includes moomoo-api
-cp .env.example .env           # set ANTHROPIC_API_KEY
+cp .env.example .env           # local WASTE LLM defaults; start serve before doctor
 aoa setup moomoo               # guided checks
 ```
 

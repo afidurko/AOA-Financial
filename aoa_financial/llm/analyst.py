@@ -1,21 +1,19 @@
-"""Claude-powered deep-analysis analyst.
+"""Deep-analysis analyst for the offline aoa_financial swarm.
 
-The analyst takes the *quant evidence* produced by the analysis layer and asks
-Claude Opus 4.8 to synthesise an institutional-quality investment view:
-a thesis, key risks, a directional call, conviction and confidence — returned
-as validated structured JSON the swarm can consume.
-
-Resilience: if the ``anthropic`` SDK is not installed or no API key is present,
+Uses a local OpenAI-compatible server (WASTE) by default. Claude/Anthropic is
+opt-in via ``AOA_LLM_PROVIDER=anthropic``. If no live backend is available,
 a deterministic offline analyst produces the same JSON shape from the evidence
 so the rest of the pipeline is never blocked. Set ``AOA_FORCE_OFFLINE=1`` to
-force the offline path even when the SDK is available.
+force the offline path.
 """
 from __future__ import annotations
 
 import json
 import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from ..config import Config
 
@@ -53,15 +51,15 @@ _SYSTEM_PROMPT = (
 @dataclass
 class AnalystResult:
     ticker: str
-    source: str                 # "claude" | "offline"
+    source: str                 # "openai_compatible" | "claude" | "offline"
     thesis: str
     action: str
     conviction: float
     confidence: float
     time_horizon: str
-    key_drivers: List[str] = field(default_factory=list)
-    key_risks: List[str] = field(default_factory=list)
-    model: Optional[str] = None
+    key_drivers: list[str] = field(default_factory=list)
+    key_risks: list[str] = field(default_factory=list)
+    model: str | None = None
 
     def to_dict(self) -> dict:
         return {
@@ -76,7 +74,7 @@ class AnalystResult:
 
 def build_evidence(ticker: str, *, technical: dict, fundamental: dict,
                    forecast: dict, regime: dict, reverse: dict,
-                   sentiment: float, sector: str) -> Dict[str, Any]:
+                   sentiment: float, sector: str) -> dict[str, Any]:
     """Assemble the compact evidence packet handed to the analyst."""
     return {
         "ticker": ticker,
@@ -86,17 +84,18 @@ def build_evidence(ticker: str, *, technical: dict, fundamental: dict,
         "forecast": forecast,
         "regime": regime,
         "reverse_engineering": reverse,
-        "sentiment": round(sentiment, 4),
+        "sentiment": sentiment,
     }
 
 
 class ClaudeAnalyst:
-    def __init__(self, config: Optional[Config] = None):
+    """Name kept for call-site compatibility; prefers local WASTE by default."""
+
+    def __init__(self, config: Config | None = None) -> None:
         self.config = config or Config()
 
-    # -- public API -------------------------------------------------------
-    def analyze(self, evidence: Dict[str, Any]) -> AnalystResult:
-        ticker = evidence.get("ticker", "?")
+    def analyze(self, evidence: dict[str, Any]) -> AnalystResult:
+        ticker = str(evidence.get("ticker", "UNKNOWN"))
         if self._can_use_live():
             try:
                 return self._analyze_live(ticker, evidence)
@@ -106,30 +105,97 @@ class ClaudeAnalyst:
                 return offline
         return self._analyze_offline(ticker, evidence)
 
-    # -- live (Claude) ----------------------------------------------------
     def _can_use_live(self) -> bool:
         if os.environ.get("AOA_FORCE_OFFLINE") == "1":
             return False
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            return False
-        try:
-            import anthropic  # noqa: F401
-            return True
-        except Exception:
-            return False
+        provider = (self.config.llm_provider or "openai_compatible").lower()
+        if provider == "openai_compatible":
+            return bool(self.config.llm_base_url)
+        if provider == "anthropic":
+            if not os.environ.get("ANTHROPIC_API_KEY") and not self.config.llm_api_key:
+                return False
+            try:
+                import anthropic  # noqa: F401
+                return True
+            except Exception:
+                return False
+        return False
 
-    def _analyze_live(self, ticker: str, evidence: Dict[str, Any]) -> AnalystResult:
+    def _analyze_live(self, ticker: str, evidence: dict[str, Any]) -> AnalystResult:
+        provider = (self.config.llm_provider or "openai_compatible").lower()
+        if provider == "openai_compatible":
+            return self._analyze_openai(ticker, evidence)
+        return self._analyze_anthropic(ticker, evidence)
+
+    def _analyze_openai(self, ticker: str, evidence: dict[str, Any]) -> AnalystResult:
+        user_content = (
+            "Quantitative evidence packet (JSON):\n\n"
+            + json.dumps(evidence, indent=2)
+            + "\n\nProduce the investment view as JSON matching the required schema."
+        )
+        body = {
+            "model": self.config.llm_model,
+            "max_tokens": self.config.llm_max_tokens,
+            "temperature": 0,
+            "thinking_effort": self.config.llm_effort,
+            "messages": [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "aoa_analyst",
+                    "schema": _OUTPUT_SCHEMA,
+                    "strict": True,
+                },
+            },
+        }
+        url = f"{self.config.llm_base_url.rstrip('/')}/chat/completions"
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode("utf-8"),
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self.config.llm_api_key or 'local'}",
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=600) as resp:
+                payload = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:300]
+            raise RuntimeError(
+                f"openai_compatible analyst failed ({exc.code}): {detail}"
+            ) from exc
+        choices = payload.get("choices") or []
+        if not choices:
+            raise RuntimeError(
+                f"openai_compatible analyst returned no choices: {payload!r}"
+            )
+        text = (choices[0].get("message") or {}).get("content") or "{}"
+        if isinstance(text, list):
+            text = "".join(
+                part.get("text", "")
+                for part in text
+                if isinstance(part, dict)
+            )
+        data = json.loads(text)
+        return self._normalize(
+            ticker, "openai_compatible", data, model=self.config.llm_model
+        )
+
+    def _analyze_anthropic(self, ticker: str, evidence: dict[str, Any]) -> AnalystResult:
         import anthropic
 
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=self.config.llm_api_key or None)
         user_content = (
             "Quantitative evidence packet (JSON):\n\n"
             + json.dumps(evidence, indent=2)
             + "\n\nProduce the investment view as JSON matching the required schema."
         )
 
-        # Stream to stay well under request timeouts on long, high-effort
-        # generations; collect the final message at the end.
         with client.messages.stream(
             model=self.config.llm_model,
             max_tokens=self.config.llm_max_tokens,
@@ -147,14 +213,8 @@ class ClaudeAnalyst:
         data = json.loads(text)
         return self._normalize(ticker, "claude", data, model=self.config.llm_model)
 
-    # -- offline (deterministic) -----------------------------------------
-    def _analyze_offline(self, ticker: str, evidence: Dict[str, Any]) -> AnalystResult:
-        """Synthesise a coherent view directly from the evidence numbers.
-
-        This is a faithful, explainable stand-in: it reaches the same
-        conclusions a human would from the same dashboard, so the swarm gets a
-        meaningful 'analyst' vote even with no API access.
-        """
+    def _analyze_offline(self, ticker: str, evidence: dict[str, Any]) -> AnalystResult:
+        """Synthesise a coherent view directly from the evidence numbers."""
         rev = evidence.get("reverse_engineering", {})
         fc = evidence.get("forecast", {})
         fund = evidence.get("fundamental", {})
@@ -166,7 +226,6 @@ class ClaudeAnalyst:
         exp_ret = float(fc.get("expected_return", 0.0))
         fund_score = float(fund.get("composite", 0.0))
 
-        # Blend the standalone reads into a single conviction.
         conviction = max(-1.0, min(1.0,
                          0.45 * bias + 0.30 * (exp_ret * 8.0) + 0.25 * fund_score))
         if conviction > 0.2:
@@ -176,13 +235,12 @@ class ClaudeAnalyst:
         else:
             action = "HOLD"
 
-        # Confidence reflects how much the models explain + forecast confidence.
         confidence = max(0.1, min(0.9,
                          0.5 * float(rev.get("explained_variance", 0.0))
                          + 0.3 * float(fc.get("confidence", 0.0))
                          + 0.2 * float(regime.get("regime_confidence", 0.0))))
 
-        drivers: List[str] = []
+        drivers: list[str] = []
         for d in rev.get("dominant_drivers", [])[:3]:
             drivers.append(f"factor:{d}")
         if tech.get("golden_cross"):
@@ -226,9 +284,8 @@ class ClaudeAnalyst:
             f"{sentiment:+.2f}. Net forward bias {rev.get('forward_bias', 0.0):+.2f}."
         )
 
-    # -- shared normalisation --------------------------------------------
     def _normalize(self, ticker: str, source: str, data: dict,
-                   model: Optional[str]) -> AnalystResult:
+                   model: str | None) -> AnalystResult:
         def fnum(x, lo, hi, default=0.0):
             try:
                 return max(lo, min(hi, float(x)))

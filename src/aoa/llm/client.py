@@ -1,11 +1,8 @@
 """LLM client for swarm reasoning.
 
-Default backend is the Anthropic Messages API. Set
-``AOA_LLM_PROVIDER=openai_compatible`` (plus ``AOA_LLM_BASE_URL``) to point
-every agent at a local OpenAI chat-completions server such as WASTE
-(``python3 -m serve ~/models/k3.waste``). That path is intended to speed
-opportunity decision loops (Tom → Julie → Morgan → Hailey → Alan) without
-changing agent code.
+Default backend is a local OpenAI-compatible server such as WASTE
+(``python3 -m serve``). Claude/Anthropic is available only when
+``AOA_LLM_PROVIDER=anthropic`` is set explicitly.
 """
 
 from __future__ import annotations
@@ -16,7 +13,7 @@ import urllib.error
 import urllib.request
 from typing import Any
 
-try:  # The SDK is a hard runtime dependency for the Anthropic path.
+try:  # Optional — only required for AOA_LLM_PROVIDER=anthropic.
     import anthropic
 except ImportError:  # pragma: no cover
     anthropic = None  # type: ignore[assignment]
@@ -28,6 +25,7 @@ class LLMError(RuntimeError):
 
 _VALID_EFFORT = frozenset({"low", "medium", "high", "xhigh", "max"})
 _VALID_PROVIDERS = frozenset({"anthropic", "openai_compatible"})
+_DEFAULT_BASE_URL = "http://127.0.0.1:8000/v1"
 
 
 class LLMClient:
@@ -35,11 +33,11 @@ class LLMClient:
         self,
         api_key: str = "",
         *,
-        provider: str = "anthropic",
-        model: str = "claude-sonnet-4-6",
+        provider: str = "openai_compatible",
+        model: str = "kimi-linear",
         effort: str = "high",
         max_tokens: int = 8000,
-        base_url: str = "",
+        base_url: str | None = None,
     ) -> None:
         if provider not in _VALID_PROVIDERS:
             raise LLMError(
@@ -54,19 +52,25 @@ class LLMClient:
         self.model = model
         self.effort = effort
         self.max_tokens = max_tokens
-        self.base_url = base_url.rstrip("/")
         self._api_key = api_key
         self._client: Any = None
 
         if provider == "anthropic":
+            self.base_url = (base_url or "").rstrip("/")
             if anthropic is None:  # pragma: no cover
                 raise LLMError(
-                    "The 'anthropic' package is not installed. Run: pip install anthropic"
+                    "The 'anthropic' package is not installed. "
+                    "Run: pip install 'aoa-financial[anthropic]' "
+                    "or set AOA_LLM_PROVIDER=openai_compatible for local WASTE."
                 )
             if not api_key:
-                raise LLMError("ANTHROPIC_API_KEY is required.")
+                raise LLMError("ANTHROPIC_API_KEY is required when using Anthropic.")
             self._client = anthropic.Anthropic(api_key=api_key)
         else:
+            if base_url is None:
+                self.base_url = _DEFAULT_BASE_URL
+            else:
+                self.base_url = base_url.strip().rstrip("/")
             if not self.base_url:
                 raise LLMError(
                     "AOA_LLM_BASE_URL is required for openai_compatible "
@@ -163,7 +167,7 @@ class LLMClient:
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as exc:  # noqa: BLE001
-            raise LLMError(f"Claude request failed: {exc}") from exc
+            raise LLMError(f"Anthropic request failed: {exc}") from exc
 
     def _create_basic(self, *, system: str, prompt: str, max_tokens: int) -> Any:
         try:
@@ -175,7 +179,7 @@ class LLMClient:
                 messages=[{"role": "user", "content": prompt}],
             )
         except Exception as exc:  # noqa: BLE001
-            raise LLMError(f"Claude request failed: {exc}") from exc
+            raise LLMError(f"Anthropic request failed: {exc}") from exc
 
     def _openai_complete(
         self,
@@ -195,7 +199,6 @@ class LLMClient:
                 {"role": "user", "content": prompt},
             ],
         }
-        # WASTE and other local servers accept thinking_effort; ignored if unsupported.
         body["thinking_effort"] = self.effort
         if schema is not None:
             body["response_format"] = {
@@ -259,7 +262,7 @@ def _first_text(resp: Any) -> str:
     for block in getattr(resp, "content", []) or []:
         if getattr(block, "type", None) == "text":
             return block.text
-    raise LLMError("Claude response contained no text block.")
+    raise LLMError("Anthropic response contained no text block.")
 
 
 def _openai_first_text(payload: dict[str, Any]) -> str:

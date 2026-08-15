@@ -11,13 +11,20 @@ requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "AOA Financial" }]
 dependencies = [
-    "anthropic>=0.40.0",
     "moomoo-api>=10.8.0",
     "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "pytest-mock>=3.12.0", "ruff>=0.6.0", "alpaca-py>=0.40.0"]
+# Opt-in Claude path (AOA_LLM_PROVIDER=anthropic). Default swarm uses local WASTE.
+anthropic = ["anthropic>=0.40.0"]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "ruff>=0.6.0",
+    "alpaca-py>=0.40.0",
+    "aoa-financial[anthropic]",
+]
 web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
 alpaca = ["alpaca-py>=0.40.0"]
 tradingagents = [
@@ -31,7 +38,7 @@ tradingagents-bedrock = [
 torch = ["torch>=2.0.0"]
 # FinancePy quant context for Andrea's options/hedge analysis (GPL-3.0 optional).
 financepy = ["financepy>=1.0.0"]
-all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca]"]
+all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca,anthropic]"]
 
 [project.scripts]
 aoa = "aoa.cli:main"

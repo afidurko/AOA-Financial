@@ -2,7 +2,8 @@
 # src/aoa trading swarm — core runtime
 # =============================================================================
 alpaca-py>=0.40.0       # Official Alpaca SDK (trading + market data)
-anthropic>=0.40.0      # Claude API — the reasoning engine for every agent
+# anthropic is opt-in only: pip install 'aoa-financial[anthropic]'
+# Default reasoning engine is local WASTE (AOA_LLM_PROVIDER=openai_compatible)
 
 # =============================================================================
 # aoa_financial optional deep-analysis engine — optional accelerators

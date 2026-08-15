@@ -34,14 +34,27 @@ def test_trading_mode_paper_vs_live():
 
 
 def test_validate_flags_missing_credentials():
+    # Default LLM is local WASTE — no Anthropic key required.
     cfg = Config(env="paper-dry", broker="moomoo")
     problems = cfg.validate()
-    assert any("ANTHROPIC_API_KEY" in p for p in problems)
+    assert not any("ANTHROPIC_API_KEY" in p for p in problems)
     assert not any("ALPACA" in p for p in problems)
+    assert cfg.validate() == []
+
+
+def test_validate_anthropic_requires_key_when_opted_in():
+    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="anthropic")
+    problems = cfg.validate()
+    assert any("ANTHROPIC_API_KEY" in p for p in problems)
 
 
 def test_validate_openai_compatible_requires_base_url():
-    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="openai_compatible")
+    cfg = Config(
+        env="paper-dry",
+        broker="moomoo",
+        llm_provider="openai_compatible",
+        llm_base_url="",
+    )
     problems = cfg.validate()
     assert any("AOA_LLM_BASE_URL" in p for p in problems)
     assert not any("ANTHROPIC_API_KEY" in p for p in problems)
@@ -58,7 +71,7 @@ def test_validate_openai_compatible_clean():
 
 
 def test_validate_rejects_unknown_llm_provider():
-    cfg = Config(env="paper-dry", broker="moomoo", anthropic_api_key="x", llm_provider="ollama")
+    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="ollama")
     problems = cfg.validate()
     assert any("AOA_LLM_PROVIDER" in p for p in problems)
 
@@ -78,7 +91,6 @@ def test_validate_clean_config():
     cfg = Config(
         env="paper-dry",
         broker="moomoo",
-        anthropic_api_key="x",
     )
     assert cfg.validate() == []
 
@@ -87,7 +99,6 @@ def test_validate_clean_config_alpaca():
     cfg = Config(
         env="paper-dry",
         broker="alpaca",
-        anthropic_api_key="x",
         alpaca_key_id="k",
         alpaca_secret_key="s",
     )
