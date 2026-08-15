@@ -85,7 +85,9 @@ Every step is written to an append-only JSONL **journal** for a full audit trail
 
 ### The agents
 
-The swarm is coordinated by a **five-member agent team** before trades are proposed.
+The swarm is coordinated by a **twelve-member meshed agent team** (trading + ATTL:
+Nova/Reed/Kai) before trades are proposed; coding loops use ATTL `auto-12` with
+critical-only review.
 **Bob**, **Julie**, and **Alan** also own code-health duties (shared helpers, lint,
 import integrity, and confidence adjustments when quality is degraded):
 
@@ -593,6 +595,12 @@ aoa simulate AAPL --paths 5000 --seed 1   # Monte-Carlo forward paths + scenario
 aoa simulate AAPL --method bootstrap   # block-bootstrap (keeps fat tails) instead of GBM
 aoa scenarios                          # list the built-in stress-scenario library
 aoa watch AAPL MSFT --interval 30      # LIVE: re-analyze & re-simulate as prices move
+
+# Optional HFT/L2 backtest (pip install -e ".[hftbacktest]"; offline only):
+aoa hft status
+aoa hft smoke                           # synthetic L2 depth smoke (no orders)
+aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
+# See docs/how-to/hftbacktest-integration.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -710,6 +718,22 @@ Open **http://localhost:8080/** for the dashboard. REST endpoints:
 
 Set `AOA_WEB_AUTO_LOOP=true` to run the team trading loop automatically in the
 background while the web server is up.
+
+Optional header shortcuts (same pattern as OpenStock):
+
+| Env | Dashboard link |
+|-----|----------------|
+| `AOA_OPENSTOCK_URL` | OpenStock ↗ |
+| `AOA_QM_URL` | QM ↗ |
+| `AOA_VISUALHFT_URL` | VisualHFT ↗ |
+
+```bash
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+aoa serve
+```
+
+See [docs/how-to/qm-integration.md](docs/how-to/qm-integration.md).
 
 ---
 
@@ -831,7 +855,10 @@ loop-run-log.md            # loop run history
 loop-budget.md             # token/run caps
 .cursor/skills/            # loop-triage, minimal-fix, loop-verifier, …
 docs/safety.md             # agent safety policy
+docs/help.md               # related content (qm, OpenStock, loop-engineering, …)
+docs/how-to/qm-integration.md # QM sibling harness (AOA_QM_URL)
 docs/how-to/fresh-clone.md # first-time setup checklist
+vault/system/qm.md         # system companion note for QM
 examples/run_demo.py       # aoa_financial end-to-end demonstration
 deploy/                    # systemd unit files for production
 Dockerfile                 # container image
@@ -916,6 +943,23 @@ from aoa.swarm.stages import default_stages, PortfolioStage
 custom = Pipeline(stages=default_stages()[:3] + [PortfolioStage()] + default_stages()[4:])
 orch = Orchestrator(config, broker, llm, pipeline=custom)
 ```
+
+## Help — related content
+
+Companion tools that sit beside this repo (not vendored here):
+
+| Project | Why it helps |
+|---------|----------------|
+| **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
+| **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
+| **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
+| **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
+| **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
+
+Companion mesh guide: [docs/how-to/workspaces.md](docs/how-to/workspaces.md).
+
+Full catalog and clone notes: **[docs/help.md](docs/help.md)**.
 
 ## Disclaimer
 

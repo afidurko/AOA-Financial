@@ -224,6 +224,18 @@ def test_from_env_parses_universe(monkeypatch):
     assert cfg.universe == ("AAPL", "MSFT", "NVDA")
 
 
+def test_from_env_parses_qm_url(monkeypatch):
+    monkeypatch.setenv("AOA_QM_URL", " http://localhost:8081 ")
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.qm_url == "http://localhost:8081"
+
+
+def test_from_env_parses_visualhft_url(monkeypatch):
+    monkeypatch.setenv("AOA_VISUALHFT_URL", " https://github.com/afidurko/VisualHFT ")
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.visualhft_url == "https://github.com/afidurko/VisualHFT"
+
+
 def test_from_env_risk_limits(monkeypatch):
     monkeypatch.setenv("AOA_MAX_POSITION_PCT", "0.25")
     monkeypatch.setenv("AOA_MAX_ORDERS_PER_CYCLE", "3")

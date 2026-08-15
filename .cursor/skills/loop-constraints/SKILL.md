@@ -3,46 +3,40 @@ name: loop-constraints
 description: >
   Read loop-constraints.md at the start of every run and enforce every rule.
   This skill runs BEFORE triage or any action skill. Constraints are binding.
+  Two tiers: Hard Safety Floor + ATTL Auto-12 Policy.
 user_invocable: true
 ---
 
-# Loop Constraints Enforcer
+# Loop Constraints Enforcer (meshed)
 
 You are the guardrail. Before any other work begins, you MUST:
 
 1. Read `loop-constraints.md` from the project root.
-2. Load every rule into your working memory.
-3. Check if `loop-pause-all` is active → exit immediately.
-4. Apply these rules to EVERY action that follows.
+2. Load **Hard Safety Floor** rules — never relax these.
+3. Load **ATTL Auto-12 Policy** — default operating mode (critical-only review).
+4. Check if `loop-pause-all` is active → exit immediately.
+5. Prefer the meshed shortcut: `aoa attl run` (constraints → brain → gate → Reed → Kai).
 
 ## How to enforce
 
-- Before pushing: re-read the Push & Merge section. If ANY rule blocks it, stop and tell the human.
-- Before editing a file: re-read the Paths section. If the path matches a denylist pattern, escalate.
-- Before proposing a fix: re-read the Code section. Run tests. One fix per run.
-- Before merging: re-read the Push & Merge section. Human must approve.
+- **Hard floor** before every edit/push/merge (denylist, no live, no auto-merge, pause).
+- **ATTL auto-12:** do not invent process gates (no activate-before-use, no mandatory team proofread). Kai only on critical / system failure / `aoa attl report`.
+- Interactive chat with the user: announce large pushes / issue closes; otherwise auto may proceed.
+- Coding path: Reed → worktree → maker; draft PR only.
 
 ## Output at start of run
 
-Always begin with a one-line confirmation:
-
 ```
-Constraints loaded from loop-constraints.md: N rules active.
+Constraints loaded from loop-constraints.md: N rules active (hard floor + auto-12).
 ```
 
-If no `loop-constraints.md` exists, say so and proceed with default safety rules from `docs/safety.md` (denylists, auto-merge policy, kill switch).
+Or programmatically: `python3 -c "from aoa.constraints import load_constraints; c=load_constraints(); print(c.rule_count, c.mode, c.pause_active)"`
+
+If no `loop-constraints.md` exists, enforce defaults from `docs/safety.md`.
 
 ## Interaction with other skills
 
-- `loop-triage` — constraints may override triage priority (e.g. "don't push" means don't act on CI fixes)
-- `minimal-fix` — constraints limit what files can be touched
-- `loop-verifier` — constraints define denylist paths the verifier must check
-- `loop-budget` — constraints may impose stricter budget than loop-budget.md
-
-## Default constraints (when no file exists)
-
-If `loop-constraints.md` is absent, enforce these minimums:
-- Never edit `.env`, `.env.*`, `auth/`, `payments/`, `secrets/`, `credentials/`
-- Never auto-merge to main
-- Never disable tests
-- Escalate after 3 failed fix attempts
+- `fable-repair` / `minimal-fix` — run under ATTL mesh; denylist from hard floor
+- `loop-verifier` — required when Kai engages or before draft PR verify
+- `loop-budget` — 80% cap → report-only
+- `coding-engineer` — twelve-member mesh (Nova/Reed/Kai included)

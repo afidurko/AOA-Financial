@@ -93,3 +93,58 @@ patterns:
     prompt_shortkey: BRIEF
     human_gates: [denylist-paths, draft-only-sensitive]
     level: L1
+
+  - id: study-cortex
+    name: Study Cortex (learn → use → distill)
+    file: src/aoa/study/
+    goal: Spaced mastery of DE/physics/econ bridges; usage in swarm; LoRA/sLM export
+    cadence: 1d-on-demand
+    risk: low
+    tools: [cursor]
+    state: data/{AOA_ENV}/study/mastery.json
+    cli: aoa study
+    level: L1
+    phases: [learn, use, distill]
+    notes: vault/study/
+
+  - id: attl
+    name: Agentic Task-Team Loop
+    file: docs/design/agentic-task-team-loop.md
+    goal: >-
+      Auto-12 meshed team task loops; second-brain workspace; critical-only
+      review (Kai); mesh into algorithms
+    cadence: auto
+    risk: medium
+    tools: [cursor, claude-code, fable-5]
+    skills: [fable-repair, minimal-fix, loop-verifier, coding-engineer]
+    state: STATE.md
+    queue: data/{AOA_ENV}/attl/
+    brain: brain/
+    phases: [brain-sync, propose, implement, critical-gate, capture]
+    human_gates: [denylist-paths, draft-pr-only, loop-pause-all, critical-report]
+    cli: aoa attl
+    level: L2-auto
+    status: active
+    roster_size: 12
+
+  - id: qm-companion
+    name: QM Multiplayer Harness
+    file: docs/how-to/qm-integration.md
+    goal: Optional sibling agent harness (Slack + web) linked via AOA_QM_URL
+    cadence: on-demand
+    risk: low
+    tools: [qm]
+    state: vault/system/qm.md
+    cli: ./scripts/qm-setup.sh
+    level: optional
+
+  - id: example-hftish-companion
+    name: example-hftish Order-Book Imbalance
+    file: docs/how-to/example-hftish-reference.md
+    goal: Research-only OB imbalance helpers for Julie/Morgan + aoa hftish CLI
+    cadence: on-demand
+    risk: low
+    tools: [example-hftish]
+    state: vault/system/example-hftish.md
+    cli: aoa hftish status
+    level: optional

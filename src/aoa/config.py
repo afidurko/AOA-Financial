@@ -179,6 +179,13 @@ def repair_path_for(env: str) -> Path:
     return data_dir_for(env) / "repair"
 
 
+def study_path_for(env: str) -> Path:
+    override = os.environ.get("AOA_STUDY_PATH")
+    if override:
+        return Path(override)
+    return data_dir_for(env) / "study" / "mastery.json"
+
+
 @dataclass(frozen=True)
 class RiskLimits:
     max_position_pct: float = 0.10
@@ -199,6 +206,7 @@ class Config:
     workloop_path: Path = field(default_factory=lambda: workloop_path_for("paper-dry"))
     analytics_db_path: Path = field(default_factory=lambda: analytics_db_path_for("paper-dry"))
     repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
+    study_path: Path = field(default_factory=lambda: study_path_for("paper-dry"))
 
     # LLM — default is local OpenAI-compatible (WASTE). Claude/Anthropic is opt-in.
     # provider: openai_compatible | anthropic
@@ -270,6 +278,10 @@ class Config:
     web_port: int = 8080
     web_auto_loop: bool = False
     openstock_url: str = ""
+    obsidian_vault_path: str = ""
+    spine_enabled: bool = False
+    qm_url: str = ""
+    visualhft_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
     custom_app_webhook_url: str = ""
@@ -311,6 +323,18 @@ class Config:
     vault_path: str = "vault"
     vault_sync_enabled: bool = True
     vault_auto_write: bool = True
+
+    # Study cortex (learn → use → optional LoRA/sLM distill). Always on by default.
+    study_usage_enabled: bool = True
+    study_usage_limit: int = 8
+    study_usage_baseline: bool = True  # inject bridge meshes even before mastery
+
+    # Second brain + Agentic Task-Team Loop (auto-12, critical-only review)
+    brain_path: str = "brain"
+    brain_mesh_into_algorithms: bool = True
+    attl_enabled: bool = True
+    attl_mode: str = "auto-12"
+    attl_review_policy: str = "critical_only"
 
     trading_agents_enabled: bool = True
     trading_agents_debate_rounds: int = 1
@@ -385,6 +409,7 @@ class Config:
             workloop_path=workloop_path_for(env),
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
+            study_path=study_path_for(env),
             llm_provider=(
                 os.environ.get("AOA_LLM_PROVIDER", "openai_compatible").strip().lower()
                 or "openai_compatible"
@@ -460,6 +485,10 @@ class Config:
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),
+            obsidian_vault_path=os.environ.get("AOA_OBSIDIAN_VAULT_PATH", "").strip(),
+            spine_enabled=_bool("AOA_SPINE_ENABLED", False),
+            qm_url=os.environ.get("AOA_QM_URL", "").strip(),
+            visualhft_url=os.environ.get("AOA_VISUALHFT_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
             custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),
@@ -500,6 +529,17 @@ class Config:
             vault_path=os.environ.get("AOA_VAULT_PATH", "vault").strip() or "vault",
             vault_sync_enabled=_bool("AOA_VAULT_SYNC_ENABLED", True),
             vault_auto_write=_bool("AOA_VAULT_AUTO_WRITE", True),
+            study_usage_enabled=_bool("AOA_STUDY_USAGE_ENABLED", True),
+            study_usage_limit=max(1, _int("AOA_STUDY_USAGE_LIMIT", 8)),
+            study_usage_baseline=_bool("AOA_STUDY_USAGE_BASELINE", True),
+            brain_path=os.environ.get("AOA_BRAIN_PATH", "brain").strip() or "brain",
+            brain_mesh_into_algorithms=_bool("AOA_BRAIN_MESH_INTO_ALGORITHMS", True),
+            attl_enabled=_bool("AOA_ATTL_ENABLED", True),
+            attl_mode=os.environ.get("AOA_ATTL_MODE", "auto-12").strip() or "auto-12",
+            attl_review_policy=(
+                os.environ.get("AOA_ATTL_REVIEW_POLICY", "critical_only").strip()
+                or "critical_only"
+            ),
             trading_agents_enabled=_bool("AOA_TRADING_AGENTS_ENABLED", True),
             trading_agents_debate_rounds=max(1, _int("AOA_TRADING_AGENTS_DEBATE_ROUNDS", 1)),
             risk=RiskLimits(

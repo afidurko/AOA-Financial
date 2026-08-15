@@ -266,6 +266,34 @@ def run_task(
                 )
             continue
 
+        if step == "ship-discover":
+            proc = _run_cmd([py, "-m", "aoa.cli", "ship", "discover"], cwd=root)
+            steps_run.append("ship-discover")
+            if proc.returncode != 0:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    gate_action=gate_action,
+                    message=proc.stderr or proc.stdout or "ship discover failed",
+                    exit_code=proc.returncode,
+                )
+            continue
+
+        if step == "ship-proofread":
+            proc = _run_cmd([py, "-m", "aoa.cli", "ship", "proofread"], cwd=root)
+            steps_run.append("ship-proofread")
+            if proc.returncode != 0:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    gate_action=gate_action,
+                    message=proc.stdout + proc.stderr,
+                    exit_code=proc.returncode,
+                )
+            continue
+
         if step == "vault-sync":
             from aoa.config import Config
             from aoa.vault.analyzers import engineering_l2_enabled
@@ -280,6 +308,26 @@ def run_task(
                 run_verify=False,
             )
             steps_run.append(f"vault-sync={'dry-run' if dry else 'write'}")
+            continue
+
+        if step == "workloop-upgrade":
+            from aoa.workloop.upgrade import run_upgrade_pipeline
+
+            dry = os.environ.get("AOA_WORKLOOP_UPGRADE_DRY_RUN", "true").lower() in {
+                "1",
+                "true",
+                "yes",
+            }
+            result = run_upgrade_pipeline(root, dry_run=dry)
+            steps_run.append(f"workloop-upgrade={'dry-run' if dry else 'run'}")
+            if not result.get("ok"):
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    message=f"Workloop upgrade pipeline failed at {result.get('phase')}",
+                    exit_code=1,
+                )
             continue
 
         if step == "chain-bootstrap":

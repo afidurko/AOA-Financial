@@ -15,6 +15,9 @@ downloads/
 eggs/
 .eggs/
 lib/
+# Shared shell helpers live under scripts/lib/ — keep them tracked.
+!scripts/lib/
+!scripts/lib/**
 lib64/
 parts/
 sdist/
@@ -235,6 +238,10 @@ reports/
 data/
 journal/*.jsonl
 
+# ATTL second-brain auto captures (keep directory via .gitkeep)
+brain/captures/run-*.md
+brain/captures/critical-*.md
+
 # Learned low-rank adapter state
 .aoa/
 
@@ -249,3 +256,27 @@ journal/*.jsonl
 
 # OpenStock sibling clone (AGPL upstream — not vendored)
 OpenStock/
+
+# obsidian-second-brain skill + AOA vault (sibling clones — not vendored)
+obsidian-second-brain/
+AOA-Vault/
+/spine/
+/obsidian-skills/
+.cursor/mcp.json
+.cursor/skills/obsidian-second-brain
+.cursor/skills/spine-init
+.cursor/skills/spine-capture
+.cursor/skills/spine-health
+.cursor/skills/spine-scan
+.cursor/skills/spine-update
+.cursor/skills/spine-recall
+.cursor/skills/obsidian-markdown
+.cursor/skills/obsidian-bases
+.cursor/skills/json-canvas
+.cursor/skills/obsidian-cli
+.cursor/skills/defuddle
+
+# QM sibling clone (multiplayer agent harness — not vendored)
+qm/
+# example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
+example-hftish/

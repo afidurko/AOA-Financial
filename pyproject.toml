@@ -25,7 +25,7 @@ dev = [
     "alpaca-py>=0.40.0",
     "aoa-financial[anthropic]",
 ]
-web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0"]
+web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0", "httpx2>=2.0.0"]
 alpaca = ["alpaca-py>=0.40.0"]
 tradingagents = [
     "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@v0.3.0",
@@ -38,8 +38,9 @@ tradingagents-bedrock = [
 torch = ["torch>=2.0.0"]
 # FinancePy quant context for Andrea's options/hedge analysis (GPL-3.0 optional).
 financepy = ["financepy>=1.0.0"]
-all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca,anthropic]"]
-
+# Tick-level L2/L3 HFT backtester (offline only). Tracks afidurko/hftbacktest.
+hftbacktest = ["hftbacktest>=2.4.0"]
+all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca,anthropic,hftbacktest]"]
 [project.scripts]
 aoa = "aoa.cli:main"
 
@@ -50,11 +51,14 @@ aoa = "aoa.cli:main"
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--ignore=tests/test_core.py"
+filterwarnings = [
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+]
 
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-exclude = ["tests/test_core.py"]
+exclude = ["tests/test_core.py", "src/aoa/orderbook/vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B"]

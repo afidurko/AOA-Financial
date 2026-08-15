@@ -97,3 +97,104 @@ export AOA_OPENSTOCK_URL=http://localhost:3000
 ```
 
 See [openstock-integration.md](openstock-integration.md) for Docker and env details.
+
+## 7. Obsidian second brain + Spine (optional)
+
+Full knowledge stack (obsidian-second-brain + Spine + shared vault + Moomoo skills + multi-root workspace):
+
+```bash
+./scripts/knowledge-stack-setup.sh
+export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
+export AOA_SPINE_ENABLED=true
+# Open AOA.code-workspace in Cursor for multi-root folders
+```
+
+Or obsidian-second-brain only:
+
+```bash
+./scripts/obsidian-second-brain-setup.sh
+./scripts/sync-obsidian-second-brain-env.sh
+export AOA_OBSIDIAN_VAULT_PATH=./AOA-Vault
+```
+
+See [workspace-mesh.md](workspace-mesh.md),
+[obsidian-second-brain-integration.md](obsidian-second-brain-integration.md), and
+[spine-integration.md](spine-integration.md).
+
+## 8. obsidian-skills (optional)
+
+Teach obsidian-second-brain Obsidian format syntax:
+
+```bash
+./scripts/obsidian-skills-setup.sh
+./scripts/integrate-obsidian-skills.sh
+```
+
+See [obsidian-skills-integration.md](obsidian-skills-integration.md).
+
+## 9. Always-on dashboard + remote access (optional)
+
+Keep `aoa serve` running at login and open the dashboard from your phone via Tailscale:
+
+```bash
+./scripts/setup-always-on.sh
+```
+
+Or step by step:
+
+```bash
+./scripts/install-aoa-launchagent.sh      # auto-start at login (macOS)
+./scripts/setup-tailscale-access.sh       # private tailnet URL
+```
+
+See [always-on-dashboard.md](always-on-dashboard.md).
+
+## 10. QM harness (optional)
+
+Link the multiplayer agent harness ([qm](https://github.com/afidurko/qm)) from
+the AOA dashboard header:
+
+```bash
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+```
+
+See [qm-integration.md](qm-integration.md). Other companions:
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
+
+## 11. VisualHFT (optional)
+
+Clone the microstructure desktop workspace and enable the dashboard link:
+
+```bash
+./scripts/visualhft-setup.sh
+export AOA_VISUALHFT_URL=https://github.com/afidurko/VisualHFT
+aoa visualhft status
+aoa workspaces status
+```
+
+See [visualhft-integration.md](visualhft-integration.md).
+
+## 12. Workspaces (optional)
+
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+
+```bash
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+```
+
+See [workspace-mesh.md](workspace-mesh.md).
+
+## 13. example-hftish reference (optional)
+
+Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
+reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
+not run it:
+
+```bash
+./scripts/example-hftish-setup.sh
+```
+
+See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
+`aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.

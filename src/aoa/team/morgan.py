@@ -8,6 +8,7 @@ from aoa.agents.base import Agent
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import OptionContract
 from aoa.data.market_data import SymbolSnapshot
+from aoa.research.hftish_patterns import snapshot_book_context
 from aoa.team.models import MarketContextReport, OptionsVolumeHighlight
 
 _SCHEMA = {
@@ -56,13 +57,17 @@ class MorganAgent(Agent):
     def analyze_symbol(self, snap: SymbolSnapshot) -> MarketContextReport:
         baseline = _volume_baseline(snap)
         options_scan = _scan_options_volume(self.broker, snap)
+        book = snapshot_book_context(snap)
 
         if snap.error or not snap.has_technicals:
+            liquidity = "Insufficient market data."
+            if book.get("available") and book.get("note"):
+                liquidity = f"{liquidity} {book['note']}"
             return MarketContextReport(
                 symbol=snap.symbol,
                 volume_regime="thin",
                 volume_ratio=baseline.get("volume_ratio"),
-                liquidity_note="Insufficient market data.",
+                liquidity_note=liquidity,
                 summary=f"{snap.symbol}: data unavailable.",
                 options_volume_note=options_scan.get("note", "Options data unavailable."),
                 options_highlights=_highlights_from_scan(options_scan),
@@ -72,17 +77,28 @@ class MorganAgent(Agent):
         prompt = (
             f"Symbol snapshot:\n{json.dumps(snap.to_context(), default=str)}\n"
             f"Computed equity volume hints:\n{json.dumps(baseline, default=str)}\n"
+        )
+        if book.get("available"):
+            prompt += (
+                f"Computed book-imbalance hints (example-hftish / research-only):\n"
+                f"{json.dumps(book, default=str)}\n"
+            )
+        prompt += (
             f"Computed options volume hints:\n{json.dumps(options_scan, default=str)}\n"
         )
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
         ratio = r.get("volume_ratio")
         if ratio is None:
             ratio = baseline.get("volume_ratio")
+        liquidity_note = str(r.get("liquidity_note", ""))
+        note = book.get("note")
+        if book.get("available") and note and note not in liquidity_note:
+            liquidity_note = f"{liquidity_note} {note}".strip()
         return MarketContextReport(
             symbol=snap.symbol,
             volume_regime=str(r.get("volume_regime", baseline.get("regime", "normal"))),
             volume_ratio=float(ratio) if ratio is not None else None,
-            liquidity_note=str(r.get("liquidity_note", "")),
+            liquidity_note=liquidity_note,
             summary=str(r.get("summary", "")),
             options_volume_note=_options_note_from_scan(r, options_scan),
             options_highlights=_highlights_from_scan(options_scan),

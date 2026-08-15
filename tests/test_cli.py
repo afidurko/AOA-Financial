@@ -83,6 +83,40 @@ def test_doctor_moomoo_skips_alpaca_crypto(monkeypatch, capsys):
     llm.ping.assert_called_once()
 
 
+def test_doctor_reports_qm_url(monkeypatch, capsys):
+    cfg = Config(
+        anthropic_api_key="sk-test",
+        alpaca_key_id="PKTEST",
+        alpaca_secret_key="secret",
+        qm_url="http://localhost:8081",
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr("aoa.cli.build_llm", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError()))
+
+    code = cmd_doctor(cfg, offline=True)
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "QM harness link: http://localhost:8081" in out
+
+
+def test_doctor_reports_visualhft_url(monkeypatch, capsys):
+    cfg = Config(
+        anthropic_api_key="sk-test",
+        alpaca_key_id="PKTEST",
+        alpaca_secret_key="secret",
+        visualhft_url="https://github.com/afidurko/VisualHFT",
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError()))
+    monkeypatch.setattr("aoa.cli.build_llm", lambda *_a, **_k: (_ for _ in ()).throw(AssertionError()))
+
+    code = cmd_doctor(cfg, offline=True)
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "VisualHFT link: https://github.com/afidurko/VisualHFT" in out
+
+
 def test_cycle_exit_code_zero_on_success():
     result = CycleResult(
         blackboard=Blackboard(),

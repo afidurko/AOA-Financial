@@ -6,6 +6,7 @@ import json
 
 from aoa.agents.base import Agent, clamp_conviction
 from aoa.data.market_data import SymbolSnapshot
+from aoa.research.hftish_patterns import snapshot_book_context
 from aoa.team.code_engineering import CodeQualityReport, run_code_quality_audit
 from aoa.team.models import AlgorithmReport, TrendReport
 
@@ -58,25 +59,44 @@ class JulieAgent(Agent):
                 adjusted_strength=0.0,
                 method_notes="Insufficient data for algorithmic validation.",
             )
+        book = snapshot_book_context(snap)
         prompt = (
             f"Tom's trend report:\n{json.dumps(trend.to_context())}\n\n"
             f"Symbol: {snap.symbol}\n"
             f"Technicals: {json.dumps(snap.technicals, default=str)}\n"
         )
+        quote_ctx = snap.to_context().get("quote")
+        if quote_ctx is not None:
+            prompt += f"Quote: {json.dumps(quote_ctx, default=str)}\n"
+        if book.get("available"):
+            prompt += (
+                f"Computed book-imbalance hints (example-hftish / research-only):\n"
+                f"{json.dumps(book, default=str)}\n"
+            )
         if code_quality is not None:
             prompt += (
                 f"\nBob's code-quality audit:\n"
                 f"{json.dumps(code_quality.to_context(), default=str)}\n"
             )
+        try:
+            from aoa.brain.context import format_brain_context_prompt
+
+            prompt += f"\n{format_brain_context_prompt()}\n"
+        except Exception:  # noqa: BLE001
+            pass
         prompt += "\nValidate and refine Tom's trend read. Return JSON."
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
         notes = r.get("method_notes", "")
         if code_quality and code_quality.worst_status.value != "ok":
             notes = f"{notes} Code note: {code_quality.summary}".strip()
+        signals = list(r.get("signals") or [])
+        signal = book.get("signal")
+        if signal and signal not in signals:
+            signals.append(str(signal))
         return AlgorithmReport(
             symbol=trend.symbol,
             validated=bool(r.get("validated")),
             adjusted_strength=clamp_conviction(r.get("adjusted_strength", 0)),
             method_notes=notes,
-            signals=list(r.get("signals") or []),
+            signals=signals,
         )

@@ -5,9 +5,16 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
+try:
+    import httpx2  # noqa: F401
+except ImportError:  # pragma: no cover - fallback when httpx2 extra missing
+    pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient  # noqa: E402
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+)
+
+from starlette.testclient import TestClient  # noqa: E402
 
 from aoa.config import Config, RiskLimits  # noqa: E402
 from aoa.web.app import create_app  # noqa: E402
@@ -75,6 +82,10 @@ def test_api_config_team_mode(client):
     data = r.json()
     assert data["team_mode"] is True
     assert "openstock_url" in data
+    assert "obsidian_vault_path" in data
+    assert "spine_enabled" in data
+    assert "qm_url" in data
+    assert "visualhft_url" in data
 
 
 def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
@@ -99,6 +110,105 @@ def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
     with TestClient(create_app(cfg)) as tc:
         r = tc.get("/api/config")
     assert r.json()["openstock_url"] == "http://localhost:3000"
+
+
+def test_api_config_obsidian_vault_path(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        obsidian_vault_path="/home/user/AOA-Vault",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    assert r.json()["obsidian_vault_path"] == "/home/user/AOA-Vault"
+
+
+def test_api_config_spine_enabled(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        spine_enabled=True,
+        obsidian_vault_path="/home/user/AOA-Vault",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    data = r.json()
+    assert data["spine_enabled"] is True
+    assert data["obsidian_vault_path"] == "/home/user/AOA-Vault"
+
+
+def test_api_config_qm_url(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        qm_url="http://localhost:8081",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    assert r.json()["qm_url"] == "http://localhost:8081"
+
+
+def test_api_config_visualhft_url(fake_broker, fake_llm, monkeypatch, tmp_path):
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        visualhft_url="https://github.com/afidurko/VisualHFT",
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(max_position_pct=0.10, max_orders_per_cycle=5),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: __import__(
+        "aoa.data.news", fromlist=["NullNewsFeed"]
+    ).NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        r = tc.get("/api/config")
+    assert r.json()["visualhft_url"] == "https://github.com/afidurko/VisualHFT"
 
 
 def test_api_journal(client):

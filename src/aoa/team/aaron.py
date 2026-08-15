@@ -58,14 +58,16 @@ class AaronAgent(Agent):
     role = "CEO"
 
     system_prompt = (
-        "You are Aaron, the CEO of an autonomous trading team (Tom, Julie, Morgan, "
-        "Hailey, Alan, Andrea, Bob, Alex). You are empowered to fix issues within "
-        "your team before escalating. Review Bob's health report, any remediation "
-        "health report, any remediation actions you already took, and each member's "
-        "deliverables. Confirm everyone did their job. Only list user_notifications "
-        "for issues you could NOT fix yourself or that require the user's verification "
-        "before proceeding (missing credentials, live-trading confirmation, etc.). "
-        "Never suggest email — alerts go to the user's iPhone. Be direct and actionable."
+        "You are Aaron, the CEO of a twelve-member autonomous team (Tom, Julie, Morgan, "
+        "Hailey, Alan, Andrea, Bob, Alex, Nova, Reed, Kai). You are empowered to fix "
+        "issues within your team before escalating. Review Bob's health report, any "
+        "remediation actions you already took, and each member's deliverables. "
+        "Nova owns the second-brain mesh; Reed runs auto task loops; Kai reviews "
+        "only on critical flaws or system failures. Confirm everyone did their job. "
+        "Only list user_notifications for issues you could NOT fix yourself or that "
+        "require the user's verification (missing credentials, live-trading confirmation, "
+        "critical Kai reports). Never suggest email — alerts go to the user's iPhone. "
+        "Be direct and actionable."
     )
 
     def __init__(
@@ -122,6 +124,8 @@ class AaronAgent(Agent):
         tom_count: int = 0,
         julie_count: int = 0,
         hailey_done: bool = True,
+        jim_done: bool = True,
+        cindy_done: bool = True,
         andrea_done: bool = True,
         halted: bool = False,
         halt_reason: str = "",
@@ -151,6 +155,8 @@ class AaronAgent(Agent):
             "julie_reports": julie_count,
             "alan_completed": alan_done,
             "hailey_completed": hailey_done,
+            "jim_completed": jim_done,
+            "cindy_completed": cindy_done,
             "andrea_completed": andrea_done,
             "decision": decision.to_context() if decision else None,
             "halted": halted,
@@ -276,17 +282,9 @@ def _looks_like_verification(message: str) -> bool:
 
 
 def _ensure_roster(status: list[TeamMemberStatus]) -> list[TeamMemberStatus]:
-    roster = [
-        ("Tom", "Trend Analyst"),
-        ("Julie", "Algorithm Specialist"),
-        ("Morgan", "Market & Volume Analyst"),
-        ("Hailey", "News & Catalyst Analyst"),
-        ("Alan", "Decision Aggregator"),
-        ("Andrea", "Risk Manager"),
-        ("Bob", "Systems Health"),
-        ("Aaron", "CEO"),
-        ("Alex", "Executive Assistant"),
-    ]
+    from aoa.team.roster import roster_pairs
+
+    roster = roster_pairs()
     by_name = {m.name: m for m in status}
     out: list[TeamMemberStatus] = []
     for name, role in roster:

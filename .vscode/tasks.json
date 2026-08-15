@@ -49,6 +49,41 @@
       "command": "python3 -m aoa.cli tasks run verify",
       "group": { "kind": "test", "isDefault": true },
       "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: workloop upgrade (dry-run)",
+      "type": "shell",
+      "command": "python3 -m aoa.cli workloop upgrade --dry-run",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: knowledge-stack setup",
+      "type": "shell",
+      "command": "./scripts/knowledge-stack-setup.sh",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: write multi-root workspace",
+      "type": "shell",
+      "command": "./scripts/write-aoa-workspace.sh",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: verify knowledge stack",
+      "type": "shell",
+      "command": "./scripts/verify-knowledge-stack.sh",
+      "group": "test",
+      "presentation": { "reveal": "always", "panel": "shared" }
+    },
+    {
+      "label": "AOA: attl init (brain workspace)",
+      "type": "shell",
+      "command": "python3 -m aoa.cli attl init",
+      "group": "none",
+      "presentation": { "reveal": "always", "panel": "shared" }
     }
   ]
 }

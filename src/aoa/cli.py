@@ -14,10 +14,16 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
+  aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
+  aoa visualhft  Offline VisualHFT microstructure studies (research lane).
+  aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
+  aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
+  aoa hftish     Order-book imbalance research lane (example-hftish patterns).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
+  aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -130,6 +136,54 @@ def _print_environment(cfg: Config) -> None:
         f"mode: {cfg.trading_mode} | data: {cfg.data_dir}"
     )
     print(f"Journal: {cfg.journal_path}")
+    print(
+        f"Swarm memory: plasticity={'ON' if cfg.plasticity_enabled else 'OFF'} | "
+        f"study_usage={'ON' if cfg.study_usage_enabled else 'OFF'} "
+        f"(limit={cfg.study_usage_limit}) | "
+        f"trading_agents={'ON' if cfg.trading_agents_enabled else 'OFF'} | "
+        f"adapt={'ON' if cfg.adapt_enabled else 'OFF'}"
+    )
+
+
+def _print_swarm_memory_config(cfg: Config) -> None:
+    """Report plasticity / study / TradingAgents / adapt configuration."""
+    if cfg.plasticity_enabled:
+        print(
+            f"  ✓ Plasticity ON (tail={cfg.plasticity_tail}, "
+            f"max_lessons={cfg.plasticity_max_lessons}, path={cfg.plasticity_path})"
+        )
+    else:
+        print("  · Plasticity OFF (set AOA_PLASTICITY_ENABLED=true to enable).")
+    if cfg.study_usage_enabled:
+        from aoa.study.cortex import StudyCortex
+
+        status = StudyCortex.from_config(cfg).status()
+        baseline = "baseline+mastered" if cfg.study_usage_baseline else "mastered-only"
+        print(
+            f"  ✓ Study cortex usage ALWAYS ON "
+            f"(mode={baseline}, mastered={status['n_mastered']}/{status['n_cards']}, "
+            f"due={status['n_due']}, limit={cfg.study_usage_limit}, "
+            f"path={cfg.study_path})"
+        )
+        if status["n_mastered"] == 0 and cfg.study_usage_baseline:
+            print("  · Bridge baselines inject every cycle; drill to raise mastery weights.")
+    else:
+        print("  · Study cortex usage OFF (set AOA_STUDY_USAGE_ENABLED=true to enable).")
+    if cfg.trading_agents_enabled:
+        print(
+            f"  ✓ TradingAgents ON (debate_rounds={cfg.trading_agents_debate_rounds})"
+        )
+    else:
+        print("  · TradingAgents OFF (set AOA_TRADING_AGENTS_ENABLED=true to enable).")
+    if cfg.adapt_enabled:
+        adapter = build_signal_adapter(cfg)
+        print(
+            f"  ✓ Low-rank signal adaptation ON "
+            f"(rank={cfg.adapt_rank}, alpha={cfg.adapt_alpha}, "
+            f"updates so far={adapter.updates if adapter else 0}, path={cfg.adapt_path})"
+        )
+    else:
+        print("  · Low-rank signal adaptation OFF (set AOA_ADAPT_ENABLED=true to enable).")
 
 
 def build_team(cfg: Config) -> TeamOrchestrator:
@@ -216,6 +270,20 @@ def _print_team(result: TeamCycleResult) -> None:
             print(
                 f"  {c.symbol:<6} risk={c.event_risk:<6} sentiment={c.headline_sentiment:<8}  "
                 f"{c.catalyst_summary[:50]}"
+            )
+    if result.short_term:
+        print("\n=== Jim — short-term technical overlays ===")
+        for j in result.short_term:
+            print(
+                f"  {j.symbol:<6} {j.direction.value:<8} conv={j.conviction:.2f}  "
+                f"ret={j.expected_return:+.2%}  {j.rationale[:50]}"
+            )
+    if result.company_analyses:
+        print("\n=== Cindy — company profitability ===")
+        for c in result.company_analyses:
+            print(
+                f"  {c.symbol:<6} grade={c.profitability_grade:<3} q={c.quality_score:+.2f}  "
+                f"fv={c.fair_value}  {c.thesis[:50]}"
             )
     if result.risk_plans:
         print("\n=== Andrea — pre-execution risk plans ===")
@@ -391,6 +459,12 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Broker: {cfg.broker} | bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
+    if cfg.openstock_url:
+        print(f"  ✓ OpenStock link: {cfg.openstock_url}")
+    if cfg.qm_url:
+        print(f"  ✓ QM harness link: {cfg.qm_url}")
+    if cfg.visualhft_url:
+        print(f"  ✓ VisualHFT link: {cfg.visualhft_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
@@ -403,6 +477,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         if cfg.alpaca_cli_profile:
             label = f"{label} (profile {cfg.alpaca_cli_profile})"
         print(f"  ✓ Alpaca auth: {label}")
+    _print_swarm_memory_config(cfg)
     if offline or cfg.is_test:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
@@ -458,15 +533,6 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     except LLMError as exc:
         print(f"  ✗ LLM check failed: {exc}")
         return 1
-    if cfg.adapt_enabled:
-        adapter = build_signal_adapter(cfg)
-        print(
-            f"  ✓ Low-rank signal adaptation ON "
-            f"(rank={cfg.adapt_rank}, alpha={cfg.adapt_alpha}, "
-            f"updates so far={adapter.updates if adapter else 0}, path={cfg.adapt_path})"
-        )
-    else:
-        print("  · Low-rank signal adaptation OFF (set AOA_ADAPT_ENABLED=true to enable).")
     return 0
 
 
@@ -787,6 +853,147 @@ def cmd_scenarios(cfg: Config) -> int:
     return 0
 
 
+def cmd_hft_status(*, as_json: bool) -> int:
+    from aoa.hftbacktest import probe_status as probe_hft
+    from aoa.orderbook import probe_status as probe_book
+
+    hft = probe_hft()
+    book = probe_book()
+    payload = {"hftbacktest": hft, "orderbook": book, "offline_only": True}
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        # Book lane is vendored and must be healthy; hftbacktest remains optional.
+        return 0 if book.get("ok") else 1
+    print("=== HFT research lanes (offline) ===")
+    print("--- hftbacktest ---")
+    print(f"  installed: {hft['installed']}")
+    print(f"  version:   {hft.get('version') or '—'}")
+    print(f"  engine:    {hft.get('engine') or '—'}")
+    print(f"  upstream:  {hft.get('upstream')}")
+    if not hft["installed"]:
+        print(f"  install:   {hft.get('hint')}")
+    else:
+        print(f"  next:      {hft.get('hint')}")
+    print("--- orderbook (HFT-Orderbook) ---")
+    print(f"  ok:        {book.get('ok')}")
+    print(f"  engine:    {book.get('engine')}")
+    print(f"  impl:      {book.get('implementation')}")
+    print(f"  upstream:  {book.get('upstream')}")
+    print(f"  next:      {book.get('hint')}")
+    return 0 if book.get("ok") else 1
+
+
+def cmd_hft_book_smoke(*, as_json: bool) -> int:
+    from aoa.orderbook import run_book_smoke
+
+    result = run_book_smoke()
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== HFT orderbook smoke (vendored LOB) ===")
+        print(f"  ok:         {result.ok}")
+        print(f"  best bid:   {result.best_bid}")
+        print(f"  best ask:   {result.best_ask}")
+        print(f"  bid volume: {result.bid_volume}")
+        print(f"  ask volume: {result.ask_volume}")
+        print(f"  orders:     {result.order_count}  levels={result.levels}")
+        print(f"  detail:     {result.detail}")
+    return 0 if result.ok else 1
+
+
+def cmd_hft_smoke(
+    *,
+    n_events: int,
+    steps: int,
+    seed: int,
+    as_json: bool,
+) -> int:
+    from aoa.hftbacktest import HAS_HFTBACKTEST, run_npz_smoke
+
+    if not HAS_HFTBACKTEST:
+        msg = 'hftbacktest not installed. Run: pip install -e ".[hftbacktest]"'
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    result = run_npz_smoke(n_events=n_events, steps=steps, seed=seed)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== HFT synthetic L2 smoke ===")
+        print(f"  ok:        {result.ok}")
+        print(f"  steps:     {result.steps}")
+        print(f"  best bid:  {result.best_bid}")
+        print(f"  best ask:  {result.best_ask}")
+        print(f"  position:  {result.position}")
+        print(f"  events:    {result.n_events}  seed={result.seed}")
+        print(f"  detail:    {result.detail}")
+    return 0 if result.ok else 1
+
+
+def cmd_hft_run(
+    *,
+    data: str,
+    tick_size: float,
+    lot_size: float,
+    steps: int,
+    step_ns: int,
+    as_json: bool,
+) -> int:
+    """Advance an on-disk hftbacktest feed without placing orders (offline probe)."""
+    from aoa.hftbacktest import HAS_HFTBACKTEST
+    from aoa.hftbacktest.runner import load_npz_from_npz
+
+    if not HAS_HFTBACKTEST:
+        msg = 'hftbacktest not installed. Run: pip install -e ".[hftbacktest]"'
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+    path = Path(data)
+    if not path.exists():
+        msg = f"data file not found: {path}"
+        if as_json:
+            print(json.dumps({"ok": False, "error": msg}))
+        else:
+            print(msg, file=sys.stderr)
+        return 1
+
+    hbt = load_npz_from_npz(
+        str(path), tick_size=tick_size, lot_size=lot_size
+    )
+    try:
+        advanced = 0
+        for _ in range(steps):
+            if hbt.elapse(step_ns) != 0:
+                break
+            advanced += 1
+        depth = hbt.depth(0)
+        payload = {
+            "ok": advanced > 0,
+            "data": str(path),
+            "steps": advanced,
+            "best_bid": float(depth.best_bid),
+            "best_ask": float(depth.best_ask),
+            "position": float(hbt.position(0)),
+            "offline_only": True,
+        }
+    finally:
+        hbt.close()
+
+    if as_json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print(f"=== HFT feed probe: {path.name} ===")
+        print(f"  steps:     {payload['steps']}")
+        print(f"  best bid:  {payload['best_bid']}")
+        print(f"  best ask:  {payload['best_ask']}")
+        print(f"  position:  {payload['position']}")
+    return 0 if payload["ok"] else 1
+
+
 def cmd_watch(
     cfg: Config,
     symbols: list[str],
@@ -824,6 +1031,93 @@ def cmd_watch(
         )
     except KeyboardInterrupt:
         print("\nStopped.")
+    return 0
+
+
+def cmd_visualhft_status(*, as_json: bool) -> int:
+    from aoa.visualhft import probe_status
+
+    status = probe_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== VisualHFT research lane ===")
+    print(f"  available:  {status['available']}")
+    print(f"  runtime:    {status['runtime']}")
+    print(f"  desktop:    {status['desktop_host']}")
+    print(f"  studies:    {', '.join(status['studies_ported'])}")
+    print(f"  offline:    {status.get('offline_only', True)}")
+    print(f"  never_live: {status.get('never_live', True)}")
+    print(f"  fork:       {status['fork']}")
+    print(f"  upstream:   {status['upstream']}")
+    print(f"  next:       {status.get('hint')}")
+    return 0
+
+
+def cmd_visualhft_smoke(*, n_trades: int, seed: int, as_json: bool) -> int:
+    from aoa.visualhft import run_synthetic_smoke
+
+    try:
+        result = run_synthetic_smoke(n_trades=n_trades, seed=seed)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+        else:
+            print(str(exc), file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== VisualHFT synthetic smoke ===")
+        print(f"  ok:        {result.ok}")
+        print(f"  lob imb:   {result.lob_imbalance:.4f}")
+        print(f"  vpin:      {result.vpin:.4f}")
+        print(f"  otr:       {result.order_to_trade_ratio:.4f}")
+        print(f"  mid:       {result.mid_price}")
+        print(f"  trades:    {result.n_trades}")
+        print(f"  buckets:   {result.vpin_buckets}")
+        print(f"  seed:      {result.seed}")
+    return 0 if result.ok else 1
+
+
+def cmd_visualhft_studies(*, as_json: bool, ported_only: bool) -> int:
+    from aoa.visualhft import list_studies
+
+    rows = list_studies(ported_only=ported_only)
+    payload = {"studies": rows, "count": len(rows), "ported_only": ported_only}
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print("=== VisualHFT studies ===")
+    for row in rows:
+        flag = "ported" if row.get("ported") else "desktop-only"
+        print(f"  {row['id']:24} [{flag}] {row['title']}")
+        print(f"    {row['summary']}")
+    return 0
+
+
+def cmd_workspaces_status(*, as_json: bool) -> int:
+    from aoa.workspaces import workspaces_report
+
+    # Offline mesh probe — Config without creating .env side effects.
+    cfg = Config.from_env(load_dotenv=False)
+    report = workspaces_report(cfg)
+    if as_json:
+        print(json.dumps(report, indent=2))
+        return 0
+    print("=== Companion workspaces ===")
+    print(f"  linked:  {report['linked']}/{report['count']}")
+    print(f"  present: {report['present']}/{report['count']}")
+    print("  live:    never (mesh is link/status only)")
+    for row in report["workspaces"]:
+        link = "linked" if row["linked"] else "unlinked"
+        path = "present" if row["present"] else "missing"
+        print(f"  · {row['id']:12} [{link}, {path}] {row['title']}")
+        print(f"      {row['role']}")
+        if row["url"]:
+            print(f"      url: {row['url']}")
+        print(f"      path: {row['local_path']}")
+        print(f"      docs: {row['docs']}")
     return 0
 
 
@@ -970,6 +1264,26 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     return 0
 
 
+def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
+    from aoa.workloop.upgrade import run_upgrade_pipeline
+
+    _ = cfg  # Config required for CLI consistency; pipeline uses repo cwd.
+    result = run_upgrade_pipeline(Path.cwd(), dry_run=dry_run)
+    flag = "OK" if result.get("ok") else "FAIL"
+    mode = "dry-run" if dry_run else "upgrade"
+    print(f"Workloop upgrade pipeline [{mode}]: {flag}")
+    print(f"phase: {result.get('phase', '')}")
+    if result.get("ok"):
+        return 0
+    upgrade = result.get("upgrade") or {}
+    if upgrade.get("output"):
+        print(upgrade["output"][-500:])
+    reverify = result.get("reverify") or {}
+    if reverify and not reverify.get("passed"):
+        print("Reverify failed after upgrade.")
+    return 1
+
+
 def _print_repair_result(result) -> None:
     run = result.run
     print(f"\n=== Fable 5 repair triage ({run.run_id}) ===")
@@ -1089,6 +1403,456 @@ def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
             keys = ", ".join(row.get("would_change", []))
             print(f"  {row['path']}: {keys}")
     return 0
+
+
+def _study_cortex(cfg: Config):
+    from aoa.study.cortex import StudyCortex
+
+    return StudyCortex.from_config(cfg, repo_root=_repo_root())
+
+
+def cmd_study_status(cfg: Config, *, as_json: bool) -> int:
+    status = _study_cortex(cfg).status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== Study cortex ===")
+    print(f"Cards: {status['n_cards']} | due: {status['n_due']} | mastered: {status['n_mastered']}")
+    print(f"Sessions: {status['sessions']} | updated: {status['updated_at'] or '(never)'}")
+    print(f"Mastery file: {status['mastery_path']}")
+    for field, bucket in status["by_field"].items():
+        print(
+            f"  {field}: {bucket['mastered']}/{bucket['total']} mastered, {bucket['due']} due"
+        )
+    if status["lessons"]:
+        print("Recent lessons:")
+        for lesson in status["lessons"][:5]:
+            print(f"  - {lesson}")
+    print(
+        "Phases: learn (drill/grade) → use (AOA_STUDY_USAGE_ENABLED) → "
+        "distill (aoa study export → LoRA/sLM)"
+    )
+    return 0
+
+
+def cmd_study_drill(cfg: Config, *, n: int, field: str, reveal: bool, as_json: bool) -> int:
+    items = _study_cortex(cfg).drill(n=n, field=field, include_answers=reveal)
+    if as_json:
+        print(json.dumps(items, indent=2))
+        return 0
+    if not items:
+        print("No cards match that field.")
+        return 1
+    for i, item in enumerate(items, 1):
+        due = "due" if item["due"] else "scheduled"
+        print(f"--- {i}. {item['id']} [{item['field']}] ({due}, mastery {item['mastery']:.2f})")
+        print(f"Title: {item['title']}")
+        print(f"Drill: {item['drill_prompt']}")
+        if reveal:
+            print(f"Statement: {item['statement']}")
+            print(f"Proof sketch:\n{item['proof_sketch']}")
+            print(f"AOA mesh: {item['aoa_mesh']}")
+        else:
+            print(f"Reveal: aoa study show {item['id']}")
+            print(f"Grade:  aoa study grade {item['id']} ok|miss")
+        print()
+    return 0
+
+
+def cmd_study_show(cfg: Config, card_id: str, *, as_json: bool) -> int:
+    data = _study_cortex(cfg).show(card_id, reveal=True)
+    if data is None:
+        print(f"Unknown card: {card_id}", file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(data, indent=2))
+        return 0
+    print(f"=== {data['id']}: {data['title']} ===")
+    print(f"Field: {data['field']} | mastery: {data['mastery']:.2f}")
+    print(f"\nStatement:\n{data['statement']}")
+    print(f"\nProof sketch:\n{data['proof_sketch']}")
+    print("\nApplications:")
+    for app in data["applications"]:
+        print(f"  - {app}")
+    print(f"\nAOA mesh:\n{data['aoa_mesh']}")
+    if data["bridges"]:
+        print(f"\nBridges: {', '.join(data['bridges'])}")
+    print(f"\nDrill:\n{data['drill_prompt']}")
+    return 0
+
+
+def cmd_study_grade(cfg: Config, card_id: str, result: str, *, note: str) -> int:
+    passed = result.lower() in {"ok", "pass", "passed", "1", "true", "yes"}
+    if result.lower() not in {
+        "ok",
+        "pass",
+        "passed",
+        "1",
+        "true",
+        "yes",
+        "miss",
+        "fail",
+        "failed",
+        "0",
+        "false",
+        "no",
+    }:
+        print("Result must be ok|miss (or pass|fail).", file=sys.stderr)
+        return 1
+    out = _study_cortex(cfg).grade(card_id, passed, note=note)
+    if not out.get("ok"):
+        print(out.get("error", "grade failed"), file=sys.stderr)
+        return 1
+    sched = out["schedule"]
+    print(
+        f"Graded {card_id}: {'ok' if passed else 'miss'} | "
+        f"ease={sched['ease']:.2f} interval={sched['interval_days']:.1f}d "
+        f"due={sched['due_at']}"
+    )
+    return 0
+
+
+def cmd_study_usage(cfg: Config, *, as_json: bool) -> int:
+    block = _study_cortex(cfg).to_usage_block(
+        limit=cfg.study_usage_limit,
+        baseline=cfg.study_usage_baseline,
+    )
+    if as_json:
+        print(
+            json.dumps(
+                {
+                    "usage_block": block,
+                    "enabled": cfg.study_usage_enabled,
+                    "baseline": cfg.study_usage_baseline,
+                },
+                indent=2,
+            )
+        )
+        return 0
+    if not cfg.study_usage_enabled:
+        print("Swarm injection is OFF — set AOA_STUDY_USAGE_ENABLED=true (default is on).")
+        return 1
+    if not block:
+        print("No usage meshes available (unexpected with baseline on).")
+        return 1
+    print(block)
+    print("\n(always-on: injected into portfolio/risk prompts each cycle)")
+    return 0
+
+
+def cmd_study_export(cfg: Config, *, out: str, only_mastered: bool) -> int:
+    path = Path(out) if out else cfg.data_dir / "study" / "corpus.jsonl"
+    summary = _study_cortex(cfg).export_jsonl(path, only_mastered=only_mastered)
+    print(
+        f"Exported {summary['written']} pairs → {summary['path']} "
+        f"(skipped {summary['skipped']})"
+    )
+    print("Next: fine-tune a small instruct model with aoa.adapt.torch_lora on this JSONL.")
+    return 0
+
+
+def cmd_study_sync(cfg: Config, *, as_json: bool) -> int:
+    result = _study_cortex(cfg).sync_vault()
+    if as_json:
+        print(json.dumps(result, indent=2))
+        return 0 if result.get("ok") else 1
+    if not result.get("ok"):
+        print(result.get("error", "sync failed"), file=sys.stderr)
+        return 1
+    print(f"Study vault sync: wrote {result['notes_written']} notes under {result['study_dir']}")
+    return 0
+
+
+def cmd_hftish_status(*, as_json: bool) -> int:
+    """Show example-hftish companion wiring (research-only)."""
+    root = _repo_root()
+    sibling = root / "example-hftish"
+    status = {
+        "available": True,
+        "module": "aoa.research.hftish_patterns",
+        "companion": "example-hftish",
+        "sibling_present": (sibling / ".git").is_dir()
+        or (sibling / "tick_taker.py").is_file(),
+        "sibling_path": str(sibling),
+        "setup": "scripts/example-hftish-setup.sh",
+        "docs": "docs/how-to/example-hftish-reference.md",
+        "study_card": "bridge-hftish-imbalance",
+        "mesh_algo": "algo.hftish_patterns",
+        "consumers": [
+            "julie.refine",
+            "morgan.analyze_symbol",
+            "SymbolSnapshot.to_context",
+        ],
+        "never_live": True,
+        "hint": "aoa hftish smoke — offline follow/imbalance check (no broker)",
+    }
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== example-hftish research lane ===")
+    print(f"  module:    {status['module']}")
+    print(
+        f"  sibling:   {'present' if status['sibling_present'] else 'missing'} ({sibling})"
+    )
+    print(f"  mesh:      {status['mesh_algo']}")
+    print(f"  study:     {status['study_card']}")
+    print(f"  consumers: {', '.join(status['consumers'])}")
+    print(f"  never_live:{status['never_live']}")
+    print(f"  next:      {status['hint']}")
+    return 0
+
+
+def cmd_hftish_smoke(*, seed: int, as_json: bool) -> int:
+    from aoa.research.hftish_patterns import synthetic_smoke
+
+    result = synthetic_smoke(seed=seed)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== example-hftish synthetic smoke ===")
+        print(f"  ok:           {result['ok']}")
+        print(f"  level_change: {result['level_change']}")
+        print(f"  armed:        {result['armed']}")
+        print(f"  follow:       {result['follow']}")
+        diag = result.get("diagnosis") or {}
+        print(f"  side:         {diag.get('side')}")
+        print(f"  note:         {diag.get('note')}")
+        print(f"  never_live:   {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
+
+
+def _attl_orchestrator(cfg: Config):
+    from aoa.attl.orchestrator import AttlOrchestrator
+    from aoa.config import data_dir_for
+
+    root = Path.cwd()
+    return AttlOrchestrator(
+        repo_root=root,
+        data_dir=data_dir_for(cfg.env) / "attl",
+    )
+
+
+def cmd_attl_init(cfg: Config) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.init_workspace()
+    print("ATTL init — auto-12")
+    print(f"Brain: {result['brain']}")
+    print(f"Mode: {result['mode']}")
+    print(f"Roster ({len(result['roster'])}): {', '.join(result['roster'])}")
+    print(f"Config: {result['config']}")
+    return 0
+
+
+def cmd_attl_status(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    status = orch.status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Mode: {status['mode']}  meshed={status.get('meshed')}")
+    print(f"Review policy: {status['review_policy']}")
+    print(f"Paused: {status.get('paused')}")
+    print(f"Hard floor rules: {status.get('hard_floor_rules')}")
+    print(f"Roster size: {status['roster_size']}")
+    print(f"Pending tasks: {status['pending_tasks']}")
+    brain = status.get("brain") or {}
+    print(
+        "Brain: "
+        f"members={brain.get('members')} algos={brain.get('algorithms')} "
+        f"required_ok={brain.get('required_ok')}"
+    )
+    return 0
+
+
+def cmd_attl_roster(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    rows = orch.roster()
+    if as_json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    print("Twelve-member meshed team")
+    for i, row in enumerate(rows, 1):
+        print(f"  {i:2}. {row['name']:8} — {row['role']}")
+    return 0
+
+
+def cmd_attl_propose(cfg: Config) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.propose()
+    print(f"Reed proposed {result['count']} tasks (need-ordered)")
+    if result.get("path"):
+        print(f"Wrote: {result['path']}")
+    for task in (result.get("tasks") or [])[:10]:
+        flag = "auto" if task.get("automatable") else "human"
+        print(f"  - [{flag}] {task.get('id')}: {task.get('title')}")
+    return 0
+
+
+def cmd_attl_brain_sync(cfg: Config, *, as_json: bool = False) -> int:
+    orch = _attl_orchestrator(cfg)
+    result = orch.brain_sync()
+    if as_json:
+        print(json.dumps(result, indent=2, default=str))
+        return 0
+    print(f"Nova sync ok={result.get('ok')}")
+    print(f"Capture: {result.get('capture')}")
+    stats = result.get("stats") or {}
+    print(f"Stats: {stats}")
+    return 0 if result.get("ok") else 1
+
+
+def _ship_agent():
+    from aoa.loop.prompts import find_repo_root
+    from aoa.ship.loop import ShipLoopAgent
+
+    return ShipLoopAgent(find_repo_root())
+
+
+def cmd_ship_discover(*, pr: int | None = None, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    state = agent.discover(pr_number=pr)
+    if as_json:
+        print(json.dumps(state.to_dict(), indent=2))
+        return 0
+    print(f"Ship discover — branch={state.branch} pr={state.pr_number}")
+    open_issues = state.open_issues()
+    print(f"Open issues: {len(open_issues)}")
+    for issue in state.issues:
+        print(f"  [{issue.status.value}] {issue.id}: {issue.title}")
+        if issue.fix_hint:
+            print(f"           hint: {issue.fix_hint}")
+    return 0
+
+
+def cmd_ship_status(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    status = agent.status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Branch: {status.get('branch')}  PR: {status.get('pr_number')}")
+    print(f"Open: {status.get('open_count')}  ready_for_merge={status.get('ready_for_merge')}")
+    print(f"Can mark ready: {status.get('can_mark_ready')} — {status.get('ready_message')}")
+    for issue in status.get("issues") or []:
+        print(f"  [{issue['status']}] {issue['id']}: {issue['title']}")
+    return 0
+
+
+def cmd_ship_fixed(issue_id: str, *, note: str = "") -> int:
+    agent = _ship_agent()
+    state = agent.mark_fixed(issue_id, note=note)
+    print(f"Marked fixed: {issue_id}")
+    print(f"Open remaining: {len(state.open_issues())}")
+    return 0
+
+
+def cmd_ship_attempt(issue_id: str, *, blocked: bool = False, detail: str = "") -> int:
+    agent = _ship_agent()
+    state = agent.mark_attempt(issue_id, blocked=blocked, detail=detail)
+    for issue in state.issues:
+        if issue.id == issue_id:
+            print(f"{issue_id}: attempts={issue.attempts} status={issue.status.value}")
+            break
+    return 0
+
+
+def cmd_ship_proofread(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    report = agent.proofread()
+    if as_json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(f"Proofread: {'PASS' if report.ok else 'FAIL'}")
+        print(f"  ruff={report.ruff_ok}  pytest={report.pytest_ok}")
+        for note in report.notes:
+            print(f"  · {note}")
+    return 0 if report.ok else 1
+
+
+def cmd_ship_ready(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    try:
+        state = agent.mark_ready()
+    except RuntimeError as exc:
+        print(f"Not ready: {exc}", file=sys.stderr)
+        return 1
+    payload = {
+        "ready_for_merge": state.ready_for_merge,
+        "branch": state.branch,
+        "pr_number": state.pr_number,
+        "message": (
+            "Ship gates passed — mark PR ready for review; "
+            "human merges (no auto-merge)."
+        ),
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print("READY FOR HUMAN MERGE")
+        print(payload["message"])
+        print(f"Branch: {state.branch}  PR: {state.pr_number}")
+    return 0
+
+
+def cmd_ship_next(*, as_json: bool = False) -> int:
+    agent = _ship_agent()
+    issue = agent.next_issue()
+    if issue is None:
+        if as_json:
+            print(json.dumps({"next": None}))
+        else:
+            print("No open issues — run: aoa ship proofread && aoa ship ready")
+        return 0
+    if as_json:
+        print(json.dumps({"next": issue.to_dict()}, indent=2))
+    else:
+        print(f"Next: {issue.id} — {issue.title}")
+        print(f"Kind: {issue.kind.value}")
+        if issue.fix_hint:
+            print(f"Hint: {issue.fix_hint}")
+        if issue.detail:
+            print(f"Detail: {issue.detail[:400]}")
+    return 0
+
+
+def cmd_attl_run(
+    cfg: Config,
+    *,
+    dry_run: bool = False,
+    report: bool = False,
+    as_json: bool = False,
+) -> int:
+    orch = _attl_orchestrator(cfg)
+    # None → live Bob audit inside mesh; critical-only Kai
+    result = orch.run(dry_run=dry_run, report=report, bob_can_proceed=None)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2, default=str))
+    else:
+        print(f"ATTL mesh — outcome: {result.outcome}")
+        print(f"Mode: {result.mode}  dry_run={result.dry_run}")
+        gate = result.gate or {}
+        print(f"Gate: {gate.get('action')} — {gate.get('reason', '')}")
+        if result.selected_task:
+            print(
+                f"Selected: {result.selected_task.get('id')} — "
+                f"{result.selected_task.get('title')}"
+            )
+        if result.worktree:
+            print(f"Worktree: {result.worktree.get('path')} ok={result.worktree.get('ok')}")
+        print(f"Kai: {result.kai.get('verdict')} engaged={result.kai.get('engaged')}")
+        for note in result.notes:
+            print(f"  · {note}")
+        print(f"Capture: {result.capture}")
+    if result.outcome == "paused":
+        return 2
+    if result.outcome == "critical-report":
+        return 2
+    return 0
+
+
+def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:
+    return cmd_attl_run(cfg, dry_run=False, report=True, as_json=as_json)
+
 
 
 def cmd_tasks_list() -> int:
@@ -1437,6 +2201,38 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("scenarios", help="List the built-in stress-scenario library.")
 
+    hft = sub.add_parser(
+        "hft",
+        help="Offline HFT/L2 backtest via optional hftbacktest (never live).",
+    )
+    hft_sub = hft.add_subparsers(dest="hft_command", required=True)
+    hft_status = hft_sub.add_parser("status", help="Show hftbacktest + orderbook lane status.")
+    hft_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_smoke = hft_sub.add_parser(
+        "smoke", help="Run a synthetic L2 depth smoke backtest (no orders)."
+    )
+    hft_smoke.add_argument("--events", type=int, default=400, help="Synthetic depth events.")
+    hft_smoke.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
+    hft_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
+    hft_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_book = hft_sub.add_parser(
+        "book-smoke",
+        help="Smoke the vendored HFT-Orderbook LOB (add/update/cancel; offline).",
+    )
+    hft_book.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_run = hft_sub.add_parser(
+        "run",
+        help="Probe an on-disk hftbacktest feed (advance time; no order submission).",
+    )
+    hft_run.add_argument("data", help="Path to hftbacktest NPZ/feed file.")
+    hft_run.add_argument("--tick-size", type=float, required=True, help="Instrument tick size.")
+    hft_run.add_argument("--lot-size", type=float, required=True, help="Instrument lot size.")
+    hft_run.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
+    hft_run.add_argument(
+        "--step-ns", type=int, default=50_000_000, help="Nanoseconds per elapse step."
+    )
+    hft_run.add_argument("--json", action="store_true", help="Emit JSON.")
+
     wp = sub.add_parser("watch", help="Live-track symbols: re-analyze & re-simulate.")
     wp.add_argument("symbols", nargs="+", help="One or more tickers, e.g. AAPL MSFT.")
     wp.add_argument("--interval", type=float, default=60.0, help="Seconds between refreshes.")
@@ -1448,6 +2244,44 @@ def main(argv: list[str] | None = None) -> int:
     wp.add_argument(
         "--halflife", type=int, default=63, help="Recency half-life (bars) for adaptation."
     )
+
+    vh = sub.add_parser(
+        "visualhft",
+        help="Offline VisualHFT microstructure studies (never live).",
+    )
+    vh_sub = vh.add_subparsers(dest="visualhft_command", required=True)
+    vh_status = vh_sub.add_parser("status", help="Show VisualHFT research-lane status.")
+    vh_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_smoke = vh_sub.add_parser(
+        "smoke",
+        help="Run LOB imbalance / VPIN / OTR on a synthetic tape.",
+    )
+    vh_smoke.add_argument(
+        "--trades",
+        type=int,
+        default=200,
+        help="Synthetic trade count (minimum 20 so VPIN can complete a bucket).",
+    )
+    vh_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
+    vh_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_studies = vh_sub.add_parser("studies", help="List VisualHFT studies and port status.")
+    vh_studies.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_studies.add_argument(
+        "--ported-only",
+        action="store_true",
+        help="Only list studies with a Python port.",
+    )
+
+    ws = sub.add_parser(
+        "workspaces",
+        help="Companion workspace mesh (OpenStock, QM, VisualHFT, hftbacktest).",
+    )
+    ws_sub = ws.add_subparsers(dest="workspaces_command", required=True)
+    ws_status = ws_sub.add_parser(
+        "status",
+        help="Show sibling workspace link/path status (never live).",
+    )
+    ws_status.add_argument("--json", action="store_true", help="Emit JSON.")
 
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
@@ -1487,6 +2321,15 @@ def main(argv: list[str] | None = None) -> int:
     wl_approve.add_argument("--note", default="", help="Optional approval note.")
     wl_log = wl_sub.add_parser("log", help="Tail the work-loop audit log.")
     wl_log.add_argument("-n", type=int, default=20, help="Number of entries to show.")
+    wl_up = wl_sub.add_parser(
+        "upgrade",
+        help="Dependency upgrade pipeline: verify → pip upgrade → reverify.",
+    )
+    wl_up.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run baseline verify only; skip pip upgrade.",
+    )
 
     rp = sub.add_parser(
         "repair",
@@ -1527,6 +2370,66 @@ def main(argv: list[str] | None = None) -> int:
     vp_status = vp_sub.add_parser("status", help="Report stale vault properties.")
     vp_status.add_argument("--json", action="store_true", help="Emit JSON report.")
 
+    st = sub.add_parser(
+        "study",
+        help="Study cortex — learn DE/physics/econ bridges, use in swarm, export for sLM/LoRA.",
+    )
+    st_sub = st.add_subparsers(dest="study_command", required=True)
+    st_status = st_sub.add_parser("status", help="Mastery overview by field.")
+    st_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_drill = st_sub.add_parser("drill", help="Next spaced drills (prompts only by default).")
+    st_drill.add_argument("-n", type=int, default=3, help="Number of cards.")
+    st_drill.add_argument(
+        "--field",
+        default="",
+        help="Filter: de | physics | econ | bridge",
+    )
+    st_drill.add_argument(
+        "--reveal",
+        action="store_true",
+        help="Include proof sketches (open-book mode).",
+    )
+    st_drill.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_show = st_sub.add_parser("show", help="Reveal a card (statement + proof + mesh).")
+    st_show.add_argument("card_id", help="Card id, e.g. bridge-bs-heat")
+    st_show.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_grade = st_sub.add_parser("grade", help="Record drill result (ok|miss).")
+    st_grade.add_argument("card_id", help="Card id")
+    st_grade.add_argument("result", help="ok or miss")
+    st_grade.add_argument("--note", default="", help="Optional lesson note")
+    st_usage = st_sub.add_parser("usage", help="Print mastered meshes for swarm injection.")
+    st_usage.add_argument("--json", action="store_true", help="Emit JSON.")
+    st_export = st_sub.add_parser(
+        "export",
+        help="Export JSONL corpus for LoRA/sLM distillation.",
+    )
+    st_export.add_argument(
+        "--out",
+        default="",
+        help="Output path (default: data/{env}/study/corpus.jsonl)",
+    )
+    st_export.add_argument(
+        "--only-mastered",
+        action="store_true",
+        help="Export only cards with mastery ≥ 0.6",
+    )
+    st_sync = st_sub.add_parser("sync", help="Write vault/study notes from curriculum + mastery.")
+    st_sync.add_argument("--json", action="store_true", help="Emit JSON.")
+
+    hf = sub.add_parser(
+        "hftish",
+        help="example-hftish order-book imbalance research lane (no orders).",
+    )
+    hf_sub = hf.add_subparsers(dest="hftish_command", required=True)
+    hf_status = hf_sub.add_parser("status", help="Show companion wiring + consumers.")
+    hf_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    hf_smoke = hf_sub.add_parser(
+        "smoke",
+        help="Offline synthetic level-change / imbalance / follow check.",
+    )
+    hf_smoke.add_argument("--seed", type=int, default=7, help="Reserved for future RNG.")
+    hf_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
@@ -1566,7 +2469,77 @@ def main(argv: list[str] | None = None) -> int:
         help="Backlog item id, e.g. upg-007",
     )
 
+    at = sub.add_parser(
+        "attl",
+        help="Agentic Task-Team Loop — auto-12, brain mesh, critical-only review.",
+    )
+    at_sub = at.add_subparsers(dest="attl_command", required=True)
+    at_sub.add_parser("init", help="Ensure brain/ workspace + ATTL config (auto-12).")
+    at_status = at_sub.add_parser("status", help="Show ATTL mode, roster, mesh stats.")
+    at_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_roster = at_sub.add_parser("roster", help="Print the 12-member meshed team.")
+    at_roster.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_sub.add_parser("propose", help="Reed: auto-propose tasks from repair/backlog.")
+    at_run = at_sub.add_parser("run", help="One ATTL auto cycle (Kai only if critical).")
+    at_run.add_argument("--dry-run", action="store_true", help="No side-effect notes beyond capture.")
+    at_run.add_argument("--report", action="store_true", help="Force Kai report path.")
+    at_run.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_report = at_sub.add_parser("report", help="Force critical report via Kai/Aaron path.")
+    at_report.add_argument("--json", action="store_true", help="Emit JSON.")
+    at_brain = at_sub.add_parser("brain", help="Second-brain workspace ops.")
+    at_brain_sub = at_brain.add_subparsers(dest="brain_command", required=True)
+    at_brain_sync = at_brain_sub.add_parser("sync", help="Nova: refresh mesh + capture.")
+    at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
+
+    ship = sub.add_parser(
+        "ship",
+        help="Ship-ready task loop — discover issues, proofread, mark ready (no auto-merge).",
+    )
+    ship_sub = ship.add_subparsers(dest="ship_command", required=True)
+    ship_disc = ship_sub.add_parser("discover", help="Scan branch and seed the ship issue queue.")
+    ship_disc.add_argument("--pr", type=int, default=None, help="PR number to associate.")
+    ship_disc.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_status = ship_sub.add_parser("status", help="Show ship-loop queue and readiness.")
+    ship_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_next = ship_sub.add_parser("next", help="Print the next open ship issue.")
+    ship_next.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_fixed = ship_sub.add_parser("fixed", help="Mark an issue fixed.")
+    ship_fixed.add_argument("issue_id", help="Issue id from ship discover/status.")
+    ship_fixed.add_argument("--note", default="", help="Optional note.")
+    ship_attempt = ship_sub.add_parser("attempt", help="Record a fix attempt (blocks after 3).")
+    ship_attempt.add_argument("issue_id", help="Issue id.")
+    ship_attempt.add_argument("--blocked", action="store_true", help="Force blocked status.")
+    ship_attempt.add_argument("--detail", default="", help="Attempt detail.")
+    ship_proof = ship_sub.add_parser("proofread", help="Independent ruff+pytest proofread gate.")
+    ship_proof.add_argument("--json", action="store_true", help="Emit JSON.")
+    ship_ready = ship_sub.add_parser(
+        "ready",
+        help="Mark ready for human merge after all gates pass (never auto-merges).",
+    )
+    ship_ready.add_argument("--json", action="store_true", help="Emit JSON.")
+
     args = parser.parse_args(argv)
+
+    # Offline research lane — no .env template and no Config/broker side effects.
+    if args.command == "visualhft":
+        if args.visualhft_command == "status":
+            return cmd_visualhft_status(as_json=getattr(args, "json", False))
+        if args.visualhft_command == "smoke":
+            return cmd_visualhft_smoke(
+                n_trades=getattr(args, "trades", 200),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.visualhft_command == "studies":
+            return cmd_visualhft_studies(
+                as_json=getattr(args, "json", False),
+                ported_only=getattr(args, "ported_only", False),
+            )
+
+    if args.command == "workspaces":
+        if args.workspaces_command == "status":
+            return cmd_workspaces_status(as_json=getattr(args, "json", False))
+
     _ensure_env_template()
     cfg = Config.from_env()
 
@@ -1618,6 +2591,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
+        if args.command == "hft":
+            if args.hft_command == "status":
+                return cmd_hft_status(as_json=getattr(args, "json", False))
+            if args.hft_command == "smoke":
+                return cmd_hft_smoke(
+                    n_events=args.events,
+                    steps=args.steps,
+                    seed=args.seed,
+                    as_json=getattr(args, "json", False),
+                )
+            if args.hft_command == "book-smoke":
+                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
+            if args.hft_command == "run":
+                return cmd_hft_run(
+                    data=args.data,
+                    tick_size=args.tick_size,
+                    lot_size=args.lot_size,
+                    steps=args.steps,
+                    step_ns=args.step_ns,
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
@@ -1645,6 +2639,10 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_workloop_approve(cfg, approver=approver, note=args.note)
             if args.workloop_command == "log":
                 return cmd_workloop_log(cfg, args.n)
+            if args.workloop_command == "upgrade":
+                return cmd_workloop_upgrade(
+                    cfg, dry_run=getattr(args, "dry_run", False)
+                )
         if args.command == "repair":
             if args.repair_command == "triage":
                 return cmd_repair_triage(cfg, no_sync=getattr(args, "no_sync", False))
@@ -1667,6 +2665,43 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.vault_command == "status":
                 return cmd_vault_status(cfg, as_json=getattr(args, "json", False))
+        if args.command == "study":
+            if args.study_command == "status":
+                return cmd_study_status(cfg, as_json=getattr(args, "json", False))
+            if args.study_command == "drill":
+                return cmd_study_drill(
+                    cfg,
+                    n=getattr(args, "n", 3),
+                    field=getattr(args, "field", "") or "",
+                    reveal=getattr(args, "reveal", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.study_command == "show":
+                return cmd_study_show(
+                    cfg, args.card_id, as_json=getattr(args, "json", False)
+                )
+            if args.study_command == "grade":
+                return cmd_study_grade(
+                    cfg, args.card_id, args.result, note=getattr(args, "note", "")
+                )
+            if args.study_command == "usage":
+                return cmd_study_usage(cfg, as_json=getattr(args, "json", False))
+            if args.study_command == "export":
+                return cmd_study_export(
+                    cfg,
+                    out=getattr(args, "out", "") or "",
+                    only_mastered=getattr(args, "only_mastered", False),
+                )
+            if args.study_command == "sync":
+                return cmd_study_sync(cfg, as_json=getattr(args, "json", False))
+        if args.command == "hftish":
+            if args.hftish_command == "status":
+                return cmd_hftish_status(as_json=getattr(args, "json", False))
+            if args.hftish_command == "smoke":
+                return cmd_hftish_smoke(
+                    seed=getattr(args, "seed", 7),
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "tasks":
             if args.tasks_command == "automations":
                 return cmd_tasks_automations()
@@ -1683,6 +2718,49 @@ def main(argv: list[str] | None = None) -> int:
                     return cmd_tasks_chain_bootstrap()
                 if args.chain_command == "advance":
                     return cmd_tasks_chain_advance(completed=args.complete)
+        if args.command == "attl":
+            if args.attl_command == "init":
+                return cmd_attl_init(cfg)
+            if args.attl_command == "status":
+                return cmd_attl_status(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "roster":
+                return cmd_attl_roster(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "propose":
+                return cmd_attl_propose(cfg)
+            if args.attl_command == "run":
+                return cmd_attl_run(
+                    cfg,
+                    dry_run=getattr(args, "dry_run", False),
+                    report=getattr(args, "report", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.attl_command == "report":
+                return cmd_attl_report(cfg, as_json=getattr(args, "json", False))
+            if args.attl_command == "brain":
+                if args.brain_command == "sync":
+                    return cmd_attl_brain_sync(cfg, as_json=getattr(args, "json", False))
+        if args.command == "ship":
+            if args.ship_command == "discover":
+                return cmd_ship_discover(
+                    pr=getattr(args, "pr", None),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.ship_command == "status":
+                return cmd_ship_status(as_json=getattr(args, "json", False))
+            if args.ship_command == "next":
+                return cmd_ship_next(as_json=getattr(args, "json", False))
+            if args.ship_command == "fixed":
+                return cmd_ship_fixed(args.issue_id, note=getattr(args, "note", "") or "")
+            if args.ship_command == "attempt":
+                return cmd_ship_attempt(
+                    args.issue_id,
+                    blocked=getattr(args, "blocked", False),
+                    detail=getattr(args, "detail", "") or "",
+                )
+            if args.ship_command == "proofread":
+                return cmd_ship_proofread(as_json=getattr(args, "json", False))
+            if args.ship_command == "ready":
+                return cmd_ship_ready(as_json=getattr(args, "json", False))
     except (BrokerError, LLMError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
