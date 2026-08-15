@@ -8,6 +8,7 @@ from aoa.agents.base import Agent
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import OptionContract
 from aoa.data.market_data import SymbolSnapshot
+from aoa.research.hftish_patterns import snapshot_book_context
 from aoa.team.models import MarketContextReport, OptionsVolumeHighlight
 
 _SCHEMA = {
@@ -56,7 +57,7 @@ class MorganAgent(Agent):
     def analyze_symbol(self, snap: SymbolSnapshot) -> MarketContextReport:
         baseline = _volume_baseline(snap)
         options_scan = _scan_options_volume(self.broker, snap)
-        book = _book_imbalance_baseline(snap)
+        book = snapshot_book_context(snap)
 
         if snap.error or not snap.has_technicals:
             liquidity = "Insufficient market data."
@@ -76,8 +77,13 @@ class MorganAgent(Agent):
         prompt = (
             f"Symbol snapshot:\n{json.dumps(snap.to_context(), default=str)}\n"
             f"Computed equity volume hints:\n{json.dumps(baseline, default=str)}\n"
-            f"Computed book-imbalance hints (example-hftish / research-only):\n"
-            f"{json.dumps(book, default=str)}\n"
+        )
+        if book.get("available"):
+            prompt += (
+                f"Computed book-imbalance hints (example-hftish / research-only):\n"
+                f"{json.dumps(book, default=str)}\n"
+            )
+        prompt += (
             f"Computed options volume hints:\n{json.dumps(options_scan, default=str)}\n"
         )
         r = self.llm.structured(self.system_prompt, prompt, _SCHEMA)
@@ -85,8 +91,9 @@ class MorganAgent(Agent):
         if ratio is None:
             ratio = baseline.get("volume_ratio")
         liquidity_note = str(r.get("liquidity_note", ""))
-        if book.get("available") and book.get("note") and book["note"] not in liquidity_note:
-            liquidity_note = f"{liquidity_note} {book['note']}".strip()
+        note = book.get("note")
+        if book.get("available") and note and note not in liquidity_note:
+            liquidity_note = f"{liquidity_note} {note}".strip()
         return MarketContextReport(
             symbol=snap.symbol,
             volume_regime=str(r.get("volume_regime", baseline.get("regime", "normal"))),
@@ -97,18 +104,6 @@ class MorganAgent(Agent):
             options_highlights=_highlights_from_scan(options_scan),
             options_by_expiration=dict(options_scan.get("by_expiration") or {}),
         )
-
-
-def _book_imbalance_baseline(snap: SymbolSnapshot) -> dict:
-    """Top-of-book pressure from quote sizes — research diagnostic only."""
-    if snap.quote is None:
-        return {"available": False, "note": "No quote on snapshot."}
-    try:
-        from aoa.research.hftish_patterns import diagnose_snapshot_quote
-
-        return diagnose_snapshot_quote(snap.quote).to_context()
-    except Exception:  # noqa: BLE001
-        return {"available": False, "note": "Book diagnosis unavailable."}
 
 
 def _volume_baseline(snap: SymbolSnapshot) -> dict:

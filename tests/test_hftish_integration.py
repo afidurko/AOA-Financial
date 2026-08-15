@@ -8,11 +8,12 @@ from aoa.research.hftish_patterns import (
     Side,
     diagnose_quote_book,
     diagnose_snapshot_quote,
+    snapshot_book_context,
     synthetic_smoke,
 )
-from aoa.team.julie import JulieAgent, _book_diagnosis
+from aoa.team.julie import JulieAgent
 from aoa.team.models import TrendDirection, TrendReport
-from aoa.team.morgan import MorganAgent, _book_imbalance_baseline
+from aoa.team.morgan import MorganAgent
 
 
 def _snap_with_sizes(*, bid_size: float, ask_size: float) -> SymbolSnapshot:
@@ -48,11 +49,14 @@ def test_diagnose_quote_book_buy_pressure():
     assert diag.signal and diag.signal.startswith("book_imbalance:buy")
     quote = _snap_with_sizes(bid_size=500, ask_size=100).quote
     assert diagnose_snapshot_quote(quote).side is Side.BUY
+    assert snapshot_book_context(_snap_with_sizes(bid_size=500, ask_size=100))[
+        "available"
+    ]
 
 
 def test_julie_appends_book_imbalance_signal(fake_llm):
     snap = _snap_with_sizes(bid_size=500, ask_size=100)
-    assert _book_diagnosis(snap)["available"] is True
+    assert snapshot_book_context(snap)["available"] is True
 
     def respond(system, prompt, schema, **kwargs):
         assert "book-imbalance hints" in prompt
@@ -79,7 +83,7 @@ def test_julie_appends_book_imbalance_signal(fake_llm):
 
 def test_morgan_prompt_includes_book_hints(fake_llm):
     snap = _snap_with_sizes(bid_size=100, ask_size=500)
-    assert _book_imbalance_baseline(snap)["side"] == "sell"
+    assert snapshot_book_context(snap)["side"] == "sell"
     captured: list[str] = []
 
     def capture(system, prompt, schema, **kwargs):
@@ -96,6 +100,20 @@ def test_morgan_prompt_includes_book_hints(fake_llm):
     report = MorganAgent(fake_llm, broker=None).analyze_symbol(snap)
     assert "book-imbalance hints" in captured[0]
     assert "Ask-heavy" in report.liquidity_note or "ask-heavy" in report.liquidity_note.lower()
+
+
+def test_follow_tolerates_tiny_price_noise():
+    from aoa.research.hftish_patterns import TopOfBook, follow_print_signal
+
+    quote = TopOfBook(10.01, 10.02, bid_size=500, ask_size=100, timestamp_ms=0.0)
+    sig = follow_print_signal(
+        quote,
+        trade_price=10.0200001,
+        trade_size=100,
+        trade_timestamp_ms=100.0,
+        armed=True,
+    )
+    assert sig.side is Side.BUY
 
 
 def test_synthetic_smoke_ok():

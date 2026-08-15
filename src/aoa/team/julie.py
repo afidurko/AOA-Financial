@@ -6,6 +6,7 @@ import json
 
 from aoa.agents.base import Agent, clamp_conviction
 from aoa.data.market_data import SymbolSnapshot
+from aoa.research.hftish_patterns import snapshot_book_context
 from aoa.team.code_engineering import CodeQualityReport, run_code_quality_audit
 from aoa.team.models import AlgorithmReport, TrendReport
 
@@ -58,16 +59,15 @@ class JulieAgent(Agent):
                 adjusted_strength=0.0,
                 method_notes="Insufficient data for algorithmic validation.",
             )
-        book = _book_diagnosis(snap)
+        book = snapshot_book_context(snap)
         prompt = (
             f"Tom's trend report:\n{json.dumps(trend.to_context())}\n\n"
             f"Symbol: {snap.symbol}\n"
             f"Technicals: {json.dumps(snap.technicals, default=str)}\n"
         )
-        if snap.quote is not None:
-            prompt += (
-                f"Quote: {json.dumps(snap.to_context().get('quote'), default=str)}\n"
-            )
+        quote_ctx = snap.to_context().get("quote")
+        if quote_ctx is not None:
+            prompt += f"Quote: {json.dumps(quote_ctx, default=str)}\n"
         if book.get("available"):
             prompt += (
                 f"Computed book-imbalance hints (example-hftish / research-only):\n"
@@ -90,8 +90,9 @@ class JulieAgent(Agent):
         if code_quality and code_quality.worst_status.value != "ok":
             notes = f"{notes} Code note: {code_quality.summary}".strip()
         signals = list(r.get("signals") or [])
-        if book.get("signal") and book["signal"] not in signals:
-            signals.append(str(book["signal"]))
+        signal = book.get("signal")
+        if signal and signal not in signals:
+            signals.append(str(signal))
         return AlgorithmReport(
             symbol=trend.symbol,
             validated=bool(r.get("validated")),
@@ -99,15 +100,3 @@ class JulieAgent(Agent):
             method_notes=notes,
             signals=signals,
         )
-
-
-def _book_diagnosis(snap: SymbolSnapshot) -> dict:
-    """Deterministic OB imbalance for Julie — never places orders."""
-    if snap.quote is None:
-        return {"available": False, "note": "No quote on snapshot."}
-    try:
-        from aoa.research.hftish_patterns import diagnose_snapshot_quote
-
-        return diagnose_snapshot_quote(snap.quote).to_context()
-    except Exception:  # noqa: BLE001 — degrade; Julie still runs
-        return {"available": False, "note": "Book diagnosis unavailable."}
