@@ -278,3 +278,6 @@ AOA-Vault/
 
 # QM sibling clone (multiplayer agent harness — not vendored)
 qm/
+
+# Generated multi-root workspace (absolute, machine-local paths)
+*.code-workspace
