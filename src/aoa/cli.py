@@ -59,6 +59,7 @@ from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
 from aoa.vault.sync import sync_vault_engineering, vault_status
+from aoa.version import package_version
 from aoa.workloop.models import STAGE_ORDER
 from aoa.workloop.orchestrator import WorkloopOrchestrator
 from aoa.workloop.scheduler import build_scheduler
@@ -426,7 +427,7 @@ def cmd_bars(
 
 
 def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
-    print(f"AOA Financial v0.2.0 — trading mode: {cfg.trading_mode.upper()}")
+    print(f"AOA Financial v{package_version()} — trading mode: {cfg.trading_mode.upper()}")
     _print_environment(cfg)
     problems = cfg.validate()
     if problems:
@@ -1240,8 +1241,8 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
 def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
     from aoa.workloop.upgrade import run_upgrade_pipeline
 
-    _ = cfg  # Config required for CLI consistency; pipeline uses repo cwd.
-    result = run_upgrade_pipeline(Path.cwd(), dry_run=dry_run)
+    _ = cfg  # Config required for CLI consistency; pipeline uses repo root.
+    result = run_upgrade_pipeline(_repo_root(), dry_run=dry_run)
     flag = "OK" if result.get("ok") else "FAIL"
     mode = "dry-run" if dry_run else "upgrade"
     print(f"Workloop upgrade pipeline [{mode}]: {flag}")
@@ -2513,6 +2514,16 @@ def main(argv: list[str] | None = None) -> int:
         if args.workspaces_command == "status":
             return cmd_workspaces_status(as_json=getattr(args, "json", False))
 
+    # Offline research lane — no .env template and no Config/broker side effects.
+    if args.command == "hftish":
+        if args.hftish_command == "status":
+            return cmd_hftish_status(as_json=getattr(args, "json", False))
+        if args.hftish_command == "smoke":
+            return cmd_hftish_smoke(
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+
     _ensure_env_template()
     cfg = Config.from_env()
 
@@ -2667,14 +2678,6 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.study_command == "sync":
                 return cmd_study_sync(cfg, as_json=getattr(args, "json", False))
-        if args.command == "hftish":
-            if args.hftish_command == "status":
-                return cmd_hftish_status(as_json=getattr(args, "json", False))
-            if args.hftish_command == "smoke":
-                return cmd_hftish_smoke(
-                    seed=getattr(args, "seed", 7),
-                    as_json=getattr(args, "json", False),
-                )
         if args.command == "tasks":
             if args.tasks_command == "automations":
                 return cmd_tasks_automations()

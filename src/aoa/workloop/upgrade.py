@@ -54,9 +54,12 @@ def run_upgrade_pipeline(
     *,
     dry_run: bool = False,
 ) -> dict[str, Any]:
-    """Verify → pip upgrade (optional) → reverify. Used by `aoa workloop upgrade`."""
+    """Verify → pip upgrade (optional) → reverify. Used by `aoa workloop upgrade`.
+
+    Always uses full verify (ruff + pytest) so upgrades cannot pass on lint alone.
+    """
     root = repo_root or Path.cwd()
-    baseline = run_verify(root, mode="quick")
+    baseline = run_verify(root, mode="full")
     if not baseline.get("passed"):
         return {
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -76,7 +79,7 @@ def run_upgrade_pipeline(
             "reverify": baseline,
         }
     upgrade = run_upgrade(root)
-    reverify = run_verify(root, mode="quick")
+    reverify = run_verify(root, mode="full")
     ok = bool(upgrade.get("ok")) and bool(reverify.get("passed"))
     return {
         "ts": datetime.now(timezone.utc).isoformat(),

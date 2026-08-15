@@ -34,6 +34,14 @@ def test_workspaces_respects_visualhft_url(monkeypatch):
     assert vh.url == "https://example.test/vh"
 
 
+def test_workspaces_visualhft_unlinked_has_empty_url(monkeypatch):
+    monkeypatch.delenv("AOA_VISUALHFT_URL", raising=False)
+    cfg = Config.from_env(load_dotenv=False)
+    vh = next(w for w in probe_workspaces(cfg) if w.id == "visualhft")
+    assert vh.linked is False
+    assert vh.url == ""
+
+
 def test_cmd_workspaces_status_json(capsys, monkeypatch):
     monkeypatch.setenv("AOA_OPENSTOCK_URL", "http://localhost:3000")
     code = cmd_workspaces_status(as_json=True)

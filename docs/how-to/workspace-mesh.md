@@ -1,5 +1,8 @@
 # Workspace mesh — AOA + vault + companion skills
 
+> Knowledge/vault/Cursor multi-root mesh (`knowledge-stack-setup`, Obsidian, Spine).
+> For trading companion status (`aoa workspaces`), see [workspaces.md](workspaces.md).
+
 AOA Financial is the primary trading runtime. Companion workspaces share one
 vault and Cursor multi-root layout so agents can move between trading, notes,
 and broker API skills without leaving the stack.
@@ -85,6 +88,7 @@ Refresh: `aoa attl brain sync`.
 
 ## Related how-tos
 
+- [workspaces.md](workspaces.md) — trading companions (`aoa workspaces`)
 - [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md)
 - [spine-integration.md](spine-integration.md)
 - [obsidian-skills-integration.md](obsidian-skills-integration.md)

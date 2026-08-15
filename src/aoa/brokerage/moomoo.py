@@ -81,6 +81,15 @@ def _f(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _first_book_level(value: Any, default: float = 0.0) -> float:
+    """Return the top-of-book price/size from a scalar or list-like snapshot field."""
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return default
+        return _f(value[0], default)
+    return _f(value, default)
+
+
 def _parse_ts(value: Any) -> datetime | None:
     if value is None or value == "":
         return None
@@ -310,10 +319,10 @@ class MoomooBroker(Broker):
         for _, row in data.iterrows():
             code = str(_row_value(row, "code", ""))
             sym = from_moomoo_code(code)
-            bid_prices = _row_value(row, "bid_price", [])
-            ask_prices = _row_value(row, "ask_price", [])
-            bid = _f(bid_prices[0] if isinstance(bid_prices, (list, tuple)) and bid_prices else 0)
-            ask = _f(ask_prices[0] if isinstance(ask_prices, (list, tuple)) and ask_prices else 0)
+            bid = _first_book_level(_row_value(row, "bid_price", []))
+            ask = _first_book_level(_row_value(row, "ask_price", []))
+            bid_size = _first_book_level(_row_value(row, "bid_vol", []))
+            ask_size = _first_book_level(_row_value(row, "ask_vol", []))
             last = _f(_row_value(row, "last_price", 0))
             if bid <= 0 and last > 0:
                 bid = last
@@ -323,6 +332,8 @@ class MoomooBroker(Broker):
                 symbol=sym,
                 bid=bid,
                 ask=ask,
+                bid_size=bid_size,
+                ask_size=ask_size,
                 timestamp=_parse_ts(_row_value(row, "update_time", None)),
             )
         return out

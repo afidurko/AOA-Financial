@@ -15,4 +15,6 @@ The package is organized into clear layers:
 - ``journal`` — append-only record of every decision and trade.
 """
 
-__version__ = "0.1.0"
+from aoa.version import package_version
+
+__version__ = package_version()

@@ -535,7 +535,8 @@ Configuration loads in this order (lowest → highest priority):
 ```bash
 cp .env.example .env
 export AOA_PROFILE=paper-dry    # recommended starting point
-# Edit .env: set ANTHROPIC_API_KEY and Alpaca paper keys.
+# Edit .env: Moomoo OpenD locally, or AOA_BROKER=alpaca + paper keys for cloud/CI.
+# Optional: ANTHROPIC_API_KEY, or AOA_LLM_PROVIDER=ollama for key-free local LLM.
 # Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
 # Optional market-data tuning:
 #   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
@@ -548,8 +549,9 @@ aoa doctor && aoa run
 | `AOA_ENV` | Broker | Orders | Use case |
 |-----------|--------|--------|----------|
 | `test` | n/a | dry-run | Unit tests / CI (no API keys required) |
-| `paper-dry` | Alpaca paper | dry-run | Watch decisions without submitting |
+| `paper-dry` | Moomoo (default) | dry-run | Watch decisions without submitting |
 | `paper` | Alpaca paper | enabled | Paper trading with real sandbox fills |
+| `moomoo-paper` | Moomoo OpenD | simulate | Paper via Moomoo when OpenD is local |
 | `live` | Alpaca live | enabled | Real money — requires `AOA_LIVE_ACK=I_UNDERSTAND` |
 
 Runtime state (journal, daily-loss baseline) is isolated under `data/{AOA_ENV}/`.

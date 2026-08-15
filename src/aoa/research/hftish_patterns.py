@@ -104,7 +104,7 @@ def detect_level_change(
     must be a one-penny market. Caller decides whether prev was also a penny
     spread (reset / arm for trading).
     """
-    if prev.bid == current.bid or prev.ask == current.ask:
+    if prices_match(prev.bid, current.bid) or prices_match(prev.ask, current.ask):
         return None
     if not is_penny_spread(current.bid, current.ask):
         return None
