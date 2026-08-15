@@ -72,3 +72,7 @@ explicit depth-feed design and `AOA_LIVE_ACK`.
 - Hard safety floor still applies: no live order submission from loops
 - Vendored LOB license: MIT (Nils Diefenbach / Crypto-toolbox); see
   `src/aoa/orderbook/vendor/LICENSE`
+
+## Workspace mesh
+
+All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

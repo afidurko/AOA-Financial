@@ -33,3 +33,6 @@ repos:
   - name: example-hftish
     url: https://github.com/afidurko/example-hftish
     role: Alpaca order-book imbalance tick-taker reference; Python ideas in aoa.research.hftish_patterns
+  - name: SGX-Full-OrderBook-Tick-Data-Trading-Strategy
+    url: https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy
+    role: SGX A50 full LOB ML notebooks; Python ideas in aoa.research.sgx_orderbook_patterns

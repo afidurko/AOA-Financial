@@ -76,3 +76,7 @@ print(run_synthetic_smoke(n_trades=100, seed=1).to_dict())
 - Hard safety floor still applies: no live order submission from loops
 - VisualHFT REST trigger payloads may be pointed at a local AOA webhook later;
   this package does not auto-execute trades from alerts
+
+## Workspace mesh
+
+All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

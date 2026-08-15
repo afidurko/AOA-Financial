@@ -28,3 +28,4 @@
 | 2026-07-06 23:40 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-08 02:32 | maintenance | — | integrated | Task chain automation: docs/upgrade-backlog.json + aoa tasks chain. Bootstrapped upg-009. 359 tests pass. tokens_estimate=9000 |
 | 2026-08-15 20:40 | avellaneda-stoikov | L2 | integrated | Offline AS research lane (`aoa avellaneda`); 6 unit tests + smoke green. tokens_estimate=25000 |
+| 2026-08-15 20:50 | microstructure-mesh | L2 | integrated | Merged HFT sibling lanes + aoa microstructure catalog; 7/7 lanes available. tokens_estimate=45000 |

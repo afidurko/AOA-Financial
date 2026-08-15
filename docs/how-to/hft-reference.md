@@ -70,3 +70,7 @@ hft/src/backtest/      replay / matcher
 Build/run notes live in the upstream README (CentOS, g++, waf, ZeroMQ 4.1.2).
 AOA agents should read strategies for ideas; they should not compile or deploy
 that stack from a cloud loop.
+
+## Workspace mesh
+
+All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

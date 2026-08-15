@@ -133,3 +133,16 @@ not run it:
 
 See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
 `aoa.research.hftish_patterns`.
+
+## 10. SGX order-book reference (optional)
+
+Clone the SGX A50 full-order-book notebooks sibling
+([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
+AOA does not run the notebooks:
+
+```bash
+./scripts/sgx-orderbook-setup.sh
+```
+
+See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
+`aoa.research.sgx_orderbook_patterns`.

@@ -260,3 +260,7 @@ qm/
 hft/
 # example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
 example-hftish/
+
+# SGX order-book sibling clone (reference — not vendored)
+SGX-Full-OrderBook-Tick-Data-Trading-Strategy/
+sgx-orderbook/

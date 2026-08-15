@@ -72,6 +72,10 @@ algorithms:
     owner: julie
     module: aoa.research.hftish_patterns
     companion: example-hftish
+  - id: algo.sgx_orderbook
+    owner: julie
+    module: aoa.research.sgx_orderbook_patterns
+    companion: SGX-Full-OrderBook-Tick-Data-Trading-Strategy
 
 spines:
   - path: spine/ATTL.md

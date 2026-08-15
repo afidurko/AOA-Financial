@@ -77,6 +77,9 @@ Unlimited-horizon quotes (inventory-bound) are also available via
 | `aoa avellaneda` | Headless Python ports for AOA research / study cortex |
 | `aoa visualhft` | LOB imbalance / VPIN / OTR studies |
 | `aoa hft` | Optional tick backtest / vendored LOB |
+| `aoa microstructure status` | Mesh catalog for every offline HFT/LOB lane |
+
+See [microstructure-lanes.md](microstructure-lanes.md).
 
 ## Safety
 
