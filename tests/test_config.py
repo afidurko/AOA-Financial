@@ -60,6 +60,43 @@ def test_validate_clean_config():
     assert cfg.validate() == []
 
 
+def test_validate_moomoo_live_requires_ack_and_unlock():
+    cfg = Config(
+        env="live",
+        broker="moomoo",
+        moomoo_live=True,
+        anthropic_api_key="x",
+        live_acknowledged=False,
+        moomoo_unlock_password="",
+    )
+    problems = cfg.validate()
+    assert any("AOA_LIVE_ACK" in p for p in problems)
+    assert any("MOOMOO_UNLOCK_PASSWORD" in p for p in problems)
+
+    ok = Config(
+        env="live",
+        broker="moomoo",
+        moomoo_live=True,
+        anthropic_api_key="x",
+        live_acknowledged=True,
+        moomoo_unlock_password="pin",
+    )
+    assert ok.validate() == []
+    assert ok.trading_mode == "live"
+    assert ok.is_live_broker is True
+
+
+def test_moomoo_live_profile_file_exists():
+    root = Path(__file__).resolve().parents[1]
+    profile = root / "profiles" / "moomoo-live.env"
+    assert profile.is_file()
+    text = profile.read_text(encoding="utf-8")
+    assert "AOA_BROKER=moomoo" in text
+    assert "MOOMOO_LIVE=true" in text
+    assert "AOA_ENV=live" in text
+
+
+
 def test_validate_clean_config_alpaca():
     cfg = Config(
         env="paper-dry",

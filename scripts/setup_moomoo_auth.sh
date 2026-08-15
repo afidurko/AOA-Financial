@@ -74,5 +74,21 @@ else
   echo "Skipping live doctor until OpenD is running."
 fi
 
+if [[ "${1:-}" == "--live" ]] || [[ "${AOA_SETUP_MOOMOO_LIVE:-}" == "1" ]]; then
+  echo
+  echo "=== LIVE Moomoo account (real money) ==="
+  need "Log OpenD into your LIVE Moomoo account (not simulate-only)"
+  need "Add to .env: AOA_LIVE_ACK=I_UNDERSTAND"
+  need "Add to .env: MOOMOO_UNLOCK_PASSWORD=<trading unlock PIN>"
+  echo "       Activate: export AOA_PROFILE=moomoo-live"
+  echo "       Verify:   AOA_PROFILE=moomoo-live aoa doctor"
+  echo "       First run: AOA_PROFILE=moomoo-live aoa run"
+  echo "       Profile:   profiles/moomoo-live.env"
+  echo "       Guide:     docs/how-to/moomoo-setup.md § Live trading"
+else
+  echo
+  echo "Paper/simulate is the default. For LIVE Moomoo: aoa setup moomoo --live"
+fi
+
 echo
 echo "Full checklist: SETUP-AWAITING-YOU.md"

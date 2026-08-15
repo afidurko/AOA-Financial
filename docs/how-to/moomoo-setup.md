@@ -36,10 +36,11 @@ After install:
 |---------|------|------|
 | Paper dry-run (default) | `profiles/paper-dry.env` | Moomoo + `AOA_DRY_RUN=true` |
 | Moomoo paper simulate | `profiles/moomoo-paper.env` | Real simulate orders via OpenD |
+| **Moomoo live** | `profiles/moomoo-live.env` | **Real money** via OpenD |
 | Alpaca paper (optional) | set `AOA_BROKER=alpaca` | See `scripts/setup_alpaca_auth.sh` |
 
 ```bash
-export AOA_PROFILE=paper-dry      # or moomoo-paper
+export AOA_PROFILE=paper-dry      # or moomoo-paper / moomoo-live
 ```
 
 Key `.env` variables:
@@ -78,12 +79,38 @@ Expected when healthy:
 | No stock bars | Log into OpenD; confirm US market data subscription |
 | Cloud / CI environment | OpenD must run locally — use Alpaca for headless: `AOA_BROKER=alpaca` |
 
-## 5. Live trading (later)
+## 5. Live trading (Moomoo real-money account)
+
+**This places real orders with real money.** Risk guards still apply, but you are responsible.
+
+### Profile
+
+```bash
+# Named profile (recommended)
+export AOA_PROFILE=moomoo-live
+
+# Local secrets only in .env (never commit):
+#   AOA_LIVE_ACK=I_UNDERSTAND
+#   MOOMOO_UNLOCK_PASSWORD=your-trading-unlock-pin
+#   ANTHROPIC_API_KEY=...
+```
+
+Or copy `profiles/live.env.example` fields into `.env`.
+
+### Checklist
+
+1. OpenD running and logged into your **live** Moomoo account (not simulate-only)
+2. Trading unlocked in Moomoo / OpenD for the US market
+3. `.env` has `AOA_LIVE_ACK=I_UNDERSTAND` and `MOOMOO_UNLOCK_PASSWORD`
+4. Confirm: `AOA_PROFILE=moomoo-live aoa doctor` shows `moomoo-live` and real equity
+5. Optional dry look: keep a journal review from paper first (`AOA_PROFILE=moomoo-paper`)
+6. First live cycle: `AOA_PROFILE=moomoo-live aoa run` (one cycle only)
 
 ```bash
 AOA_ENV=live
-AOA_LIVE_ACK=I_UNDERSTAND
+AOA_BROKER=moomoo
 MOOMOO_LIVE=true
+AOA_LIVE_ACK=I_UNDERSTAND
 MOOMOO_UNLOCK_PASSWORD=your-trading-password
 ```
 
