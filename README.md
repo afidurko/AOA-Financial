@@ -4,7 +4,8 @@ An autonomous, multi-agent swarm that analyzes the US stock market for
 opportunities and executes **stock and options** trades in a **cash account**
 through a live brokerage. The brokerage ([Alpaca](https://alpaca.markets)) is
 both the **information source** (quotes, bars, option chains, account, positions)
-and the **order executor**. Every agent reasons with **Claude** (`claude-opus-4-8`).
+and the **order executor**. Agents reason via a **local WASTE** OpenAI-compatible
+LLM by default (Claude is opt-in only).
 
 > ⚠️ **This software can place real orders with real money.** It defaults to
 > **paper trading** (`ALPACA_LIVE=false`). Set `ALPACA_LIVE=true` only when you
@@ -250,13 +251,13 @@ A deep stock-market **analysis, forecasting, and decision engine**. It builds
 its own databases of market history (back to **June 1960**), runs a quant stack
 of technical / fundamental / forecasting / regime / factor models,
 **reverse-engineers the latent drivers** behind a stock's trend, layers a
-**Claude Opus 4.8** analyst on top, and fuses everything through a **multi-agent
+**local WASTE** analyst on top (Claude opt-in), and fuses everything through a **multi-agent
 "swarm"** into a sized BUY / HOLD / SELL decision.
 
 > **Design principle:** the entire core runs on the **Python standard library
-> alone** — no numpy, pandas, or network required. `anthropic`, `numpy`, and
-> live data feeds are *optional accelerators* that are detected at runtime and
-> used when present, with graceful fallback otherwise. This makes the system
+> alone** — no numpy, pandas, or network required. Local WASTE / optional
+> `anthropic`, `numpy`, and live data feeds are *accelerators* detected at
+> runtime and used when present, with graceful fallback otherwise. This makes the system
 > reproducible and runnable anywhere.
 >
 > **numpy acceleration:** when numpy is installed, the analysis core
@@ -356,7 +357,7 @@ synthetic generator. Add `--json` to any command for machine-readable output.
 | **Databases** | `databases/` | SQLite store (`schema.sql`) with typed DAL for prices, fundamentals, sentiment, inferred regimes, per-agent signals and final decisions. |
 | **Ingest** | `ingest/` | `SyntheticGenerator` — deterministic regime-switching GBM producing full OHLCV history back to **1960‑06‑01** for *any* ticker. `loaders` add an optional Stooq CSV feed with automatic offline fallback. |
 | **Analysis** | `analysis/` | Technical indicators (SMA/EMA/RSI/MACD/Bollinger/ATR/vol/drawdown), fundamental scoring, an **ensemble forecaster** (Monte-Carlo + trend regression + EWMA), **regime inference** (bull/recovery/sideways/correction/bear), a **linear factor model** (momentum/reversal/trend/volatility/market), lexicon sentiment, and the **reverse-engineering** synthesis. |
-| **LLM** | `llm/` | `ClaudeAnalyst` turns the quant evidence into a structured investment view via **Claude Opus 4.8**. Falls back to a deterministic offline analyst when no API key / SDK. |
+| **LLM** | `llm/` | `ClaudeAnalyst` (name retained) turns quant evidence into a structured investment view via **local WASTE** by default. Claude is opt-in; offline deterministic fallback when no server is reachable. |
 | **Swarm** | `swarm/` | Independent specialist agents each emit a directional signal; the swarm aggregates by **weight × confidence**, penalises disagreement, and sizes a portfolio weight. |
 
 ---
@@ -382,24 +383,21 @@ python -m aoa_financial reverse AAPL
 
 ---
 
-## The Claude analyst
+## The local LLM analyst
 
-The `llm/` layer sends the *computed quant evidence* (not raw prices) to
-**Claude Opus 4.8** and asks for a disciplined investment view returned as
-**structured JSON** (thesis, action, conviction, confidence, drivers, risks).
-It uses adaptive thinking, high effort, and streaming — see
-`llm/analyst.py`. To enable the live analyst:
+The `llm/` layer sends the *computed quant evidence* (not raw prices) to a
+**local WASTE** OpenAI-compatible server by default and asks for a disciplined
+investment view as **structured JSON** (thesis, action, conviction, confidence,
+drivers, risks) — see `llm/analyst.py` and `docs/how-to/waste-local-llm.md`.
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-pip install anthropic
-python -m aoa_financial analyze AAPL          # now uses Claude
+# with WASTE serve running on :8000 (defaults in .env.example)
+python -m aoa_financial analyze AAPL
 ```
 
-Without a key it transparently uses a deterministic offline analyst that
-reaches the same kind of conclusion from the same dashboard, so the swarm
-always gets a meaningful "analyst" vote. Force offline with
-`AOA_FORCE_OFFLINE=1`.
+Claude is opt-in only (`AOA_LLM_PROVIDER=anthropic` + `pip install 'aoa-financial[anthropic]'`).
+Without a reachable LLM it uses a deterministic offline analyst so the swarm
+always gets a meaningful "analyst" vote. Force offline with `AOA_FORCE_OFFLINE=1`.
 
 ---
 
@@ -536,8 +534,8 @@ Configuration loads in this order (lowest → highest priority):
 cp .env.example .env
 export AOA_PROFILE=paper-dry    # recommended starting point
 # Edit .env: Moomoo OpenD locally, or AOA_BROKER=alpaca + paper keys for cloud/CI.
-# Optional: ANTHROPIC_API_KEY, or AOA_LLM_PROVIDER=ollama for key-free local LLM.
-# Leave ALPACA_LIVE=false to use the paper-trading sandbox first.
+# Optional LLM: local WASTE (docs/how-to/waste-local-llm.md), Ollama, or ANTHROPIC_API_KEY.
+# Leave ALPACA_LIVE=false / MOOMOO_LIVE=false for paper first.
 # Optional market-data tuning:
 #   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
 #   ALPACA_BAR_ADJUSTMENT=split   # raw | split | dividend | all | spin-off
@@ -604,6 +602,8 @@ aoa hft status
 aoa hft smoke                           # synthetic L2 depth smoke (no orders)
 aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # See docs/how-to/hftbacktest-integration.md
+# SGX LOB features: docs/how-to/sgx-orderbook-reference.md · examples/sgx_orderbook_smoke.py
+# Companion map: docs/how-to/hft-research-lane.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -811,7 +811,7 @@ falls back to qualitative reasoning without fabricating headlines.
 └──────┬──────────────────┬──────────────────┬────────────────────┘
        │                  │                  │
        ▼                  ▼                  ▼
-  Alpaca broker      Claude LLM         Journal (JSONL)
+  Alpaca/Moomoo      Local WASTE LLM    Journal (JSONL)
   (data + orders)    (agent reasoning)  + SwarmEnvironment
 ```
 
@@ -825,7 +825,7 @@ src/aoa/                   # live trading swarm (primary package)
   brokerage/               # broker abstraction (base) + Alpaca impl + neutral models
   data/                    # market-data assembly + pure-Python indicators
   simulation/              # trend analysis, scenario library, Monte-Carlo + live tracker
-  llm/                     # Anthropic Claude wrapper (adaptive thinking, structured output)
+  llm/                     # LLM client — WASTE/openai_compatible by default; Claude opt-in
   adapt/                   # LoRA: online signal recalibration + optional torch LoRA
   agents/                  # scanner, technical, fundamental, meshing, options, portfolio, risk
   team/                    # Tom, Julie, Bob, Alan, Aaron + team orchestrator
@@ -843,7 +843,7 @@ aoa_financial/             # optional deep analysis & forecasting (no live order
   ingest/                  # synthetic generator, Stooq loader, live fundamentals feed
   analysis/                # technical, fundamentals, forecast, regimes, factors, sentiment
   analysis/frames.py       # optional pandas layer: DataFrame/CSV IO, correlation panel
-  llm/                     # Claude Opus 4.8 analyst (+ offline fallback)
+  llm/                     # WASTE/openai_compatible analyst by default (+ offline fallback)
   swarm/                   # specialist agents + decision aggregator
   backtest/                # walk-forward, lookahead-free backtest harness
   cli.py / __main__.py     # command-line interface
@@ -891,7 +891,7 @@ analysis model, and the full decision pipeline with persistence (stdlib-only,
 
 ## Low-rank adaptation (LoRA)
 
-The agents reason through a **frozen, hosted model** (Claude via the API), so we
+The agents reason through a **local model** (WASTE by default), so we
 can't fine-tune their weights directly. Instead the swarm applies the LoRA idea
 one level up — a tiny, trainable **low-rank correction on top of each agent's raw
 conviction**, learned online from realized outcomes. It lives in `aoa.adapt`:
@@ -955,6 +955,7 @@ Companion tools that sit beside this repo (not vendored here):
 |---------|----------------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full-LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |
 | **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |

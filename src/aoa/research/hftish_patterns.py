@@ -8,7 +8,7 @@ bar-based and cash-account; nothing here submits orders.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum
 
 _PRICE_EPS = 1e-6
@@ -69,24 +69,19 @@ class BookDiagnosis:
     signal: str | None = None
 
     def to_context(self) -> dict[str, object]:
-        return {
-            "available": self.available,
-            "side": self.side.value,
-            "ratio": self.ratio,
-            "bid": self.bid,
-            "ask": self.ask,
-            "bid_size": self.bid_size,
-            "ask_size": self.ask_size,
-            "width": self.width,
-            "penny_spread": self.penny_spread,
-            "note": self.note,
-            "signal": self.signal,
-        }
+        data = asdict(self)
+        data["side"] = self.side.value
+        return data
 
 
 def book_width(bid: float, ask: float) -> float:
     """Top-of-book width (ask − bid)."""
     return ask - bid
+
+
+def prices_match(a: float, b: float, *, eps: float = _PRICE_EPS) -> bool:
+    """True when two prices are equal within a small absolute epsilon."""
+    return abs(a - b) <= eps
 
 
 def is_penny_spread(bid: float, ask: float, *, eps: float = 1e-9) -> bool:
@@ -167,11 +162,6 @@ def trade_follows_quote(
     return trade_timestamp_ms > quote_timestamp_ms + min_lag_ms
 
 
-def prices_match(a: float, b: float, *, eps: float = _PRICE_EPS) -> bool:
-    """True when two prices are equal within a small absolute epsilon."""
-    return abs(a - b) <= eps
-
-
 def position_allows_buy(
     total_shares: int,
     pending_buy: int,
@@ -206,7 +196,9 @@ def diagnose_quote_book(
     threshold: float = 1.8,
 ) -> BookDiagnosis:
     """Research-only book pressure from a live AOA Quote (sizes may be zero)."""
-    if bid <= 0 or ask <= 0:
+    bid_size = max(0.0, float(bid_size))
+    ask_size = max(0.0, float(ask_size))
+    if bid <= 0 or ask <= 0 or ask <= bid:
         return BookDiagnosis(
             available=False,
             side=Side.FLAT,

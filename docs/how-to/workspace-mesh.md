@@ -25,7 +25,9 @@ This clones and wires:
 | Moomoo OpenD skills | Vendored `moomooapi` + `install-moomoo-opend` |
 | `AOA.code-workspace` | Multi-root Cursor/VS Code workspace |
 
-Optional siblings: `qm` (`./scripts/qm-setup.sh`), `py-moomoo-api`.
+Optional siblings: `qm` (`./scripts/qm-setup.sh`), `py-moomoo-api`,
+SGX order-book notebooks (`./scripts/sgx-orderbook-setup.sh` — see
+[hft-research-lane.md](hft-research-lane.md)).
 
 ## Open in Cursor
 
@@ -94,3 +96,5 @@ Refresh: `aoa attl brain sync`.
 - [obsidian-skills-integration.md](obsidian-skills-integration.md)
 - [moomoo-setup.md](moomoo-setup.md)
 - [qm-integration.md](qm-integration.md)
+- [hft-research-lane.md](hft-research-lane.md)
+- [sgx-orderbook-reference.md](sgx-orderbook-reference.md)

@@ -334,3 +334,80 @@ def test_workloop_escalated_changes_require_user_approval(tmp_path, monkeypatch)
     assert done.halted is False
     assert done.run.status == "completed"
 
+
+
+def test_optional_llm_uses_waste_without_anthropic_key(tmp_path):
+    from aoa.workloop.stages import _optional_llm
+
+    cfg = _config(
+        tmp_path,
+        anthropic_api_key="",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+        model="kimi-linear",
+    )
+    llm = _optional_llm(cfg)
+    assert llm is not None
+    assert llm.provider == "openai_compatible"
+
+
+def test_optional_llm_none_for_anthropic_without_key(tmp_path):
+    from aoa.workloop.stages import _optional_llm
+
+    cfg = _config(tmp_path, anthropic_api_key="", llm_provider="anthropic")
+    assert _optional_llm(cfg) is None
+
+
+def test_team_review_uses_llm_without_anthropic_key(tmp_path, monkeypatch):
+    """WASTE/openai_compatible clients must drive Alan/Aaron without Anthropic."""
+    from unittest.mock import MagicMock
+
+    from aoa.team.code_engineering import CodeQualityReport
+    from aoa.workloop import team_review as tr_mod
+
+    bob = CodeQualityReport(can_proceed=True, summary="clean")
+    julie = {"ok": True, "notes": []}
+    proposal = {"summary": "fix typo", "paths": ["src/aoa/cli.py"], "diff_lines": 3}
+    adaptations: list[dict] = []
+
+    llm = MagicMock()
+    llm.structured.side_effect = [
+        {
+            "recommendation": "approve",
+            "summary": "safe",
+            "confidence": 0.9,
+            "risks": [],
+        },
+        {
+            "verdict": "approve",
+            "required_approver": "Aaron",
+            "summary": "go",
+            "user_notifications": [],
+        },
+    ]
+    cfg = _config(
+        tmp_path,
+        anthropic_api_key="",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+    )
+    alan = tr_mod._alan_review(
+        bob=bob,
+        julie=julie,
+        proposal=proposal,
+        adaptations=adaptations,
+        llm=llm,
+        config=cfg,
+    )
+    assert alan["source"] == "llm"
+    aaron = tr_mod._aaron_decide(
+        bob=bob,
+        julie=julie,
+        alan=alan,
+        proposal=proposal,
+        config=cfg,
+        run_id="run1",
+        llm=llm,
+    )
+    assert aaron["source"] == "llm"
+    assert llm.structured.call_count == 2

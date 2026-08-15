@@ -122,7 +122,7 @@ ok "Package installed"
 if [[ ! -f .env ]]; then
   cp .env.example .env
   ok "Created .env from .env.example"
-  need "Edit .env — set ANTHROPIC_API_KEY=sk-ant-..."
+  need "Start local WASTE serve — docs/how-to/waste-local-llm.md (AOA does not use Claude by default)"
 else
   ok ".env exists"
 fi

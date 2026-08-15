@@ -22,6 +22,23 @@ def test_workspaces_report_shape(monkeypatch):
     vh = next(w for w in report["workspaces"] if w["id"] == "visualhft")
     assert vh["docs"].endswith("visualhft-integration.md")
     assert vh["detail"]["python_lane"]["offline_only"] is True
+    hft = next(w for w in report["workspaces"] if w["id"] == "hftbacktest")
+    # Vendored orderbook makes the HFT lane linked even without the pip extra.
+    assert "orderbook" in hft["detail"]
+    assert hft["detail"]["orderbook"].get("ok") is True
+    assert hft["linked"] is True
+    assert hft["present"] is True
+
+
+def test_cli_hft_skips_env_template(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env.example").write_text("AOA_ENV=paper\n", encoding="utf-8")
+    code = main(["hft", "status", "--json"])
+    out = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert out["offline_only"] is True
+    assert out["orderbook"]["ok"] is True
+    assert not (tmp_path / ".env").exists()
 
 
 def test_workspaces_respects_visualhft_url(monkeypatch):

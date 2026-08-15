@@ -122,7 +122,8 @@ Scheduled task routing: [docs/how-to/fable-max-operating-schedule.md](docs/how-t
 
 - **Fable 5 trial (Cloud Agent)** — daily triage, repair triage, one L2 fix/run, draft PRs; capped in `loop-budget.md`.
 - **Claude Max 5×** — setup, PR review, interactive Claude Code / gstack; does not power `aoa run`.
-- **Anthropic API** — swarm runtime only (`ANTHROPIC_API_KEY` in `.env`).
+- **Anthropic API** — opt-in only (`AOA_LLM_PROVIDER=anthropic`). Default swarm
+  runtime uses local WASTE (`openai_compatible`). See `docs/how-to/waste-local-llm.md`.
 
 ## Agentic Task-Team Loop (ATTL) — auto-12
 
@@ -133,7 +134,7 @@ Design + runtime: [docs/design/agentic-task-team-loop.md](docs/design/agentic-ta
 - **Second brain:** `brain/` meshed into vault + Julie algorithms
 - **CLI:** `aoa attl init|status|roster|propose|run|report|brain sync`
 
-Cross-repo aids: loop-engineering, spine, obsidian-second-brain, AutoHedge, example-hftish.
+Cross-repo aids: loop-engineering, spine, obsidian-second-brain, AutoHedge, sgx-orderbook, example-hftish.
 
 ## Links
 

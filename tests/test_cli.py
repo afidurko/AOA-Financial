@@ -13,9 +13,9 @@ from aoa.swarm.orchestrator import CycleResult
 
 def test_doctor_offline_skips_connectivity(monkeypatch, capsys):
     cfg = Config(
-        anthropic_api_key="sk-test",
-        alpaca_key_id="PKTEST",
-        alpaca_secret_key="secret",
+        broker="moomoo",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
     )
 
     def _fail_if_called(*args, **kwargs):
@@ -29,6 +29,58 @@ def test_doctor_offline_skips_connectivity(monkeypatch, capsys):
 
     assert code == 0
     assert "Offline mode" in out
+    assert "Broker: moomoo" in out
+
+
+def test_doctor_moomoo_skips_alpaca_crypto(monkeypatch, capsys):
+    """Moomoo doctor must not require Alpaca crypto/keys — OpenD + WASTE only."""
+    from datetime import datetime, timezone
+    from unittest.mock import MagicMock
+
+    from aoa.brokerage.models import Account, Bar
+
+    cfg = Config(
+        broker="moomoo",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+        model="kimi-linear",
+    )
+
+    def _no_alpaca(*args, **kwargs):
+        raise AssertionError("AlpacaBarsFetcher must not run for Moomoo doctor")
+
+    monkeypatch.setattr("aoa.cli.AlpacaBarsFetcher", _no_alpaca)
+
+    broker = MagicMock()
+    broker.name = "moomoo-paper"
+    broker.get_account.return_value = Account(
+        equity=100_000.0,
+        cash=100_000.0,
+        settled_cash=100_000.0,
+        buying_power=100_000.0,
+        options_level=0,
+    )
+    broker.verify_stock_bars.return_value = Bar(
+        timestamp=datetime(2026, 1, 2, tzinfo=timezone.utc),
+        open=1.0,
+        high=1.0,
+        low=1.0,
+        close=500.0,
+        volume=1.0,
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda _cfg: broker)
+
+    llm = MagicMock()
+    monkeypatch.setattr("aoa.cli.build_llm", lambda _cfg: llm)
+
+    code = cmd_doctor(cfg, offline=False)
+    out = capsys.readouterr().out
+
+    assert code == 0
+    assert "Broker reachable (moomoo-paper)" in out
+    assert "openai_compatible" in out
+    assert "Crypto bars" not in out
+    llm.ping.assert_called_once()
 
 
 def test_doctor_reports_qm_url(monkeypatch, capsys):
