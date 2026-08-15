@@ -47,11 +47,13 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker (1¢ level changes + size imbalance). Pure-Python idea ports: `aoa.research.hftish_patterns`. Upstream fork of [alpacahq/example-hftish](https://github.com/alpacahq/example-hftish). |
 | **[SGX-Full-OrderBook-…](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full LOB ML notebooks (rise ratio, weighted depth). Pure-Python idea ports: `aoa.research.sgx_orderbook_patterns`. |
 
-**In-system wiring:** clone with `./scripts/hft-setup.sh` or
-`./scripts/example-hftish-setup.sh` (gitignored siblings). Vault notes:
-`vault/system/hft.md`, `vault/system/example-hftish.md`. Guides:
+**In-system wiring:** clone with `./scripts/hft-setup.sh`,
+`./scripts/example-hftish-setup.sh`, or `./scripts/sgx-orderbook-setup.sh`
+(gitignored siblings). Vault notes: `vault/system/hft.md`,
+`vault/system/example-hftish.md`, `vault/system/sgx-orderbook.md`. Guides:
 [how-to/hft-reference.md](how-to/hft-reference.md),
-[how-to/example-hftish-reference.md](how-to/example-hftish-reference.md).
+[how-to/example-hftish-reference.md](how-to/example-hftish-reference.md),
+[how-to/sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md).
 Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)

@@ -10,11 +10,22 @@ from collections.abc import Callable
 from typing import Any
 
 
+def _lane_available(status: dict[str, Any]) -> bool:
+    """Derive availability from probe semantics (installed / ok / available)."""
+    if "available" in status:
+        return bool(status["available"])
+    if "ok" in status:
+        return bool(status["ok"])
+    if "installed" in status:
+        return bool(status["installed"])
+    return True
+
+
 def _safe_probe(label: str, loader: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
-        status = loader()
-        status.setdefault("lane", label)
-        status.setdefault("available", True)
+        status = dict(loader())
+        status["lane"] = label
+        status["available"] = _lane_available(status)
         return status
     except Exception as exc:  # noqa: BLE001 — catalog must stay resilient
         return {
@@ -24,6 +35,17 @@ def _safe_probe(label: str, loader: Callable[[], dict[str, Any]]) -> dict[str, A
             "offline_only": True,
             "never_live": True,
         }
+
+
+def _module_symbols(mod: Any) -> list[str]:
+    names = getattr(mod, "__all__", None)
+    if names:
+        return sorted(str(n) for n in names if hasattr(mod, n))
+    return sorted(
+        n
+        for n, obj in vars(mod).items()
+        if not n.startswith("_") and callable(obj) and getattr(obj, "__module__", "") == mod.__name__
+    )
 
 
 def _probe_avellaneda() -> dict[str, Any]:
@@ -50,58 +72,49 @@ def _probe_orderbook() -> dict[str, Any]:
     return probe_status()
 
 
-def _probe_hft_patterns() -> dict[str, Any]:
-    import aoa.research.hft_patterns as mod
+def _probe_pattern_module(
+    *,
+    module: str,
+    companion: str,
+    cli_hint: str,
+) -> dict[str, Any]:
+    import importlib
 
+    mod = importlib.import_module(module)
     return {
         "available": True,
         "runtime": "python-research",
-        "module": "aoa.research.hft_patterns",
-        "companion": "https://github.com/afidurko/hft",
-        "cli_hint": "import aoa.research.hft_patterns",
+        "module": module,
+        "companion": companion,
+        "cli_hint": cli_hint,
         "offline_only": True,
         "never_live": True,
-        "symbols": sorted(
-            n
-            for n in (
-                "calibrate_spread_bands",
-                "open_side_from_bands",
-                "ma_cross_signal",
-                "mid_maker_side",
-            )
-            if hasattr(mod, n)
-        ),
+        "symbols": _module_symbols(mod),
     }
+
+
+def _probe_hft_patterns() -> dict[str, Any]:
+    return _probe_pattern_module(
+        module="aoa.research.hft_patterns",
+        companion="https://github.com/afidurko/hft",
+        cli_hint="import aoa.research.hft_patterns",
+    )
 
 
 def _probe_hftish() -> dict[str, Any]:
-    import aoa.research.hftish_patterns as mod
-
-    return {
-        "available": True,
-        "runtime": "python-research",
-        "module": "aoa.research.hftish_patterns",
-        "companion": "https://github.com/afidurko/example-hftish",
-        "cli_hint": "import aoa.research.hftish_patterns",
-        "offline_only": True,
-        "never_live": True,
-        "symbols": sorted(n for n in dir(mod) if not n.startswith("_") and callable(getattr(mod, n))),
-    }
+    return _probe_pattern_module(
+        module="aoa.research.hftish_patterns",
+        companion="https://github.com/afidurko/example-hftish",
+        cli_hint="import aoa.research.hftish_patterns",
+    )
 
 
 def _probe_sgx() -> dict[str, Any]:
-    import aoa.research.sgx_orderbook_patterns as mod
-
-    return {
-        "available": True,
-        "runtime": "python-research",
-        "module": "aoa.research.sgx_orderbook_patterns",
-        "companion": "https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy",
-        "cli_hint": "import aoa.research.sgx_orderbook_patterns",
-        "offline_only": True,
-        "never_live": True,
-        "symbols": sorted(n for n in dir(mod) if not n.startswith("_") and callable(getattr(mod, n))),
-    }
+    return _probe_pattern_module(
+        module="aoa.research.sgx_orderbook_patterns",
+        companion="https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy",
+        cli_hint="import aoa.research.sgx_orderbook_patterns",
+    )
 
 
 LANES: tuple[tuple[str, Callable[[], dict[str, Any]], str], ...] = (
@@ -118,9 +131,9 @@ LANES: tuple[tuple[str, Callable[[], dict[str, Any]], str], ...] = (
 def catalog_status() -> dict[str, Any]:
     """Aggregate status for every microstructure research lane in this workspace."""
     lanes: list[dict[str, Any]] = []
-    for name, loader, hint in LANES:
+    for name, loader, fallback_hint in LANES:
         row = _safe_probe(name, loader)
-        row["hint"] = hint
+        row.setdefault("hint", fallback_hint)
         lanes.append(row)
     available = sum(1 for row in lanes if row.get("available"))
     return {

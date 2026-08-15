@@ -12,11 +12,19 @@ Julie owns algorithm clarity. Brain context injects into analysis via
 - Mesh node `algo.julie` → team Julie
 - Mesh node `algo.signal_adapter` → plasticity / adapt path
 - Mesh node `algo.swarm` → trading Orchestrator
-- Research lane `aoa.avellaneda_stoikov` → AS reservation-price MM (offline; sibling repo `avellaneda-stoikov`)
+- Research lane `aoa.avellaneda_stoikov` → AS reservation-price MM (offline; sibling repo `avellaneda-stoikov`; study bridge `bridge-as-reservation`)
 - Mesh node `algo.hft_patterns` → educational pairs/maker/MA helpers (`aoa.research.hft_patterns`)
 - Mesh node `algo.hftish_patterns` → educational OB imbalance helpers (`aoa.research.hftish_patterns`)
 - Mesh node `algo.sgx_orderbook` → educational depth-rise helpers (`aoa.research.sgx_orderbook_patterns`)
 - Mesh catalog `aoa.microstructure` → `aoa microstructure status` (all offline HFT/LOB lanes)
+
+## Avellaneda–Stoikov companion (reference only)
+
+Sibling [afidurko/avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)
+ports reservation-price market making. Headless Python lives in
+`aoa.avellaneda_stoikov` (`aoa avellaneda`). Study bridge:
+`bridge-as-reservation`. Guide:
+[docs/how-to/avellaneda-stoikov.md](../../docs/how-to/avellaneda-stoikov.md).
 
 ## HFT companion (reference only)
 

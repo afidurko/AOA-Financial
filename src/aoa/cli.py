@@ -1354,7 +1354,14 @@ def cmd_avellaneda_status(*, as_json: bool) -> int:
 def cmd_avellaneda_smoke(*, n_steps: int, n_sims: int, seed: int, as_json: bool) -> int:
     from aoa.avellaneda_stoikov import run_synthetic_smoke
 
-    result = run_synthetic_smoke(n_steps=n_steps, n_sims=n_sims, seed=seed)
+    try:
+        result = run_synthetic_smoke(n_steps=n_steps, n_sims=n_sims, seed=seed)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 1
     if as_json:
         print(json.dumps(result.to_dict(), indent=2))
     else:
@@ -2508,6 +2515,7 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
                 ported_only=getattr(args, "ported_only", False),
             )
+        return 2
     if args.command == "hft":
         if args.hft_command == "status":
             return cmd_hft_status(as_json=getattr(args, "json", False))
@@ -2529,6 +2537,7 @@ def main(argv: list[str] | None = None) -> int:
                 step_ns=args.step_ns,
                 as_json=getattr(args, "json", False),
             )
+        return 2
     if args.command == "avellaneda":
         if args.avellaneda_command == "status":
             return cmd_avellaneda_status(as_json=getattr(args, "json", False))
@@ -2548,9 +2557,11 @@ def main(argv: list[str] | None = None) -> int:
                 unlimited=getattr(args, "unlimited", False),
                 as_json=getattr(args, "json", False),
             )
+        return 2
     if args.command == "microstructure":
         if args.microstructure_command == "status":
             return cmd_microstructure_status(as_json=getattr(args, "json", False))
+        return 2
 
     _ensure_env_template()
     cfg = Config.from_env()
@@ -2603,27 +2614,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
-        if args.command == "hft":
-            if args.hft_command == "status":
-                return cmd_hft_status(as_json=getattr(args, "json", False))
-            if args.hft_command == "smoke":
-                return cmd_hft_smoke(
-                    n_events=args.events,
-                    steps=args.steps,
-                    seed=args.seed,
-                    as_json=getattr(args, "json", False),
-                )
-            if args.hft_command == "book-smoke":
-                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
-            if args.hft_command == "run":
-                return cmd_hft_run(
-                    data=args.data,
-                    tick_size=args.tick_size,
-                    lot_size=args.lot_size,
-                    steps=args.steps,
-                    step_ns=args.step_ns,
-                    as_json=getattr(args, "json", False),
-                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,

@@ -286,3 +286,7 @@ example-hftish/
 # SGX order-book sibling clone (reference — not vendored)
 SGX-Full-OrderBook-Tick-Data-Trading-Strategy/
 sgx-orderbook/
+# Avellaneda–Stoikov sibling clone (reference — not vendored)
+avellaneda-stoikov/
+# VisualHFT sibling clone (Windows desktop — not vendored)
+VisualHFT/

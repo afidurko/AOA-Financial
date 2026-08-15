@@ -10,7 +10,8 @@ None of these lanes place paper or live orders. Use
 |------|--------------|----------------|------|
 | Avellaneda–Stoikov | `aoa avellaneda` · `aoa.avellaneda_stoikov` | [avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov) | Reservation price + optimal quotes + Monte-Carlo |
 | VisualHFT studies | `aoa visualhft` · `aoa.visualhft` | [VisualHFT](https://github.com/afidurko/VisualHFT) | LOB imbalance, VPIN, OTR |
-| hftbacktest + LOB | `aoa hft` · `aoa.hftbacktest` / `aoa.orderbook` | [hftbacktest](https://github.com/afidurko/hftbacktest), [HFT-Orderbook](https://github.com/afidurko/HFT-Orderbook) | Tick replay (optional) + vendored book |
+| hftbacktest + LOB | `aoa hft` · `aoa.hftbacktest` / `aoa.orderbook` | [hftbacktest](https://github.com/afidurko/hftbacktest), [HFT-Orderbook](https://github.com/afidurko/HFT-Orderbook) | Tick replay (**optional** extra) + vendored book |
+
 | HFT patterns | `aoa.research.hft_patterns` | [hft](https://github.com/afidurko/hft) | Pairs bands, hedged maker, MA cross ideas |
 | example-hftish | `aoa.research.hftish_patterns` | [example-hftish](https://github.com/afidurko/example-hftish) | Penny level-change / size imbalance |
 | SGX order book | `aoa.research.sgx_orderbook_patterns` | [SGX-Full-OrderBook-…](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy) | Depth rise / weighted book features |

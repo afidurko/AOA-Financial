@@ -23,7 +23,7 @@ class SimConfig:
 
     n_steps: int = 200
     s0: float = 100.0
-    drift_per_step: float = 0.1
+    drift_per_step: float = 0.0
     limit_horizon: bool = True
     params: ASParams = field(default_factory=ASParams)
     seed: int = 1
