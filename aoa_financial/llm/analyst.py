@@ -145,7 +145,13 @@ class ClaudeAnalyst:
             "model": self.config.llm_model,
             "max_tokens": self.config.llm_max_tokens,
             "temperature": 0,
-            "thinking_effort": self.config.llm_effort,
+            "reasoning_effort": {
+                "low": "low",
+                "medium": "high",
+                "high": "high",
+                "xhigh": "max",
+                "max": "max",
+            }.get(self.config.llm_effort, "high"),
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
@@ -174,20 +180,45 @@ class ClaudeAnalyst:
                 payload = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")[:300]
-            raise RuntimeError(
-                f"openai_compatible analyst failed ({exc.code}): {detail}"
-            ) from exc
+            # kimi-linear may reject reasoning_effort / response_format — retry bare.
+            if exc.code == 400 and (
+                "effort" in detail.lower()
+                or "reasoning" in detail.lower()
+                or "response_format" in detail.lower()
+            ):
+                body.pop("reasoning_effort", None)
+                if "response_format" in detail.lower():
+                    body.pop("response_format", None)
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(body).encode("utf-8"),
+                    method="POST",
+                    headers={
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {self.config.llm_api_key or 'local'}",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=600) as resp:
+                    payload = json.loads(resp.read().decode("utf-8"))
+            else:
+                raise RuntimeError(
+                    f"openai_compatible analyst failed ({exc.code}): {detail}"
+                ) from exc
         choices = payload.get("choices") or []
         if not choices:
             raise RuntimeError(
                 f"openai_compatible analyst returned no choices: {payload!r}"
             )
-        text = (choices[0].get("message") or {}).get("content") or "{}"
+        text = (choices[0].get("message") or {}).get("content")
         if isinstance(text, list):
             text = "".join(
                 part.get("text", "")
                 for part in text
                 if isinstance(part, dict)
+            )
+        if not isinstance(text, str) or not text.strip():
+            raise RuntimeError(
+                f"openai_compatible analyst returned empty content: {payload!r}"
             )
         data = json.loads(text)
         return self._normalize(

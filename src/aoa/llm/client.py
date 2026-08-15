@@ -26,6 +26,14 @@ class LLMError(RuntimeError):
 _VALID_EFFORT = frozenset({"low", "medium", "high", "xhigh", "max"})
 _VALID_PROVIDERS = frozenset({"anthropic", "openai_compatible"})
 _DEFAULT_BASE_URL = "http://127.0.0.1:8000/v1"
+# WASTE accept low|high|max for reasoning_effort; map AOA medium/xhigh.
+_WASTE_EFFORT = {
+    "low": "low",
+    "medium": "high",
+    "high": "high",
+    "xhigh": "max",
+    "max": "max",
+}
 
 
 class LLMClient:
@@ -199,7 +207,9 @@ class LLMClient:
                 {"role": "user", "content": prompt},
             ],
         }
-        body["thinking_effort"] = self.effort
+        # WASTE documents reasoning_effort (thinking_effort is an alias).
+        # kimi-linear / chat.json may reject effort — retry without it on 400.
+        body["reasoning_effort"] = _WASTE_EFFORT.get(self.effort, "high")
         if schema is not None:
             body["response_format"] = {
                 "type": "json_schema",
@@ -209,6 +219,20 @@ class LLMClient:
                     "strict": True,
                 },
             }
+        try:
+            return self._openai_post(body)
+        except LLMError as exc:
+            detail = str(exc).lower()
+            if "400" in detail and (
+                "effort" in detail or "reasoning" in detail or "response_format" in detail
+            ):
+                body.pop("reasoning_effort", None)
+                if "response_format" in detail:
+                    body.pop("response_format", None)
+                return self._openai_post(body)
+            raise
+
+    def _openai_post(self, body: dict[str, Any]) -> str:
         url = f"{self.base_url}/chat/completions"
         data = json.dumps(body).encode("utf-8")
         req = urllib.request.Request(

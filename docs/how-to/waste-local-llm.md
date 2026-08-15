@@ -45,8 +45,8 @@ AOA_EFFORT=high
 ```
 
 No `ANTHROPIC_API_KEY` is required. Change `AOA_MODEL` to match the served
-container. `AOA_EFFORT` is forwarded as `thinking_effort` when the server
-supports it.
+container. `AOA_EFFORT` is sent as WASTE `reasoning_effort` (medium→high,
+xhigh→max) and dropped automatically if the model rejects it.
 
 ## 3. Verify
 

@@ -343,10 +343,10 @@ def cmd_bars(
                 return 1
         if stocks:
             try:
-                broker = build_broker(cfg)
-                for sym in stocks:
-                    bars = broker.get_bars(sym, timeframe=timeframe, limit=limit)
-                    _print_bars_table(sym, bars, asset="Stock")
+                with build_broker(cfg) as broker:
+                    for sym in stocks:
+                        bars = broker.get_bars(sym, timeframe=timeframe, limit=limit)
+                        _print_bars_table(sym, bars, asset="Stock")
             except BrokerError as exc:
                 print(f"Moomoo bars failed: {exc}", file=sys.stderr)
                 return 1
@@ -451,13 +451,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         return 1
     try:
         llm = build_llm(cfg)
-        if cfg.llm_provider == "openai_compatible":
-            print(
-                f"  ✓ LLM client initialized "
-                f"(provider=openai_compatible, base_url={cfg.llm_base_url})."
-            )
-        else:
-            print("  ✓ LLM client initialized (provider=anthropic).")
+        base = f", base_url={cfg.llm_base_url}" if cfg.llm_provider == "openai_compatible" else ""
+        print(f"  ✓ LLM client initialized (provider={cfg.llm_provider}{base}).")
         llm.ping()
         print(f"  ✓ LLM reachable (model={cfg.model}).")
     except LLMError as exc:

@@ -116,7 +116,7 @@ def test_openai_compatible_structured_uses_chat_completions():
     body = json.loads(req.data.decode("utf-8"))
     assert body["model"] == "k3"
     assert body["response_format"]["type"] == "json_schema"
-    assert body["thinking_effort"] == "high"
+    assert body["reasoning_effort"] == "high"
 
 
 def test_openai_compatible_http_error_surfaces_detail():
@@ -188,3 +188,34 @@ def test_llm_from_config_openai_compatible():
     client = llm_from_config(cfg)
     assert client.provider == "openai_compatible"
     assert client.model == "k3"
+
+
+def test_openai_retries_without_effort_on_400():
+    client = LLMClient(
+        provider="openai_compatible",
+        model="kimi-linear",
+        base_url="http://127.0.0.1:8000/v1",
+    )
+    err = HTTPError(
+        "http://127.0.0.1:8000/v1/chat/completions",
+        400,
+        "bad",
+        hdrs=None,
+        fp=BytesIO(b'{"error":"reasoning_effort is not supported by this model"}'),
+    )
+    ok_payload = {"choices": [{"message": {"content": "hello"}}]}
+    fake_ok = MagicMock()
+    fake_ok.read.return_value = json.dumps(ok_payload).encode("utf-8")
+    fake_ok.__enter__.return_value = fake_ok
+    fake_ok.__exit__.return_value = None
+
+    with patch(
+        "aoa.llm.client.urllib.request.urlopen",
+        side_effect=[err, fake_ok],
+    ) as mock_open:
+        text = client.complete("sys", "prompt", max_tokens=16)
+
+    assert text == "hello"
+    assert mock_open.call_count == 2
+    second = json.loads(mock_open.call_args_list[1].args[0].data.decode("utf-8"))
+    assert "reasoning_effort" not in second
