@@ -104,6 +104,7 @@ def test_verify_stock_bars_empty_response():
 
 def test_cmd_doctor_reports_stock_bars_check(monkeypatch):
     cfg = Config(
+        broker="alpaca",
         anthropic_api_key="x",
         alpaca_key_id="k",
         alpaca_secret_key="s",

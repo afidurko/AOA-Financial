@@ -308,8 +308,9 @@ def _ensure_env_template() -> None:
         return
     env_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
     print(
-        "Created .env from .env.example — add your Alpaca paper keys there "
-        "for stock data (crypto works without keys).\n"
+        "Created .env from .env.example — defaults are Moomoo + local WASTE LLM.\n"
+        "  Start OpenD (127.0.0.1:11111) and WASTE serve (:8000), then: aoa doctor\n"
+        "  Guide: docs/how-to/moomoo-setup.md · docs/how-to/waste-local-llm.md\n"
     )
 
 
@@ -397,25 +398,28 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
         return 0
-    fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
-    try:
-        crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
-        print(
-            f"  ✓ Crypto bars API (no keys); BTC/USD last close "
-            f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
-        )
-    except BrokerError as exc:
-        print(f"  ✗ Crypto bars check failed: {exc}")
-        return 1
-    finally:
-        fetcher.close()
-    if not cfg.has_brokerage_creds:
-        print(
-            "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
-            "(crypto already works)."
-        )
-        print("  · Skipping broker account and stock-bar checks until keys are set.")
-        return 0
+
+    if cfg.broker == "alpaca":
+        fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
+        try:
+            crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
+            print(
+                f"  ✓ Crypto bars API (no keys); BTC/USD last close "
+                f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
+            )
+        except BrokerError as exc:
+            print(f"  ✗ Crypto bars check failed: {exc}")
+            return 1
+        finally:
+            fetcher.close()
+        if not cfg.has_brokerage_creds:
+            print(
+                "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
+                "(crypto already works)."
+            )
+            print("  · Skipping broker account and stock-bar checks until keys are set.")
+            return 0
+
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()

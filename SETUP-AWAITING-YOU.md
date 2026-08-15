@@ -85,7 +85,8 @@ You should see:
 - `✓ Broker: moomoo`
 - `✓ Moomoo OpenD target: 127.0.0.1:11111 (US, simulate)`
 - `✓ Broker reachable (moomoo-paper); equity $...`
-- `✓ LLM reachable (model=...)`
+- `✓ LLM client initialized (provider=openai_compatible, …)`
+- `✓ LLM reachable (model=kimi-linear)`
 
 ---
 
