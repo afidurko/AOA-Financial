@@ -155,6 +155,12 @@ class IntegritySquad:
                     )
                     if notify:
                         self._dispatch_notification(notification, proposal)
+                    from aoa.integrity.attention import write_cursor_attention_file
+
+                    attention_path = write_cursor_attention_file(self.queue_path)
+                    notes.append(
+                        f"Cursor Needs Attention payload: {attention_path}"
+                    )
                     outcome = "awaiting_user"
                 else:
                     outcome = "issues-no-proposal"
@@ -271,6 +277,10 @@ class IntegritySquad:
         result["logged"] = logged
         result["channels"] = sorted(set(channels))
         result["pushed"] = bool(result["channels"])
+        from aoa.integrity.attention import write_cursor_attention_file
+
+        attention_path = write_cursor_attention_file(self.queue_path)
+        result["cursor_attention"] = str(attention_path)
         if not notify_info.get("configured") and not force:
             result["detail"] = (
                 notify_info.get("setup_hint")
@@ -280,6 +290,9 @@ class IntegritySquad:
             result["detail"] = f"Pushed via {', '.join(result['channels'])}."
         else:
             result["detail"] = "Notifications logged; push channel unavailable."
+        result["detail"] += (
+            " Surface in Cursor via: aoa integrity attention --cursor"
+        )
         return result
 
     def _dispatch_notification(

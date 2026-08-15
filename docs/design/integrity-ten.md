@@ -60,6 +60,7 @@ aoa integrity run              # one cycle; notify if action needs approval
 aoa integrity watch --interval 300
 aoa integrity queue            # list pending corrective proposals
 aoa integrity queue --push     # notify user about pending queue
+aoa integrity attention --cursor  # Cursor Needs Attention MCP payload
 aoa integrity approve <id>     # implant corrective action
 aoa integrity reject <id>      # decline
 ```
@@ -74,6 +75,8 @@ Aaron pushes queue alerts when a channel is configured:
 
 Toggle: `AOA_INTEGRITY_NOTIFY_QUEUE=true` (default). Check: `aoa integrity status`.
 
+**Cursor Needs Attention:** `aoa integrity attention --cursor` emits `external_action` items for MCP `request-environment-setup-actions`. Dashboard tab **Needs Attention** + `/api/needs-attention` for local approve/reject.
+
 ## Acceptance
 
 1. Roster is exactly 10 unique names, all subset of the twelve-member roster.
@@ -81,4 +84,5 @@ Toggle: `AOA_INTEGRITY_NOTIFY_QUEUE=true` (default). Check: `aoa integrity statu
 3. Non-OK findings create a pending proposal; implant requires explicit approve.
 4. Approve writes a brain capture and optional Reed handoff; never merges.
 5. `aoa integrity queue --push` notifies via configured channels (or reports setup hint).
-6. Tests cover roster size, cohesion check, propose/approve/reject, queue notify, CLI smoke.
+6. `aoa integrity attention --cursor` emits MCP-ready external_action payload.
+7. Tests cover roster size, cohesion check, propose/approve/reject, queue notify, CLI smoke.

@@ -2174,9 +2174,47 @@ def cmd_integrity_queue(
         print(result.get("detail") or "")
         if result.get("channels"):
             print(f"Channels: {', '.join(result['channels'])}")
+        if result.get("cursor_attention"):
+            print(f"Cursor payload: {result['cursor_attention']}")
+            print("  Cloud agents: aoa integrity attention --cursor")
     if not pending:
         return 0
     return 0 if result.get("pushed") or not notify.get("configured") else 1
+
+
+def cmd_integrity_attention(cfg: Config, *, cursor: bool = False, as_json: bool = False) -> int:
+    """Emit Needs Attention feed; with --cursor print MCP external_action payload."""
+    from aoa.config import data_dir_for
+    from aoa.integrity.actions import default_queue_path
+    from aoa.integrity.attention import (
+        cursor_mcp_payload,
+        needs_attention_feed,
+        write_cursor_attention_file,
+    )
+
+    queue = default_queue_path(Path.cwd(), data_dir_for(cfg.env) / "integrity")
+    path = write_cursor_attention_file(queue)
+    payload = cursor_mcp_payload(queue) if cursor else needs_attention_feed(
+        integrity_queue_path=queue
+    )
+    if as_json or cursor:
+        print(json.dumps(payload, indent=2))
+    else:
+        feed = needs_attention_feed(integrity_queue_path=queue)
+        print(f"Needs Attention — {feed['count']} item(s)")
+        print(f"Cursor payload: {path}")
+        for item in feed["items"]:
+            print(f"  • [{item['source']}] {item['title']} ({item['id']})")
+            for act in item.get("actions") or []:
+                print(f"      {act.get('label')}: {act.get('command')}")
+        if feed["count"] == 0:
+            print("  (nothing pending)")
+        else:
+            print(
+                "\nIn Cursor Cloud: run `aoa integrity attention --cursor` then "
+                "CallMcpTool request-environment-setup-actions with the actions array."
+            )
+    return 0 if payload.get("pending", payload.get("count", 0)) >= 0 else 0
 
 
 def cmd_integrity_approve(cfg: Config, proposal_id: str, *, note: str = "") -> int:
@@ -2948,6 +2986,16 @@ def main(argv: list[str] | None = None) -> int:
         help="Notify each pending proposal separately (default: one digest).",
     )
     integ_queue.add_argument("--json", action="store_true", help="Emit JSON.")
+    integ_attn = integ_sub.add_parser(
+        "attention",
+        help="Needs Attention feed for dashboard + Cursor Cloud.",
+    )
+    integ_attn.add_argument(
+        "--cursor",
+        action="store_true",
+        help="Emit MCP request-environment-setup-actions payload (external_action).",
+    )
+    integ_attn.add_argument("--json", action="store_true", help="Emit JSON.")
     integ_approve = integ_sub.add_parser(
         "approve",
         help="User approves implant of a corrective proposal.",
@@ -3267,6 +3315,12 @@ def main(argv: list[str] | None = None) -> int:
                     cfg,
                     push=getattr(args, "push", False),
                     digest=not getattr(args, "per_item", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.integrity_command == "attention":
+                return cmd_integrity_attention(
+                    cfg,
+                    cursor=getattr(args, "cursor", False),
                     as_json=getattr(args, "json", False),
                 )
             if args.integrity_command == "approve":

@@ -207,6 +207,49 @@ def test_cli_integrity_queue(capsys):
     assert "notify" in data
 
 
+def test_cursor_attention_payload(tmp_path: Path):
+    from aoa.integrity.actions import propose_from_reports
+    from aoa.integrity.attention import cursor_mcp_payload, write_cursor_attention_file
+
+    queue = tmp_path / "corrective_queue.json"
+    reports = [
+        DomainReport(
+            domain="code",
+            agent="Bob",
+            status=IntegritySeverity.DEGRADED,
+            findings=[
+                IntegrityFinding(
+                    domain="code",
+                    agent="Bob",
+                    status=IntegritySeverity.DEGRADED,
+                    detail="needs attention demo",
+                    automatable=True,
+                )
+            ],
+            summary="degraded",
+        )
+    ]
+    prop = propose_from_reports(reports, queue_path=queue)
+    assert prop is not None
+    payload = cursor_mcp_payload(queue)
+    assert payload["pending"] == 1
+    assert payload["mcp_tool"] == "request-environment-setup-actions"
+    assert any(a["type"] == "external_action" for a in payload["actions"])
+    assert any(prop.id in a["id"] for a in payload["actions"])
+    path = write_cursor_attention_file(queue)
+    assert path.is_file()
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["pending"] == 1
+
+
+def test_cli_integrity_attention_cursor(capsys, tmp_path, monkeypatch):
+    # Use real queue path under cwd data — just ensure CLI emits JSON shape
+    assert main(["integrity", "attention", "--cursor"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert data["mcp_tool"] == "request-environment-setup-actions"
+    assert "actions" in data
+
+
 def _seed_minimal_repo(root: Path) -> None:
     (root / "STATE.md").write_text("## Loop automation\n\n- L1: enabled\n", encoding="utf-8")
     (root / "loop-constraints.md").write_text(

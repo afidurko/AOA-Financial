@@ -84,12 +84,15 @@ Continuous cohesive unit (10 of 12 ATTL members) for code, workspaces, neural me
 aoa integrity roster
 aoa integrity run              # check + notify if corrective needs approve
 aoa integrity queue --push     # notify pending corrective queue
+aoa integrity attention --cursor  # Cursor Needs Attention MCP payload
 aoa integrity watch --interval 300
 aoa integrity approve <id>     # user implants corrective action
 aoa integrity reject <id>
 ```
 
 Design: [docs/design/integrity-ten.md](docs/design/integrity-ten.md). Hard floor still applies; never auto-merge.
+
+When Integrity Ten queues a corrective proposal, cloud agents MUST surface it in Cursor **Needs Attention** via `aoa integrity attention --cursor` then MCP `request-environment-setup-actions` (`external_action`). Dashboard tab: **Needs Attention**.
 
 Official Moomoo skill packs live under `.cursor/skills/{moomooapi,install-moomoo-opend}/` and are mirrored in `.claude/skills/` for Claude Code. Source: [opend-skills.zip](https://openapi.moomoo.com/skills/opend-skills.zip). Prefer `/moomooapi` (or natural language about quotes/orders); use `/install-moomoo-opend` to install OpenD on a local machine.
 

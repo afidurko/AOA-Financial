@@ -36,8 +36,21 @@ aoa integrity queue --push
 aoa integrity run                 # check; notify on new proposal
 aoa integrity queue               # list pending
 aoa integrity queue --push        # digest push for pending queue
+aoa integrity attention           # Needs Attention feed (dashboard + Cursor)
+aoa integrity attention --cursor  # MCP external_action payload for Cursor Cloud
 aoa integrity approve <id>        # implant
 aoa integrity reject <id>         # decline
 ```
+
+## Cursor Needs Attention
+
+Cloud agents surface pending integrity work in Cursor’s **Needs Attention** tab:
+
+1. `aoa integrity attention --cursor` → JSON with `actions` (`external_action` items)
+2. Call MCP `cursor-cloud` / `request-environment-setup-actions` with that `actions` array
+3. User approves/rejects from Needs Attention, or runs the printed CLI commands
+4. Dashboard: **Needs Attention** tab + `/api/needs-attention`
+
+Payload is also written to `data/{env}/integrity/cursor_needs_attention.json` whenever a proposal is queued.
 
 Hard floor: notifications never auto-merge; implant waits on your approve.

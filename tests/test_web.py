@@ -56,6 +56,24 @@ def test_dashboard_html(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "AOA Financial" in r.text
+    assert "Needs Attention" in r.text
+
+
+def test_api_needs_attention(client):
+    r = client.get("/api/needs-attention")
+    assert r.status_code == 200
+    data = r.json()
+    assert "items" in data
+    assert "cursor" in data
+    assert data["cursor"]["mcp_tool"] == "request-environment-setup-actions"
+
+
+def test_api_integrity_queue(client):
+    r = client.get("/api/integrity/queue")
+    assert r.status_code == 200
+    data = r.json()
+    assert "pending" in data
+    assert "items" in data
 
 
 def test_api_status(client):
