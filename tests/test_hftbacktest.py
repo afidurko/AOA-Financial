@@ -42,8 +42,9 @@ def test_cmd_hft_status_json(capsys):
     code = cmd_hft_status(as_json=True)
     out = json.loads(capsys.readouterr().out)
     assert out["offline_only"] is True
-    assert out["installed"] is HAS_HFTBACKTEST
-    assert code == (0 if HAS_HFTBACKTEST else 1)
+    assert out["hftbacktest"]["installed"] is HAS_HFTBACKTEST
+    assert out["orderbook"]["ok"] is True
+    assert code == 0
 
 
 @pytestmark_hft

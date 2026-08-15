@@ -600,6 +600,7 @@ aoa watch AAPL MSFT --interval 30      # LIVE: re-analyze & re-simulate as price
 # Optional HFT/L2 backtest (pip install -e ".[hftbacktest]"; offline only):
 aoa hft status
 aoa hft smoke                           # synthetic L2 depth smoke (no orders)
+aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # See docs/how-to/hftbacktest-integration.md
 ```
 

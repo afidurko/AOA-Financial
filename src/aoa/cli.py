@@ -14,7 +14,7 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
-  aoa hft        Offline HFT/L2 backtest lane (optional hftbacktest extra).
+  aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
@@ -767,23 +767,51 @@ def cmd_scenarios(cfg: Config) -> int:
 
 
 def cmd_hft_status(*, as_json: bool) -> int:
-    from aoa.hftbacktest import probe_status
+    from aoa.hftbacktest import probe_status as probe_hft
+    from aoa.orderbook import probe_status as probe_book
 
-    status = probe_status()
+    hft = probe_hft()
+    book = probe_book()
+    payload = {"hftbacktest": hft, "orderbook": book, "offline_only": True}
     if as_json:
-        print(json.dumps(status, indent=2))
-        return 0 if status["installed"] else 1
-    print("=== HFT backtest (hftbacktest) ===")
-    print(f"  installed: {status['installed']}")
-    print(f"  version:   {status.get('version') or '—'}")
-    print(f"  engine:    {status.get('engine') or '—'}")
-    print(f"  offline:   {status.get('offline_only', True)}")
-    print(f"  upstream:  {status.get('upstream')}")
-    if not status["installed"]:
-        print(f"  install:   {status.get('hint')}")
-        return 1
-    print(f"  next:      {status.get('hint')}")
-    return 0
+        print(json.dumps(payload, indent=2))
+        # Succeed if either lane is usable; book is always vendored.
+        return 0 if book.get("ok") else 1
+    print("=== HFT research lanes (offline) ===")
+    print("--- hftbacktest ---")
+    print(f"  installed: {hft['installed']}")
+    print(f"  version:   {hft.get('version') or '—'}")
+    print(f"  engine:    {hft.get('engine') or '—'}")
+    print(f"  upstream:  {hft.get('upstream')}")
+    if not hft["installed"]:
+        print(f"  install:   {hft.get('hint')}")
+    else:
+        print(f"  next:      {hft.get('hint')}")
+    print("--- orderbook (HFT-Orderbook) ---")
+    print(f"  ok:        {book.get('ok')}")
+    print(f"  engine:    {book.get('engine')}")
+    print(f"  impl:      {book.get('implementation')}")
+    print(f"  upstream:  {book.get('upstream')}")
+    print(f"  next:      {book.get('hint')}")
+    return 0 if book.get("ok") else 1
+
+
+def cmd_hft_book_smoke(*, as_json: bool) -> int:
+    from aoa.orderbook import run_book_smoke
+
+    result = run_book_smoke()
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== HFT orderbook smoke (vendored LOB) ===")
+        print(f"  ok:         {result.ok}")
+        print(f"  best bid:   {result.best_bid}")
+        print(f"  best ask:   {result.best_ask}")
+        print(f"  bid volume: {result.bid_volume}")
+        print(f"  ask volume: {result.ask_volume}")
+        print(f"  orders:     {result.order_count}  levels={result.levels}")
+        print(f"  detail:     {result.detail}")
+    return 0 if result.ok else 1
 
 
 def cmd_hft_smoke(
@@ -1653,7 +1681,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Offline HFT/L2 backtest via optional hftbacktest (never live).",
     )
     hft_sub = hft.add_subparsers(dest="hft_command", required=True)
-    hft_status = hft_sub.add_parser("status", help="Show whether hftbacktest is installed.")
+    hft_status = hft_sub.add_parser("status", help="Show hftbacktest + orderbook lane status.")
     hft_status.add_argument("--json", action="store_true", help="Emit JSON.")
     hft_smoke = hft_sub.add_parser(
         "smoke", help="Run a synthetic L2 depth smoke backtest (no orders)."
@@ -1662,6 +1690,11 @@ def main(argv: list[str] | None = None) -> int:
     hft_smoke.add_argument("--steps", type=int, default=20, help="elapse() steps to advance.")
     hft_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
     hft_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    hft_book = hft_sub.add_parser(
+        "book-smoke",
+        help="Smoke the vendored HFT-Orderbook LOB (add/update/cancel; offline).",
+    )
+    hft_book.add_argument("--json", action="store_true", help="Emit JSON.")
     hft_run = hft_sub.add_parser(
         "run",
         help="Probe an on-disk hftbacktest feed (advance time; no order submission).",
@@ -1888,6 +1921,8 @@ def main(argv: list[str] | None = None) -> int:
                     seed=args.seed,
                     as_json=getattr(args, "json", False),
                 )
+            if args.hft_command == "book-smoke":
+                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
             if args.hft_command == "run":
                 return cmd_hft_run(
                     data=args.data,
