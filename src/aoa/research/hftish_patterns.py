@@ -353,6 +353,7 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
     }
 
 __all__ = [
+    "BookDiagnosis",
     "FollowSignal",
     "LevelChange",
     "Side",
