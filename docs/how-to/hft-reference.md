@@ -6,6 +6,9 @@ stack (CTP market data / orders, ZeroMQ IPC, waf build) with open strategy and
 backtest sources. AOA Financial keeps it as an **optional sibling reference** —
 same pattern as AutoHedge / FinancePy — not as a live order path.
 
+This is **not** the optional offline L2 engine (`aoa.hftbacktest` /
+[hftbacktest-integration.md](hftbacktest-integration.md)); that lane is separate.
+
 ## What AOA takes from it
 
 | Upstream module | Idea | AOA landing |
