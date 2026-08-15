@@ -12,8 +12,10 @@ Sibling:
 
 - **Reference only** — rise ratio + weighted depth feature ideas
 - Python ports: `aoa.research.sgx_orderbook_patterns`
+- Bridge: `snapshot_from_limit_order_book` → vendored `aoa.orderbook`
 - Setup: `./scripts/sgx-orderbook-setup.sh`
 - Guide: [docs/how-to/sgx-orderbook-reference.md](../../docs/how-to/sgx-orderbook-reference.md)
+- Lane map: [docs/how-to/hft-research-lane.md](../../docs/how-to/hft-research-lane.md)
 
 ## Hard floor
 
