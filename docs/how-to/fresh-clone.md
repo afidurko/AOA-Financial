@@ -158,21 +158,7 @@ export AOA_QM_URL=http://localhost:8081
 ```
 
 See [qm-integration.md](qm-integration.md). Other companions:
-[docs/help.md](../help.md) · [workspaces.md](workspaces.md).
-
-## 8. SGX order-book strategy reference (optional)
-
-Clone the SGX A50 full-LOB ML sibling for rise-ratio / weighted-depth reading
-([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
-AOA does not run the notebooks:
-
-```bash
-./scripts/sgx-orderbook-setup.sh
-```
-
-See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
-`aoa.research.sgx_orderbook_patterns`. Companion map:
-[hft-research-lane.md](hft-research-lane.md).
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
 
 ## 11. VisualHFT (optional)
 
@@ -187,7 +173,18 @@ aoa workspaces status
 
 See [visualhft-integration.md](visualhft-integration.md).
 
-## 12. example-hftish reference (optional)
+## 12. Workspaces (optional)
+
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+
+```bash
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+```
+
+See [workspace-mesh.md](workspace-mesh.md).
+
+## 13. example-hftish reference (optional)
 
 Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
 reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
@@ -199,3 +196,17 @@ not run it:
 
 See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
 `aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.
+
+## 14. SGX order-book strategy reference (optional)
+
+Clone the SGX A50 full-LOB ML sibling for rise-ratio / weighted-depth reading
+([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
+AOA does not run the notebooks:
+
+```bash
+./scripts/sgx-orderbook-setup.sh
+```
+
+See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
+`aoa.research.sgx_orderbook_patterns`. Companion map:
+[hft-research-lane.md](hft-research-lane.md).

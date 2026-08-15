@@ -5,9 +5,16 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("fastapi")
-pytest.importorskip("httpx")
+try:
+    import httpx2  # noqa: F401
+except ImportError:  # pragma: no cover - fallback when httpx2 extra missing
+    pytest.importorskip("httpx")
 
-from fastapi.testclient import TestClient  # noqa: E402
+pytestmark = pytest.mark.filterwarnings(
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+)
+
+from starlette.testclient import TestClient  # noqa: E402
 
 from aoa.config import Config, RiskLimits  # noqa: E402
 from aoa.web.app import create_app  # noqa: E402

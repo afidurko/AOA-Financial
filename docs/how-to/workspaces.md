@@ -32,10 +32,11 @@ Shows whether each companion is **linked** (env URL / install) and **present**
 | OpenStock | `./scripts/openstock-setup.sh` | `AOA_OPENSTOCK_URL` | [openstock-integration.md](openstock-integration.md) |
 | QM | `./scripts/qm-setup.sh` | `AOA_QM_URL` | [qm-integration.md](qm-integration.md) |
 | VisualHFT | `./scripts/visualhft-setup.sh` | `AOA_VISUALHFT_URL` | [visualhft-integration.md](visualhft-integration.md) |
-| hftbacktest | `pip install -e ".[hftbacktest]"` | (optional package) | [hftbacktest-integration.md](hftbacktest-integration.md) |
+| hftbacktest | `pip install -e ".[hftbacktest]"` (orderbook vendored) | (optional package) | [hftbacktest-integration.md](hftbacktest-integration.md) |
 
-`hftbacktest-integration.md` ships with the optional HFT PR/extra; until then
-`aoa workspaces status` still reports install presence.
+The HFT workspace is **linked** when the vendored orderbook is healthy and/or
+the optional `hftbacktest` extra is installed. `aoa hft`, `aoa visualhft`, and
+`aoa workspaces` are offline — they do not create `.env` or load brokerage config.
 
 ## Dashboard
 
