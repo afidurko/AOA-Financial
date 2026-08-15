@@ -7,6 +7,10 @@ HFT_DIR="${HFT_DIR:-$ROOT/hft}"
 HFT_REPO="${HFT_REPO:-https://github.com/afidurko/hft.git}"
 
 if [[ ! -d "$HFT_DIR/.git" ]]; then
+  if [[ -e "$HFT_DIR" ]]; then
+    echo "error: $HFT_DIR exists but is not a git clone; remove or set HFT_DIR elsewhere" >&2
+    exit 1
+  fi
   echo "Cloning HFT reference into $HFT_DIR"
   git clone "$HFT_REPO" "$HFT_DIR"
 else
