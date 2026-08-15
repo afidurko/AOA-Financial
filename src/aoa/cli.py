@@ -620,6 +620,9 @@ def cmd_loop(cfg: Config) -> int:
 
 
 def cmd_loop_brief(cfg: Config, *, push: bool, as_json: bool) -> int:
+    from aoa.config import data_dir_for
+    from aoa.integrity.actions import default_queue_path
+    from aoa.integrity.notify import pending_queue_items
     from aoa.loop.user_brief import (
         build_loop_user_brief,
         deliver_loop_brief,
@@ -631,10 +634,13 @@ def cmd_loop_brief(cfg: Config, *, push: bool, as_json: bool) -> int:
     pending: list[dict] = []
     if team.analytics is not None:
         pending = team.analytics.store.list_pending_responses()
+    integ_path = default_queue_path(Path.cwd(), data_dir_for(cfg.env) / "integrity")
+    integ_pending = pending_queue_items(integ_path)
     brief = build_loop_user_brief(
         assistant_brief=assistant,
         repair_summary=repair_queue_summary(cfg.repair_path),
         pending_responses=pending,
+        integrity_summary={"pending": len(integ_pending)},
     )
 
     if as_json:
@@ -653,6 +659,11 @@ def cmd_loop_brief(cfg: Config, *, push: bool, as_json: bool) -> int:
                 for item in items:
                     hint = f" → {item['action_hint']}" if item.get("action_hint") else ""
                     print(f"  • {item['title']}: {item['detail']}{hint}")
+        if brief.integrity_queue.get("pending"):
+            print(
+                f"\nINTEGRITY QUEUE: {brief.integrity_queue['pending']} pending "
+                "(aoa integrity queue)"
+            )
         if brief.suggested_replies:
             print("\nAWAITING YOUR REPLY:")
             for reply in brief.suggested_replies:
@@ -1989,12 +2000,22 @@ def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:
 
 
 def _integrity_squad(cfg: Config):
+    from aoa.analytics.store import AnalyticsStore
     from aoa.config import data_dir_for
     from aoa.integrity import IntegritySquad
+    from aoa.notify.iphone import IPhoneNotifier
 
+    analytics = None
+    if cfg.analytics_enabled:
+        try:
+            analytics = AnalyticsStore(cfg.analytics_db_path)
+        except Exception:  # noqa: BLE001
+            analytics = None
     return IntegritySquad(
         repo_root=Path.cwd(),
         data_dir=data_dir_for(cfg.env) / "integrity",
+        notifier=IPhoneNotifier.from_config(cfg),
+        analytics_store=analytics,
     )
 
 
@@ -2014,6 +2035,12 @@ def cmd_integrity_status(cfg: Config, *, as_json: bool = False) -> int:
         f"required_ok={brain.get('required_ok')}"
     )
     print(f"Queue: {status['queue_path']}")
+    notify = status.get("notify") or {}
+    channels = notify.get("channels") or []
+    if notify.get("configured"):
+        print(f"Notify: configured via {', '.join(channels)}")
+    else:
+        print(f"Notify: not configured — {notify.get('setup_hint')}")
     return 0
 
 
@@ -2037,6 +2064,9 @@ def cmd_integrity_run(
     as_json: bool = False,
 ) -> int:
     squad = _integrity_squad(cfg)
+    # Honor AOA_INTEGRITY_NOTIFY_QUEUE when caller did not disable notify.
+    if notify and not cfg.integrity_notify_queue:
+        notify = False
     result = squad.run(dry_run=dry_run, notify=notify)
     if as_json:
         print(json.dumps(result.to_dict(), indent=2))
@@ -2049,6 +2079,11 @@ def cmd_integrity_run(
         print(f"Proposal: {result.proposal.get('id')} (awaiting user approve/reject)")
         print("  aoa integrity approve <id>   # implant corrective action")
         print("  aoa integrity reject <id>    # decline implant")
+        print("  aoa integrity queue --push   # re-notify pending queue")
+    if result.notification and result.notification.get("channels"):
+        print(f"Notified via: {', '.join(result.notification['channels'])}")
+    elif result.proposal and notify:
+        print("Notify: logged only (configure AOA_NTFY_TOPIC / Pushover / webhook).")
     if result.capture:
         print(f"Capture: {result.capture}")
     return 0 if not result.paused else 2
@@ -2063,12 +2098,12 @@ def cmd_integrity_watch(
     notify: bool = True,
 ) -> int:
     squad = _integrity_squad(cfg)
+    if notify and not cfg.integrity_notify_queue:
+        notify = False
     print(
         f"Integrity Ten watch — interval={interval}s "
         f"iterations={'∞' if iterations is None else iterations}"
     )
-    # Finite iterations for CLI safety when None not intended; default one pass
-    # unless user passes --iterations. Continuous when iterations is None.
     results = squad.watch(
         interval_seconds=interval,
         iterations=iterations,
@@ -2082,6 +2117,66 @@ def cmd_integrity_watch(
         if result.paused:
             return 2
     return 0
+
+
+def cmd_integrity_queue(
+    cfg: Config,
+    *,
+    push: bool = False,
+    digest: bool = True,
+    as_json: bool = False,
+) -> int:
+    """List pending corrective queue; optionally push notifications."""
+    squad = _integrity_squad(cfg)
+    status = squad.status()
+    pending = status.get("proposals") or []
+    if as_json and not push:
+        print(
+            json.dumps(
+                {
+                    "pending": len(pending),
+                    "proposals": pending,
+                    "notify": status.get("notify"),
+                    "queue_path": status.get("queue_path"),
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    print(f"Integrity corrective queue — {len(pending)} pending")
+    print(f"Path: {status.get('queue_path')}")
+    notify = status.get("notify") or {}
+    if notify.get("configured"):
+        print(f"Notify channels: {', '.join(notify.get('channels') or [])}")
+    else:
+        print(f"Notify: not configured — {notify.get('setup_hint')}")
+    for prop in pending:
+        print(f"  • {prop.get('id')}: {prop.get('title')}")
+        print(f"      aoa integrity approve {prop.get('id')}")
+        print(f"      aoa integrity reject {prop.get('id')}")
+    if not pending:
+        print("  (empty)")
+
+    if not push:
+        return 0
+
+    if not cfg.integrity_notify_queue:
+        print(
+            "AOA_INTEGRITY_NOTIFY_QUEUE=false — refusing push.",
+            file=sys.stderr,
+        )
+        return 1
+    result = squad.notify_queue(digest=digest)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(result.get("detail") or "")
+        if result.get("channels"):
+            print(f"Channels: {', '.join(result['channels'])}")
+    if not pending:
+        return 0
+    return 0 if result.get("pushed") or not notify.get("configured") else 1
 
 
 def cmd_integrity_approve(cfg: Config, proposal_id: str, *, note: str = "") -> int:
@@ -2838,6 +2933,21 @@ def main(argv: list[str] | None = None) -> int:
     integ_watch.add_argument(
         "--no-notify", action="store_true", help="Skip push dispatch."
     )
+    integ_queue = integ_sub.add_parser(
+        "queue",
+        help="List pending corrective queue; --push notifies the user.",
+    )
+    integ_queue.add_argument(
+        "--push",
+        action="store_true",
+        help="Push queue digest to configured iPhone channel(s).",
+    )
+    integ_queue.add_argument(
+        "--per-item",
+        action="store_true",
+        help="Notify each pending proposal separately (default: one digest).",
+    )
+    integ_queue.add_argument("--json", action="store_true", help="Emit JSON.")
     integ_approve = integ_sub.add_parser(
         "approve",
         help="User approves implant of a corrective proposal.",
@@ -3151,6 +3261,13 @@ def main(argv: list[str] | None = None) -> int:
                     iterations=getattr(args, "iterations", None),
                     dry_run=getattr(args, "dry_run", False),
                     notify=not getattr(args, "no_notify", False),
+                )
+            if args.integrity_command == "queue":
+                return cmd_integrity_queue(
+                    cfg,
+                    push=getattr(args, "push", False),
+                    digest=not getattr(args, "per_item", False),
+                    as_json=getattr(args, "json", False),
                 )
             if args.integrity_command == "approve":
                 return cmd_integrity_approve(

@@ -15,7 +15,6 @@ from aoa.integrity.actions import (
     apply_safe_fixes,
     build_user_notification,
     default_queue_path,
-    load_queue,
     propose_from_reports,
     resolve_proposal,
 )
@@ -91,8 +90,10 @@ class IntegritySquad:
         ]
 
     def status(self) -> dict[str, Any]:
+        from aoa.integrity.notify import notify_status_payload, pending_queue_items
+
         cs = load_constraints(self.repo_root)
-        pending = [p.to_dict() for p in load_queue(self.queue_path) if p.status == "pending"]
+        pending = [p.to_dict() for p in pending_queue_items(self.queue_path)]
         brain = BrainStore.open(self.repo_root).stats()
         return {
             "unit": "integrity-ten",
@@ -104,6 +105,7 @@ class IntegritySquad:
             "proposals": pending,
             "brain": brain,
             "queue_path": str(self.queue_path),
+            "notify": notify_status_payload(self.notifier),
         }
 
     def run(self, *, dry_run: bool = False, notify: bool = True) -> IntegrityCycleResult:
@@ -232,6 +234,54 @@ class IntegritySquad:
         )
         return {"proposal": prop.to_dict()}
 
+    def notify_queue(self, *, digest: bool = True, force: bool = False) -> dict[str, Any]:
+        """Push notifications for pending corrective-queue items (Aaron path)."""
+        from aoa.integrity.notify import (
+            build_queue_notifications,
+            notify_status_payload,
+            pending_queue_items,
+        )
+
+        pending = pending_queue_items(self.queue_path)
+        notify_info = notify_status_payload(self.notifier)
+        result: dict[str, Any] = {
+            "pending": len(pending),
+            "proposals": [p.id for p in pending],
+            "notify": notify_info,
+            "pushed": False,
+            "channels": [],
+            "logged": 0,
+            "detail": "",
+        }
+        if not pending:
+            result["detail"] = "Queue empty — nothing to notify."
+            return result
+
+        payloads = build_queue_notifications(pending, digest=digest)
+        channels: list[str] = []
+        logged = 0
+        for payload in payloads:
+            proposal = pending[0] if digest else next(
+                (p for p in pending if p.id == payload.get("proposal_id")), pending[0]
+            )
+            self._dispatch_notification(payload, proposal)
+            logged += 1
+            channels.extend(list(payload.get("channels") or []))
+
+        result["logged"] = logged
+        result["channels"] = sorted(set(channels))
+        result["pushed"] = bool(result["channels"])
+        if not notify_info.get("configured") and not force:
+            result["detail"] = (
+                notify_info.get("setup_hint")
+                or "Notify not configured — queue logged only."
+            )
+        elif result["pushed"]:
+            result["detail"] = f"Pushed via {', '.join(result['channels'])}."
+        else:
+            result["detail"] = "Notifications logged; push channel unavailable."
+        return result
+
     def _dispatch_notification(
         self,
         notification: dict[str, Any],
@@ -240,6 +290,7 @@ class IntegritySquad:
         """Log + optional iPhone push (Aaron path). Never blocks the cycle."""
         store = self.analytics_store
         nid = None
+        notification.setdefault("channels", [])
         if store is not None:
             try:
                 approval_id = store.add_approval(
@@ -257,7 +308,11 @@ class IntegritySquad:
                     title=notification["title"],
                     message=notification["message"],
                     payload={
-                        **notification,
+                        **{
+                            k: v
+                            for k, v in notification.items()
+                            if k != "channels"
+                        },
                         "approval_id": approval_id,
                         "proposal_id": proposal.id,
                     },
@@ -269,7 +324,7 @@ class IntegritySquad:
             except Exception:  # noqa: BLE001
                 pass
 
-        if self.notifier is None:
+        if self.notifier is None or not getattr(self.notifier, "configured", False):
             return
         try:
             from aoa.notify.types import NotificationKind, StructuredNotification
@@ -281,15 +336,28 @@ class IntegritySquad:
                 requires_response=True,
                 priority=str(notification.get("priority") or "normal"),
                 notification_id=nid,
-                metrics={"proposal_id": proposal.id},
+                metrics={
+                    "proposal_id": proposal.id,
+                    "proposal_ids": notification.get("proposal_ids") or [proposal.id],
+                },
             )
+            channels: list[str] = []
             if hasattr(self.notifier, "send_structured"):
-                self.notifier.send_structured(structured)
+                channels = list(self.notifier.send_structured(structured) or [])
             elif hasattr(self.notifier, "send"):
-                self.notifier.send(structured)  # type: ignore[arg-type]
-            if store is not None and nid is not None:
-                # Best-effort: mark pushed if send did not raise.
-                pass
+                from aoa.notify.iphone import IPhoneNotification, NotificationReason
+
+                channels = list(
+                    self.notifier.send(
+                        IPhoneNotification(
+                            title=notification["title"],
+                            message=notification["message"],
+                            reason=NotificationReason.NEEDS_VERIFICATION,
+                        )
+                    )
+                    or []
+                )
+            notification["channels"] = channels
         except Exception:  # noqa: BLE001
             pass
 

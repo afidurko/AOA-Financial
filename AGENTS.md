@@ -83,6 +83,7 @@ Continuous cohesive unit (10 of 12 ATTL members) for code, workspaces, neural me
 ```bash
 aoa integrity roster
 aoa integrity run              # check + notify if corrective needs approve
+aoa integrity queue --push     # notify pending corrective queue
 aoa integrity watch --interval 300
 aoa integrity approve <id>     # user implants corrective action
 aoa integrity reject <id>

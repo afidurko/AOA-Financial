@@ -150,6 +150,63 @@ def test_cli_integrity_run_dry(capsys):
     assert "outcome:" in out
 
 
+def test_queue_notify_digest_and_push(tmp_path: Path, monkeypatch):
+    from aoa.integrity.actions import propose_from_reports
+    from aoa.notify.iphone import IPhoneNotifier
+
+    queue = tmp_path / "corrective_queue.json"
+    reports = [
+        DomainReport(
+            domain="code",
+            agent="Bob",
+            status=IntegritySeverity.DEGRADED,
+            findings=[
+                IntegrityFinding(
+                    domain="code",
+                    agent="Bob",
+                    status=IntegritySeverity.DEGRADED,
+                    detail="queue notify demo",
+                    automatable=True,
+                )
+            ],
+            summary="degraded",
+        )
+    ]
+    prop = propose_from_reports(reports, queue_path=queue)
+    assert prop is not None
+
+    sent: list[str] = []
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+    def fake_post(url, **kwargs):
+        sent.append(url)
+        return FakeResp()
+
+    monkeypatch.setattr("aoa.notify.iphone.httpx.post", fake_post)
+    squad = IntegritySquad(
+        repo_root=tmp_path,
+        data_dir=tmp_path,
+        notifier=IPhoneNotifier(ntfy_topic="aoa-integrity-test"),
+    )
+    # Point queue at our temp file
+    squad.queue_path = queue
+    result = squad.notify_queue(digest=True)
+    assert result["pending"] == 1
+    assert result["pushed"] is True
+    assert "ntfy" in result["channels"]
+    assert sent and sent[0].endswith("/aoa-integrity-test")
+
+
+def test_cli_integrity_queue(capsys):
+    assert main(["integrity", "queue", "--json"]) == 0
+    data = json.loads(capsys.readouterr().out)
+    assert "pending" in data
+    assert "notify" in data
+
+
 def _seed_minimal_repo(root: Path) -> None:
     (root / "STATE.md").write_text("## Loop automation\n\n- L1: enabled\n", encoding="utf-8")
     (root / "loop-constraints.md").write_text(

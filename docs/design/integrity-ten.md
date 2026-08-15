@@ -58,9 +58,21 @@ aoa integrity roster
 aoa integrity status
 aoa integrity run              # one cycle; notify if action needs approval
 aoa integrity watch --interval 300
+aoa integrity queue            # list pending corrective proposals
+aoa integrity queue --push     # notify user about pending queue
 aoa integrity approve <id>     # implant corrective action
 aoa integrity reject <id>      # decline
 ```
+
+## Queue notifications
+
+Aaron pushes queue alerts when a channel is configured:
+
+1. **ntfy (easiest):** install the ntfy iPhone app → subscribe to a private topic → set `AOA_NTFY_TOPIC` in `.env` (never commit secrets).
+2. **Pushover:** `AOA_PUSHOVER_USER_KEY` + `AOA_PUSHOVER_APP_TOKEN`
+3. **Custom app:** real `AOA_CUSTOM_APP_WEBHOOK_URL` (placeholder `example.com` URLs are ignored)
+
+Toggle: `AOA_INTEGRITY_NOTIFY_QUEUE=true` (default). Check: `aoa integrity status`.
 
 ## Acceptance
 
@@ -68,4 +80,5 @@ aoa integrity reject <id>      # decline
 2. `aoa integrity run` produces domain reports without requiring a live broker.
 3. Non-OK findings create a pending proposal; implant requires explicit approve.
 4. Approve writes a brain capture and optional Reed handoff; never merges.
-5. Tests cover roster size, cohesion check, propose/approve/reject, CLI smoke.
+5. `aoa integrity queue --push` notifies via configured channels (or reports setup hint).
+6. Tests cover roster size, cohesion check, propose/approve/reject, queue notify, CLI smoke.

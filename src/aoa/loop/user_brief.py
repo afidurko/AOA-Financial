@@ -101,6 +101,7 @@ class LoopUserBrief:
     should_do: list[dict[str, Any]] = field(default_factory=list)
     can_wait: list[dict[str, Any]] = field(default_factory=list)
     repair_queue: dict[str, int] = field(default_factory=dict)
+    integrity_queue: dict[str, int] = field(default_factory=dict)
     suggested_replies: list[SuggestedReply] = field(default_factory=list)
 
     def to_context(self) -> dict[str, Any]:
@@ -111,6 +112,7 @@ class LoopUserBrief:
             "should_do": self.should_do,
             "can_wait": self.can_wait,
             "repair_queue": self.repair_queue,
+            "integrity_queue": self.integrity_queue,
             "suggested_replies": [r.to_context() for r in self.suggested_replies],
         }
 
@@ -120,9 +122,11 @@ def build_loop_user_brief(
     assistant_brief: AssistantBrief,
     repair_summary: dict[str, int] | None = None,
     pending_responses: list[dict[str, Any]] | None = None,
+    integrity_summary: dict[str, int] | None = None,
 ) -> LoopUserBrief:
-    """Wrap Alex's brief with repair-queue context and per-alert reply options."""
+    """Wrap Alex's brief with repair/integrity queue context and reply options."""
     repair = repair_summary or {"count": 0, "fixable": 0}
+    integrity = integrity_summary or {"pending": 0}
     replies: list[SuggestedReply] = []
     for note in pending_responses or []:
         nid = str(note.get("id", ""))
@@ -133,6 +137,18 @@ def build_loop_user_brief(
     summary = assistant_brief.summary or "Loop steady; no blockers."
     if repair.get("fixable"):
         summary = f"{summary} ({repair['fixable']} fixable repair item(s) queued)."
+    if integrity.get("pending"):
+        summary = (
+            f"{summary} ({integrity['pending']} integrity corrective "
+            "proposal(s) awaiting approve/reject)."
+        )
+        replies.append(
+            SuggestedReply(
+                "Review integrity queue",
+                "ack",
+                "aoa integrity queue",
+            )
+        )
 
     return LoopUserBrief(
         summary=summary,
@@ -141,6 +157,7 @@ def build_loop_user_brief(
         should_do=[i.to_context() for i in assistant_brief.should_do],
         can_wait=[i.to_context() for i in assistant_brief.can_wait],
         repair_queue=repair,
+        integrity_queue=integrity,
         suggested_replies=replies,
     )
 
