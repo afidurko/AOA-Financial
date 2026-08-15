@@ -15,6 +15,7 @@ Commands:
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
+  aoa visualhft  Offline VisualHFT microstructure studies (research lane).
   aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
@@ -1003,6 +1004,68 @@ def cmd_watch(
     return 0
 
 
+def cmd_visualhft_status(*, as_json: bool) -> int:
+    from aoa.visualhft import probe_status
+
+    status = probe_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== VisualHFT research lane ===")
+    print(f"  available:  {status['available']}")
+    print(f"  runtime:    {status['runtime']}")
+    print(f"  desktop:    {status['desktop_host']}")
+    print(f"  studies:    {', '.join(status['studies_ported'])}")
+    print(f"  offline:    {status.get('offline_only', True)}")
+    print(f"  never_live: {status.get('never_live', True)}")
+    print(f"  fork:       {status['fork']}")
+    print(f"  upstream:   {status['upstream']}")
+    print(f"  next:       {status.get('hint')}")
+    return 0
+
+
+def cmd_visualhft_smoke(*, n_trades: int, seed: int, as_json: bool) -> int:
+    from aoa.visualhft import run_synthetic_smoke
+
+    try:
+        result = run_synthetic_smoke(n_trades=n_trades, seed=seed)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+        else:
+            print(str(exc), file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== VisualHFT synthetic smoke ===")
+        print(f"  ok:        {result.ok}")
+        print(f"  lob imb:   {result.lob_imbalance:.4f}")
+        print(f"  vpin:      {result.vpin:.4f}")
+        print(f"  otr:       {result.order_to_trade_ratio:.4f}")
+        print(f"  mid:       {result.mid_price}")
+        print(f"  trades:    {result.n_trades}")
+        print(f"  buckets:   {result.vpin_buckets}")
+        print(f"  seed:      {result.seed}")
+    return 0 if result.ok else 1
+
+
+def cmd_visualhft_studies(*, as_json: bool, ported_only: bool) -> int:
+    from aoa.visualhft import list_studies
+
+    rows = list_studies(ported_only=ported_only)
+    payload = {"studies": rows, "count": len(rows), "ported_only": ported_only}
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    print("=== VisualHFT studies ===")
+    for row in rows:
+        flag = "ported" if row.get("ported") else "desktop-only"
+        print(f"  {row['id']:24} [{flag}] {row['title']}")
+        print(f"    {row['summary']}")
+    return 0
+
+
 def cmd_journal(cfg: Config, n: int) -> int:
     entries = Journal(cfg.journal_path).tail(n)
     if not entries:
@@ -1349,6 +1412,26 @@ def cmd_avellaneda_simulate(
         print(f"  q range: {result.min_inventory:.1f} … {result.max_inventory:.1f}")
         print(f"  horizon:   {'limited' if result.limit_horizon else 'unlimited'}")
         print(f"  seed:      {result.seed}")
+    return 0
+
+
+def cmd_microstructure_status(*, as_json: bool) -> int:
+    from aoa.microstructure import catalog_status
+
+    status = catalog_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== Microstructure workspace mesh ===")
+    print(f"  lanes:     {status['available_count']}/{status['lane_count']} available")
+    print(f"  offline:   {status.get('offline_only', True)}")
+    print(f"  never_live:{status.get('never_live', True)}")
+    print(f"  docs:      {status.get('docs')}")
+    for row in status.get("lanes", []):
+        flag = "ok" if row.get("available") else "missing"
+        print(f"  [{flag:7}] {row.get('lane')}: {row.get('hint')}")
+        if not row.get("available") and row.get("error"):
+            print(f"           {row['error']}")
     return 0
 
 
@@ -2165,6 +2248,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     av_sim.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    vh = sub.add_parser(
+        "visualhft",
+        help="Offline VisualHFT microstructure studies (never live).",
+    )
+    vh_sub = vh.add_subparsers(dest="visualhft_command", required=True)
+    vh_status = vh_sub.add_parser("status", help="Show VisualHFT research-lane status.")
+    vh_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_smoke = vh_sub.add_parser(
+        "smoke",
+        help="Run LOB imbalance / VPIN / OTR on a synthetic tape.",
+    )
+    vh_smoke.add_argument("--trades", type=int, default=200, help="Synthetic trade count.")
+    vh_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
+    vh_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_studies = vh_sub.add_parser("studies", help="List VisualHFT studies and port status.")
+    vh_studies.add_argument("--json", action="store_true", help="Emit JSON.")
+    vh_studies.add_argument(
+        "--ported-only",
+        action="store_true",
+        help="Only list studies with a Python port.",
+    )
+
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
     wl_run = wl_sub.add_parser("run", help="Run the work loop.")
@@ -2378,6 +2483,65 @@ def main(argv: list[str] | None = None) -> int:
     ship_ready.add_argument("--json", action="store_true", help="Emit JSON.")
 
     args = parser.parse_args(argv)
+
+    # Offline research lanes — no .env template and no Config/broker side effects.
+    if args.command == "visualhft":
+        if args.visualhft_command == "status":
+            return cmd_visualhft_status(as_json=getattr(args, "json", False))
+        if args.visualhft_command == "smoke":
+            return cmd_visualhft_smoke(
+                n_trades=getattr(args, "trades", 200),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.visualhft_command == "studies":
+            return cmd_visualhft_studies(
+                as_json=getattr(args, "json", False),
+                ported_only=getattr(args, "ported_only", False),
+            )
+    if args.command == "hft":
+        if args.hft_command == "status":
+            return cmd_hft_status(as_json=getattr(args, "json", False))
+        if args.hft_command == "smoke":
+            return cmd_hft_smoke(
+                n_events=args.events,
+                steps=args.steps,
+                seed=args.seed,
+                as_json=getattr(args, "json", False),
+            )
+        if args.hft_command == "book-smoke":
+            return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
+        if args.hft_command == "run":
+            return cmd_hft_run(
+                data=args.data,
+                tick_size=args.tick_size,
+                lot_size=args.lot_size,
+                steps=args.steps,
+                step_ns=args.step_ns,
+                as_json=getattr(args, "json", False),
+            )
+    if args.command == "avellaneda":
+        if args.avellaneda_command == "status":
+            return cmd_avellaneda_status(as_json=getattr(args, "json", False))
+        if args.avellaneda_command == "smoke":
+            return cmd_avellaneda_smoke(
+                n_steps=getattr(args, "steps", 200),
+                n_sims=getattr(args, "sims", 20),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.avellaneda_command == "simulate":
+            return cmd_avellaneda_simulate(
+                n_steps=getattr(args, "steps", 200),
+                seed=getattr(args, "seed", 1),
+                ensemble=getattr(args, "ensemble", False),
+                n_sims=getattr(args, "sims", 50),
+                unlimited=getattr(args, "unlimited", False),
+                as_json=getattr(args, "json", False),
+            )
+    if args.command == "microstructure":
+        return cmd_microstructure_status(as_json=getattr(args, "json", False))
+
     _ensure_env_template()
     cfg = Config.from_env()
 
@@ -2429,27 +2593,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
-        if args.command == "hft":
-            if args.hft_command == "status":
-                return cmd_hft_status(as_json=getattr(args, "json", False))
-            if args.hft_command == "smoke":
-                return cmd_hft_smoke(
-                    n_events=args.events,
-                    steps=args.steps,
-                    seed=args.seed,
-                    as_json=getattr(args, "json", False),
-                )
-            if args.hft_command == "book-smoke":
-                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
-            if args.hft_command == "run":
-                return cmd_hft_run(
-                    data=args.data,
-                    tick_size=args.tick_size,
-                    lot_size=args.lot_size,
-                    steps=args.steps,
-                    step_ns=args.step_ns,
-                    as_json=getattr(args, "json", False),
-                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
@@ -2460,25 +2603,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.paths,
                 args.halflife,
             )
-        if args.command == "avellaneda":
-            if args.avellaneda_command == "status":
-                return cmd_avellaneda_status(as_json=getattr(args, "json", False))
-            if args.avellaneda_command == "smoke":
-                return cmd_avellaneda_smoke(
-                    n_steps=getattr(args, "steps", 200),
-                    n_sims=getattr(args, "sims", 20),
-                    seed=getattr(args, "seed", 1),
-                    as_json=getattr(args, "json", False),
-                )
-            if args.avellaneda_command == "simulate":
-                return cmd_avellaneda_simulate(
-                    n_steps=getattr(args, "steps", 200),
-                    seed=getattr(args, "seed", 1),
-                    ensemble=getattr(args, "ensemble", False),
-                    n_sims=getattr(args, "sims", 50),
-                    unlimited=getattr(args, "unlimited", False),
-                    as_json=getattr(args, "json", False),
-                )
         if args.command == "workloop":
             if args.workloop_command == "run":
                 return cmd_workloop_run(
