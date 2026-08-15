@@ -1,0 +1,20 @@
+{
+  "folders": [
+    {
+      "name": "AOA-Financial",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.pytest_cache": true,
+      "**/__pycache__": true
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-python.python",
+      "charliermarsh.ruff"
+    ]
+  }
+}
