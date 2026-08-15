@@ -287,3 +287,4 @@ VisualHFT/
 oxyplot/
 # hftbacktest research fork sibling (optional — not vendored)
 hftbacktest/
+loop-state/

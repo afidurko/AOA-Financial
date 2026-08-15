@@ -23,9 +23,14 @@ echo ""
 "$ROOT/scripts/integrate-moomoo-skills.sh"
 
 echo ""
-"$ROOT/scripts/verify-knowledge-stack.sh" || true
+if ! "$ROOT/scripts/verify-knowledge-stack.sh"; then
+  echo ""
+  echo "== Knowledge stack VERIFY FAILED ==" >&2
+  echo "Fix the checks above, then re-run ./scripts/knowledge-stack-setup.sh" >&2
+  exit 1
+fi
 echo ""
-"$ROOT/scripts/write-aoa-workspace.sh" || true
+"$ROOT/scripts/write-aoa-workspace.sh"
 echo ""
 "$ROOT/scripts/open-obsidian-vault.sh" || true
 echo ""

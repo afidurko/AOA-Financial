@@ -1,5 +1,8 @@
 # Companion workspaces mesh
 
+> Trading companions (`aoa workspaces`) — OpenStock, QM, VisualHFT, hftbacktest.
+> For the Obsidian/Spine/Cursor multi-root vault mesh, see [workspace-mesh.md](workspace-mesh.md).
+
 AOA Financial stays the brokerage/risk authority. Optional **sibling workspaces**
 plug in for research UI, agent harnesses, and microstructure tooling. None of
 them place live orders.
