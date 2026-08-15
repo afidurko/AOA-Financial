@@ -311,13 +311,10 @@ def run_task(
             continue
 
         if step == "workloop-upgrade":
+            from aoa.config import _bool
             from aoa.workloop.upgrade import run_upgrade_pipeline
 
-            dry = os.environ.get("AOA_WORKLOOP_UPGRADE_DRY_RUN", "true").lower() in {
-                "1",
-                "true",
-                "yes",
-            }
+            dry = _bool("AOA_WORKLOOP_UPGRADE_DRY_RUN", True)
             result = run_upgrade_pipeline(root, dry_run=dry)
             steps_run.append(f"workloop-upgrade={'dry-run' if dry else 'run'}")
             if not result.get("ok"):
