@@ -27,3 +27,4 @@
 | 2026-07-06 04:32 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-06 23:40 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-08 02:32 | maintenance | — | integrated | Task chain automation: docs/upgrade-backlog.json + aoa tasks chain. Bootstrapped upg-009. 359 tests pass. tokens_estimate=9000 |
+| 2026-08-15 21:05 | fable-repair | L2 | fixed+workspaces | upg-009 pipeline + upg-001 alpaca paper + httpx2; knowledge-stack verify OK; env.json + VS Code tasks. 430 tests. tokens_estimate=12000 |

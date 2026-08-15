@@ -33,6 +33,15 @@ Optional siblings: `qm` (`./scripts/qm-setup.sh`), `py-moomoo-api`.
 
 Only folders that exist on disk are included.
 
+VS Code / Cursor tasks: **AOA: knowledge-stack setup**, **AOA: write multi-root workspace**,
+**AOA: attl init (brain workspace)**.
+
+## Cloud Agent environment
+
+Repo-managed bootstrap: `.cursor/environment.json` runs `pip install -e ".[dev,web]"`,
+`aoa attl init`, and `write-aoa-workspace.sh` after checkout. Knowledge-stack sibling
+clones remain local (`./scripts/knowledge-stack-setup.sh`) and are gitignored.
+
 ## Agent skills (already in-repo)
 
 | Skill | Path |
