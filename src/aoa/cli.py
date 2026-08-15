@@ -18,6 +18,7 @@ Commands:
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
+  aoa hftish     Order-book imbalance research lane (example-hftish patterns).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
@@ -1282,6 +1283,64 @@ def cmd_study_sync(cfg: Config, *, as_json: bool) -> int:
     return 0
 
 
+def cmd_hftish_status(*, as_json: bool) -> int:
+    """Show example-hftish companion wiring (research-only)."""
+    root = _repo_root()
+    sibling = root / "example-hftish"
+    status = {
+        "available": True,
+        "module": "aoa.research.hftish_patterns",
+        "companion": "example-hftish",
+        "sibling_present": (sibling / ".git").is_dir()
+        or (sibling / "tick_taker.py").is_file(),
+        "sibling_path": str(sibling),
+        "setup": "scripts/example-hftish-setup.sh",
+        "docs": "docs/how-to/example-hftish-reference.md",
+        "study_card": "bridge-hftish-imbalance",
+        "mesh_algo": "algo.hftish_patterns",
+        "consumers": [
+            "julie.refine",
+            "morgan.analyze_symbol",
+            "SymbolSnapshot.to_context",
+        ],
+        "never_live": True,
+        "hint": "aoa hftish smoke — offline follow/imbalance check (no broker)",
+    }
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== example-hftish research lane ===")
+    print(f"  module:    {status['module']}")
+    print(
+        f"  sibling:   {'present' if status['sibling_present'] else 'missing'} ({sibling})"
+    )
+    print(f"  mesh:      {status['mesh_algo']}")
+    print(f"  study:     {status['study_card']}")
+    print(f"  consumers: {', '.join(status['consumers'])}")
+    print(f"  never_live:{status['never_live']}")
+    print(f"  next:      {status['hint']}")
+    return 0
+
+
+def cmd_hftish_smoke(*, seed: int, as_json: bool) -> int:
+    from aoa.research.hftish_patterns import synthetic_smoke
+
+    result = synthetic_smoke(seed=seed)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== example-hftish synthetic smoke ===")
+        print(f"  ok:           {result['ok']}")
+        print(f"  level_change: {result['level_change']}")
+        print(f"  armed:        {result['armed']}")
+        print(f"  follow:       {result['follow']}")
+        diag = result.get("diagnosis") or {}
+        print(f"  side:         {diag.get('side')}")
+        print(f"  note:         {diag.get('note')}")
+        print(f"  never_live:   {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
+
+
 def _attl_orchestrator(cfg: Config):
     from aoa.attl.orchestrator import AttlOrchestrator
     from aoa.config import data_dir_for
@@ -1998,6 +2057,20 @@ def main(argv: list[str] | None = None) -> int:
     st_sync = st_sub.add_parser("sync", help="Write vault/study notes from curriculum + mastery.")
     st_sync.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    hf = sub.add_parser(
+        "hftish",
+        help="example-hftish order-book imbalance research lane (no orders).",
+    )
+    hf_sub = hf.add_subparsers(dest="hftish_command", required=True)
+    hf_status = hf_sub.add_parser("status", help="Show companion wiring + consumers.")
+    hf_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    hf_smoke = hf_sub.add_parser(
+        "smoke",
+        help="Offline synthetic level-change / imbalance / follow check.",
+    )
+    hf_smoke.add_argument("--seed", type=int, default=7, help="Reserved for future RNG.")
+    hf_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
@@ -2216,6 +2289,14 @@ def main(argv: list[str] | None = None) -> int:
                 )
             if args.study_command == "sync":
                 return cmd_study_sync(cfg, as_json=getattr(args, "json", False))
+        if args.command == "hftish":
+            if args.hftish_command == "status":
+                return cmd_hftish_status(as_json=getattr(args, "json", False))
+            if args.hftish_command == "smoke":
+                return cmd_hftish_smoke(
+                    seed=getattr(args, "seed", 7),
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "tasks":
             if args.tasks_command == "automations":
                 return cmd_tasks_automations()

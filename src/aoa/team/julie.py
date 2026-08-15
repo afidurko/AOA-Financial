@@ -58,11 +58,21 @@ class JulieAgent(Agent):
                 adjusted_strength=0.0,
                 method_notes="Insufficient data for algorithmic validation.",
             )
+        book = _book_diagnosis(snap)
         prompt = (
             f"Tom's trend report:\n{json.dumps(trend.to_context())}\n\n"
             f"Symbol: {snap.symbol}\n"
             f"Technicals: {json.dumps(snap.technicals, default=str)}\n"
         )
+        if snap.quote is not None:
+            prompt += (
+                f"Quote: {json.dumps(snap.to_context().get('quote'), default=str)}\n"
+            )
+        if book.get("available"):
+            prompt += (
+                f"Computed book-imbalance hints (example-hftish / research-only):\n"
+                f"{json.dumps(book, default=str)}\n"
+            )
         if code_quality is not None:
             prompt += (
                 f"\nBob's code-quality audit:\n"
@@ -79,10 +89,25 @@ class JulieAgent(Agent):
         notes = r.get("method_notes", "")
         if code_quality and code_quality.worst_status.value != "ok":
             notes = f"{notes} Code note: {code_quality.summary}".strip()
+        signals = list(r.get("signals") or [])
+        if book.get("signal") and book["signal"] not in signals:
+            signals.append(str(book["signal"]))
         return AlgorithmReport(
             symbol=trend.symbol,
             validated=bool(r.get("validated")),
             adjusted_strength=clamp_conviction(r.get("adjusted_strength", 0)),
             method_notes=notes,
-            signals=list(r.get("signals") or []),
+            signals=signals,
         )
+
+
+def _book_diagnosis(snap: SymbolSnapshot) -> dict:
+    """Deterministic OB imbalance for Julie — never places orders."""
+    if snap.quote is None:
+        return {"available": False, "note": "No quote on snapshot."}
+    try:
+        from aoa.research.hftish_patterns import diagnose_snapshot_quote
+
+        return diagnose_snapshot_quote(snap.quote).to_context()
+    except Exception:  # noqa: BLE001 — degrade; Julie still runs
+        return {"available": False, "note": "Book diagnosis unavailable."}

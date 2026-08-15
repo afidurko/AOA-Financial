@@ -45,6 +45,7 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 
 **In-system wiring:** clone with `./scripts/example-hftish-setup.sh` (gitignored sibling).
 Vault note: `vault/system/example-hftish.md`. Guide: [how-to/example-hftish-reference.md](how-to/example-hftish-reference.md).
+Julie/Morgan consume research-only book hints; CLI: `aoa hftish status|smoke`.
 Not an order path — research / Julie algorithm context only.
 
 
