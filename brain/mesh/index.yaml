@@ -68,6 +68,10 @@ algorithms:
     owner: julie
     module: aoa.research.hft_patterns
     companion: hft
+  - id: algo.hftish_patterns
+    owner: julie
+    module: aoa.research.hftish_patterns
+    companion: example-hftish
 
 spines:
   - path: spine/ATTL.md

@@ -537,6 +537,39 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         check_keywords=("mid", "band", "mean", "std", "hitmean", "pairs"),
     ),
     KnowledgeCard(
+            id="bridge-hftish-imbalance",
+            field="bridge",
+            title="Order-book imbalance ↔ level-change follow",
+            statement=(
+                "After both bid and ask jump onto a new 1¢ spread, a large print that "
+                "hits the ask (bid) with bid (ask) size ≥ 1.8× the far side is a discrete "
+                "follow signal — inventory-capped, lag-gated microstructure control."
+            ),
+            proof_sketch=(
+                "1) State Q_t = (bid, ask, bid_size, ask_size). Level change when both "
+                "prices move and ask−bid = 0.01.\n"
+                "2) Arm only if the prior spread was also 0.01 (penny-to-penny).\n"
+                "3) On a trade: require size ≥ 100 and timestamp ≥ quote_time + 50ms.\n"
+                "4) Follow ask when price = ask and bid_size > 1.8 ask_size (room under "
+                "max shares); follow bid symmetrically when selling inventory."
+            ),
+            applications=(
+                "Research signals for high-volume names with frequent 1¢ moves",
+                "Inventory / pending-lot capacity checks before any hypothetical follow",
+            ),
+            aoa_mesh=(
+                "Julie may cite aoa.research.hftish_patterns for imbalance diagnostics; "
+                "sibling afidurko/example-hftish is reference-only — never an AOA order path."
+            ),
+            bridges=("bridge-ou-meanrev", "phys-diffusion", "bridge-sdf-martingale"),
+            drill_prompt=(
+                "Given two consecutive penny-spread quotes and a print on the ask, state "
+                "whether the follow signal is buy, sell, or flat and name the blocking "
+                "gate if flat."
+            ),
+            check_keywords=("imbalance", "penny", "level", "ask", "bid", "follow"),
+        ),
+    KnowledgeCard(
         id="bridge-free-energy",
         field="bridge",
         title="Free energy ↔ certainty-equivalent utility",

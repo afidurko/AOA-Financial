@@ -258,3 +258,5 @@ OpenStock/
 qm/
 # HFT sibling clone (C++ strategy reference — not vendored)
 hft/
+# example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
+example-hftish/

@@ -44,9 +44,13 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 |----------|------|
 | **[Finance](https://github.com/shashankvemuri/Finance)** | Reference library of quantitative finance Python programs (used in Tom’s knowledge context). |
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT futures strategies (pairs arb, hedged maker, MA cross) as a sibling reference. Pure-Python idea ports: `aoa.research.hft_patterns`. Upstream fork of [keyianpai/hft](https://github.com/keyianpai/hft). |
+| **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker (1¢ level changes + size imbalance). Pure-Python idea ports: `aoa.research.hftish_patterns`. Upstream fork of [alpacahq/example-hftish](https://github.com/alpacahq/example-hftish). |
 
-**In-system wiring:** clone with `./scripts/hft-setup.sh` (gitignored sibling).
-Vault note: `vault/system/hft.md`. Guide: [how-to/hft-reference.md](how-to/hft-reference.md).
+**In-system wiring:** clone with `./scripts/hft-setup.sh` or
+`./scripts/example-hftish-setup.sh` (gitignored siblings). Vault notes:
+`vault/system/hft.md`, `vault/system/example-hftish.md`. Guides:
+[how-to/hft-reference.md](how-to/hft-reference.md),
+[how-to/example-hftish-reference.md](how-to/example-hftish-reference.md).
 Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)
@@ -63,6 +67,10 @@ fitting the full model in RAM.
 | Resource | Role |
 |----------|------|
 | **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | Classic AS HFT market-making simulation + paper PDFs. AOA ports the math as an offline lane: `aoa avellaneda status|smoke|simulate`. |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 desktop + `aoa visualhft` study ports (LOB imbalance, VPIN, OTR). |
+| **[hftbacktest](https://github.com/afidurko/hftbacktest)** | Optional tick L2/L3 engine + vendored LOB via `aoa hft`. |
 
-Guide: [how-to/avellaneda-stoikov.md](how-to/avellaneda-stoikov.md). Vault: `vault/system/avellaneda_stoikov.md`.
+Mesh status for every lane: `aoa microstructure status`.
+Guide: [how-to/microstructure-lanes.md](how-to/microstructure-lanes.md) ·
+[how-to/avellaneda-stoikov.md](how-to/avellaneda-stoikov.md).
 Never an order path — Hard Safety Floor still applies.

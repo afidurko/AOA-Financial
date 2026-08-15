@@ -30,3 +30,6 @@ repos:
   - name: hft
     url: https://github.com/afidurko/hft
     role: C++ HFT strategy reference (simplearb/maker/MA); Python ideas in aoa.research.hft_patterns
+  - name: example-hftish
+    url: https://github.com/afidurko/example-hftish
+    role: Alpaca order-book imbalance tick-taker reference; Python ideas in aoa.research.hftish_patterns
