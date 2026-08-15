@@ -3,6 +3,14 @@
     {
       "name": "AOA-Financial",
       "path": "."
+    },
+    {
+      "name": "VisualHFT",
+      "path": "VisualHFT"
+    },
+    {
+      "name": "oxyplot",
+      "path": "oxyplot"
     }
   ],
   "settings": {

@@ -78,3 +78,15 @@ def test_cli_workspaces_skips_env_template(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert out["count"] == 4
     assert not (tmp_path / ".env").exists()
+
+
+def test_cli_workspaces_setup_help():
+    proc = __import__("subprocess").run(
+        [__import__("sys").executable, "-m", "aoa.cli", "workspaces", "setup", "--help"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    # setup has no --help subflags beyond parser; missing command would fail
+    # argparse shows help for parent when --help on leaf with no args added
+    assert proc.returncode == 0

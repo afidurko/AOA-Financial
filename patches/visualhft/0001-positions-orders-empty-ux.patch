@@ -1,0 +1,32 @@
+diff --git a/ViewModel/vmPosition.cs b/ViewModel/vmPosition.cs
+index cf73bf5..e77e8ed 100644
+--- a/ViewModel/vmPosition.cs
++++ b/ViewModel/vmPosition.cs
+@@ -29,7 +29,7 @@ namespace VisualHFT.ViewModel
+         private readonly ReaderWriterLockSlim _lockOrders = new ReaderWriterLockSlim();
+         private readonly ReaderWriterLockSlim _lockPosMgr = new ReaderWriterLockSlim();
+         private bool _disposed = false; // to track whether the object has been disposed
+-        private string _selectedFilter = "Working";
++        private string _selectedFilter = "All";
+         private static readonly log4net.ILog log = log4net.LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
+ 
+         public ICollectionView OrdersView { get; }
+@@ -98,7 +98,7 @@ namespace VisualHFT.ViewModel
+                 _allOrders = new ObservableCollection<VisualHFT.ViewModel.Model.Order>();
+                 OrdersView = CollectionViewSource.GetDefaultView(_allOrders);
+                 OrdersView.SortDescriptions.Add(new SortDescription("CreationTimeStamp", ListSortDirection.Descending));
+-                SelectedFilter = "Working";
++                SelectedFilter = "All";
+                 ApplyFilter();
+             }
+             finally
+@@ -283,7 +283,8 @@ namespace VisualHFT.ViewModel
+                         _positionViewModelLookup.Add(pos.Symbol, positionViewModel);
+                     }
+ 
+-                    SelectedFilter = "Working";
++                    // Preserve the active filter (default All) so filled orders stay visible.
++                    ApplyFilter();
+                 }
+                 finally
+                 {
