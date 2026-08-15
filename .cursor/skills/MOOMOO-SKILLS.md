@@ -22,4 +22,5 @@ cp -a /tmp/opend-skills/skills/install-moomoo-opend .cursor/skills/
 cp -a /tmp/opend-skills/skills/LEGAL*.md .cursor/skills/
 cp -a /tmp/opend-skills/skills/moomooapi .claude/skills/
 cp -a /tmp/opend-skills/skills/install-moomoo-opend .claude/skills/
+cp -a /tmp/opend-skills/skills/LEGAL*.md .claude/skills/
 ```
