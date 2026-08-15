@@ -27,3 +27,6 @@ repos:
   - name: avellaneda-stoikov
     url: https://github.com/afidurko/avellaneda-stoikov
     role: AS reservation-price MM reference; aoa.avellaneda_stoikov offline lane
+  - name: hft
+    url: https://github.com/afidurko/hft
+    role: C++ HFT strategy reference (simplearb/maker/MA); Python ideas in aoa.research.hft_patterns

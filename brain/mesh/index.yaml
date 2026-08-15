@@ -64,6 +64,10 @@ algorithms:
   - id: algo.swarm
     owner: alan
     module: aoa.swarm.orchestrator
+  - id: algo.hft_patterns
+    owner: julie
+    module: aoa.research.hft_patterns
+    companion: hft
 
 spines:
   - path: spine/ATTL.md

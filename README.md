@@ -953,6 +953,7 @@ Companion tools that sit beside this repo (not vendored here):
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
 | **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)) |
+| **[hft](https://github.com/afidurko/hft)** | C++ HFT strategy reference — [hft-reference.md](docs/how-to/hft-reference.md) + `aoa.research.hft_patterns` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
 | **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | AS reservation-price MM sim — `aoa avellaneda` research lane |

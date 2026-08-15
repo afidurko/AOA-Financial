@@ -17,6 +17,7 @@ Commands:
   aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
   aoa visualhft  Offline VisualHFT microstructure studies (research lane).
   aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
+  aoa microstructure  Mesh status for all offline HFT/LOB research lanes.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
@@ -2270,6 +2271,14 @@ def main(argv: list[str] | None = None) -> int:
         help="Only list studies with a Python port.",
     )
 
+    ms = sub.add_parser(
+        "microstructure",
+        help="Mesh status for all offline HFT/LOB research lanes (never live).",
+    )
+    ms_sub = ms.add_subparsers(dest="microstructure_command", required=True)
+    ms_status = ms_sub.add_parser("status", help="Show aggregated lane availability.")
+    ms_status.add_argument("--json", action="store_true", help="Emit JSON.")
+
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
     wl_run = wl_sub.add_parser("run", help="Run the work loop.")
@@ -2540,7 +2549,8 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
             )
     if args.command == "microstructure":
-        return cmd_microstructure_status(as_json=getattr(args, "json", False))
+        if args.microstructure_command == "status":
+            return cmd_microstructure_status(as_json=getattr(args, "json", False))
 
     _ensure_env_template()
     cfg = Config.from_env()
