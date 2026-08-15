@@ -15,6 +15,7 @@ Commands:
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa visualhft  Offline VisualHFT microstructure studies (research lane).
+  aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
@@ -425,6 +426,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         print(f"  ✓ OpenStock link: {cfg.openstock_url}")
     if cfg.qm_url:
         print(f"  ✓ QM harness link: {cfg.qm_url}")
+    if cfg.visualhft_url:
+        print(f"  ✓ VisualHFT link: {cfg.visualhft_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
@@ -906,6 +909,32 @@ def cmd_visualhft_studies(*, as_json: bool, ported_only: bool) -> int:
         flag = "ported" if row.get("ported") else "desktop-only"
         print(f"  {row['id']:24} [{flag}] {row['title']}")
         print(f"    {row['summary']}")
+    return 0
+
+
+def cmd_workspaces_status(*, as_json: bool) -> int:
+    from aoa.workspaces import workspaces_report
+
+    # Offline mesh probe — Config without creating .env side effects.
+    cfg = Config.from_env(load_dotenv=False)
+    report = workspaces_report(cfg)
+    if as_json:
+        print(json.dumps(report, indent=2))
+        return 0
+    print("=== Companion workspaces ===")
+    print(f"  linked:  {report['linked']}/{report['count']}")
+    print(f"  present: {report['present']}/{report['count']}")
+    print("  live:    never (mesh is link/status only)")
+    for row in report["workspaces"]:
+        flags = []
+        flags.append("linked" if row["linked"] else "unlinked")
+        flags.append("present" if row["present"] else "missing")
+        print(f"  · {row['id']:12} [{', '.join(flags)}] {row['title']}")
+        print(f"      {row['role']}")
+        if row["url"]:
+            print(f"      url: {row['url']}")
+        print(f"      path: {row['local_path']}")
+        print(f"      docs: {row['docs']}")
     return 0
 
 
@@ -1820,7 +1849,12 @@ def main(argv: list[str] | None = None) -> int:
         "smoke",
         help="Run LOB imbalance / VPIN / OTR on a synthetic tape.",
     )
-    vh_smoke.add_argument("--trades", type=int, default=200, help="Synthetic trade count.")
+    vh_smoke.add_argument(
+        "--trades",
+        type=int,
+        default=200,
+        help="Synthetic trade count (minimum 20 so VPIN can complete a bucket).",
+    )
     vh_smoke.add_argument("--seed", type=int, default=1, help="RNG seed for the tape.")
     vh_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
     vh_studies = vh_sub.add_parser("studies", help="List VisualHFT studies and port status.")
@@ -1830,6 +1864,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Only list studies with a Python port.",
     )
+
+    ws = sub.add_parser(
+        "workspaces",
+        help="Companion workspace mesh (OpenStock, QM, VisualHFT, hftbacktest).",
+    )
+    ws_sub = ws.add_subparsers(dest="workspaces_command", required=True)
+    ws_status = ws_sub.add_parser(
+        "status",
+        help="Show sibling workspace link/path status (never live).",
+    )
+    ws_status.add_argument("--json", action="store_true", help="Emit JSON.")
 
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
@@ -2033,6 +2078,10 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
                 ported_only=getattr(args, "ported_only", False),
             )
+
+    if args.command == "workspaces":
+        if args.workspaces_command == "status":
+            return cmd_workspaces_status(as_json=getattr(args, "json", False))
 
     _ensure_env_template()
     cfg = Config.from_env()

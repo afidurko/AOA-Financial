@@ -30,6 +30,14 @@ aoa serve
 Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md) ·
 [how-to/visualhft-integration.md](how-to/visualhft-integration.md).
 
+Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest):
+
+```bash
+aoa workspaces status
+```
+
+Guide: [how-to/workspaces.md](how-to/workspaces.md).
+
 ## Engineering loop
 
 | Resource | Role |

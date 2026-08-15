@@ -107,4 +107,17 @@ export AOA_QM_URL=http://localhost:8081
 ```
 
 See [qm-integration.md](qm-integration.md). Other companions:
-[docs/help.md](../help.md).
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md).
+
+## 8. VisualHFT (optional)
+
+Clone the microstructure desktop workspace and enable the dashboard link:
+
+```bash
+./scripts/visualhft-setup.sh
+export AOA_VISUALHFT_URL=https://github.com/afidurko/VisualHFT
+aoa visualhft status
+aoa workspaces status
+```
+
+See [visualhft-integration.md](visualhft-integration.md).

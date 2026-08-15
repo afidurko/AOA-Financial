@@ -720,6 +720,7 @@ Optional header shortcuts (same pattern as OpenStock):
 |-----|----------------|
 | `AOA_OPENSTOCK_URL` | OpenStock ↗ |
 | `AOA_QM_URL` | QM ↗ |
+| `AOA_VISUALHFT_URL` | VisualHFT ↗ |
 
 ```bash
 ./scripts/qm-setup.sh
@@ -946,9 +947,11 @@ Companion tools that sit beside this repo (not vendored here):
 |---------|----------------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
-| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)) |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
+
+Companion mesh guide: [docs/how-to/workspaces.md](docs/how-to/workspaces.md).
 
 Full catalog and clone notes: **[docs/help.md](docs/help.md)**.
 
