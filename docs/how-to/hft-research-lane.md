@@ -32,7 +32,7 @@ aoa visualhft status
 | [SGX-Full-OrderBook-…](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy) | `./scripts/sgx-orderbook-setup.sh` | [sgx-orderbook-reference.md](sgx-orderbook-reference.md) |
 | [example-hftish](https://github.com/afidurko/example-hftish) | `./scripts/example-hftish-setup.sh` | [example-hftish-reference.md](example-hftish-reference.md) |
 | [VisualHFT](https://github.com/afidurko/VisualHFT) | `./scripts/visualhft-setup.sh` | [visualhft-integration.md](visualhft-integration.md) |
-| [hft](https://github.com/afidurko/hft) | `./scripts/hft-setup.sh` (when landed) | [hft-reference.md](hft-reference.md) |
+| [hft](https://github.com/afidurko/hft) | `./scripts/hft-setup.sh` | [hft-reference.md](hft-reference.md) · `aoa.research.hft_patterns` |
 
 Mesh catalog: `brain/mesh/repos.yaml`. Multi-root Cursor folders:
 `./scripts/write-aoa-workspace.sh` · [workspace-mesh.md](workspace-mesh.md).

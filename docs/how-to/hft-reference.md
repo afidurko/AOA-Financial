@@ -6,13 +6,16 @@ stack (CTP market data / orders, ZeroMQ IPC, waf build) with open strategy and
 backtest sources. AOA Financial keeps it as an **optional sibling reference** —
 same pattern as AutoHedge / FinancePy — not as a live order path.
 
+This is **not** the optional offline L2 engine (`aoa.hftbacktest` /
+[hftbacktest-integration.md](hftbacktest-integration.md)); that lane is separate.
+
 ## What AOA takes from it
 
 | Upstream module | Idea | AOA landing |
 |-----------------|------|-------------|
-| `simplearb` | Pair mid-diff bands from trailing mean/std; open outside bands; exit at mean; outer stop-loss | `aoa.research.hft_patterns` + study card `bridge-hft-spread` |
-| `simplemaker` / `arbmaker` | Hedged market-making on main−hedge mid; train up/down diffs; spread gate | `mid_maker_side`, `spread_tight_enough` |
-| `strat_MA` | Short vs long MA golden / death cross | `ma_cross_signal` (Julie already uses MA/RSI tooling on bars) |
+| `simplearb` | Pair mid-diff bands from trailing mean/std; open outside bands; exit at mean; position-asymmetric stop-loss | `calibrate_spread_bands`, `open_side_from_bands`, `hit_mean`, `stop_loss_hit` |
+| `simplemaker` / `arbmaker` | Train μ±σ mid-diff thresholds; MidBuy/MidSell quoting gates; spread gate | `calibrate_maker_diffs`, `mid_buy_ok`, `mid_sell_ok`, `spread_tight_enough` |
+| `strat_MA` | Short vs long MA golden / death cross (strict inequality) | `ma_cross_signal` (Julie already uses MA/RSI tooling on bars) |
 | `ctpdata` / `ctporder` / proxies | Process split: data → strategy → order | Architecture inspiration only — **not** wired |
 
 AOA stays bar-based (Alpaca / Moomoo equities & cash options). There is no tick
@@ -40,11 +43,17 @@ The sibling directory `hft/` is gitignored.
 from aoa.research.hft_patterns import (
     calibrate_spread_bands,
     open_side_from_bands,
+    stop_loss_hit,
+    calibrate_maker_diffs,
+    mid_buy_ok,
     ma_cross_signal,
 )
 
 bands = calibrate_spread_bands([0.1, 0.2, -0.1, 0.0, 0.15], min_train=5, range_width=1.0)
 side = open_side_from_bands(0.5, bands)  # buy / sell / flat — research signal only
+stopped = stop_loss_hit(position=1, mid_diff=-1.0, bands=bands)
+maker = calibrate_maker_diffs([0.1, 0.2, -0.1, 0.0, 0.15], min_train=5)
+quote_ok = mid_buy_ok(10.0, 9.8, up_diff=maker.up_diff)
 cross = ma_cross_signal(short_prev=9.0, long_prev=10.0, short_now=11.0, long_now=10.5)
 ```
 
@@ -70,7 +79,3 @@ hft/src/backtest/      replay / matcher
 Build/run notes live in the upstream README (CentOS, g++, waf, ZeroMQ 4.1.2).
 AOA agents should read strategies for ideas; they should not compile or deploy
 that stack from a cloud loop.
-
-## Workspace mesh
-
-All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

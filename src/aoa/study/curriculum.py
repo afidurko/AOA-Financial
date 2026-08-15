@@ -518,7 +518,8 @@ _CARDS: tuple[KnowledgeCard, ...] = (
             "1) State X_t = mid_main − mid_hedge (simplearb map_vector).\n"
             "2) Estimate μ, σ on a trailing window (CalParams).\n"
             "3) Enter when X > μ+m or X < μ−m; HitMean closes when X crosses μ "
-            "in the position's favor; outer stops at μ ± (1+λ)m.\n"
+            "in the position's favor; StopLossLogic is asymmetric (long below "
+            "μ−(1+λ)m, short above μ+(1+λ)m).\n"
             "4) Same structure as OU threshold policies with discrete samples."
         ),
         applications=(
