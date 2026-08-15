@@ -926,10 +926,9 @@ def cmd_workspaces_status(*, as_json: bool) -> int:
     print(f"  present: {report['present']}/{report['count']}")
     print("  live:    never (mesh is link/status only)")
     for row in report["workspaces"]:
-        flags = []
-        flags.append("linked" if row["linked"] else "unlinked")
-        flags.append("present" if row["present"] else "missing")
-        print(f"  · {row['id']:12} [{', '.join(flags)}] {row['title']}")
+        link = "linked" if row["linked"] else "unlinked"
+        path = "present" if row["present"] else "missing"
+        print(f"  · {row['id']:12} [{link}, {path}] {row['title']}")
         print(f"      {row['role']}")
         if row["url"]:
             print(f"      url: {row['url']}")
