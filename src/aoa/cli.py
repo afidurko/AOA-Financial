@@ -2697,9 +2697,7 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
                 ported_only=getattr(args, "ported_only", False),
             )
-<<<<<<< HEAD
         return 2
-=======
 
     if args.command == "workspaces":
         if args.workspaces_command == "status":
@@ -2715,7 +2713,6 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
             )
 
->>>>>>> origin/main
     if args.command == "hft":
         if args.hft_command == "status":
             return cmd_hft_status(as_json=getattr(args, "json", False))
