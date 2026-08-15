@@ -775,7 +775,7 @@ def cmd_hft_status(*, as_json: bool) -> int:
     payload = {"hftbacktest": hft, "orderbook": book, "offline_only": True}
     if as_json:
         print(json.dumps(payload, indent=2))
-        # Succeed if either lane is usable; book is always vendored.
+        # Book lane is vendored and must be healthy; hftbacktest remains optional.
         return 0 if book.get("ok") else 1
     print("=== HFT research lanes (offline) ===")
     print("--- hftbacktest ---")
