@@ -30,3 +30,19 @@ env_upsert() {
     END { if (!done) print key "=" val }
   ' "$file" >"$file.tmp" && cat "$file.tmp" >"$file" && rm -f "$file.tmp"
 }
+
+# resolve_vault_dir ROOT
+#   Resolve the Obsidian vault directory from AOA_OBSIDIAN_VAULT_PATH (env var
+#   first, then ROOT/.env), interpreting a relative value against ROOT and
+#   defaulting to ROOT/AOA-Vault. Does not require the directory to exist.
+resolve_vault_dir() {
+  local root="$1" val="${AOA_OBSIDIAN_VAULT_PATH:-}"
+  [[ -n "$val" ]] || val="$(env_read AOA_OBSIDIAN_VAULT_PATH "$root/.env")"
+  if [[ -z "$val" ]]; then
+    printf '%s' "$root/AOA-Vault"
+  elif [[ "$val" = /* ]]; then
+    printf '%s' "$val"
+  else
+    printf '%s' "$root/${val#./}"
+  fi
+}
