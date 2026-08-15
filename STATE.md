@@ -4,7 +4,7 @@ Last run: 2026-08-15 20:35 UTC (L2 fix upg-001 — Alpaca paper profiles)
 
 ## High Priority (loop is acting or waiting on human)
 
-_(none — upg-001 fix in PR)_
+_(none — chain waiting or complete)_
 
 ## Watch List
 
