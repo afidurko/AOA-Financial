@@ -334,16 +334,20 @@ def default_stages() -> list[WorkloopStage]:
 
 
 def _optional_llm(config):
-    if not config.anthropic_api_key:
+    """Return an LLM client when the active provider is configured, else None."""
+    provider = getattr(config, "llm_provider", "openai_compatible")
+    if provider == "openai_compatible":
+        if not getattr(config, "llm_base_url", ""):
+            return None
+    elif provider == "anthropic":
+        if not getattr(config, "anthropic_api_key", ""):
+            return None
+    else:
         return None
     try:
-        from aoa.llm.client import LLMClient
+        from aoa.llm.client import llm_from_config
 
-        return LLMClient(
-            config.anthropic_api_key,
-            model=config.model,
-            effort=config.effort,
-        )
+        return llm_from_config(config)
     except Exception:  # noqa: BLE001
         return None
 
