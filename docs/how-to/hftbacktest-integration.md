@@ -10,6 +10,7 @@ It does **not** replace:
 
 - `aoa simulate` / `aoa.simulation` — bar Monte-Carlo and scenario stress
 - `aoa_financial` walk-forward backtest — daily decision harness
+- `aoa visualhft` — VisualHFT study-formula ports (LOB imbalance / VPIN / OTR)
 - live paper/live execution — never submit orders from this path
 
 ## Install
@@ -33,6 +34,7 @@ aoa hft smoke --events 500 --steps 30 --seed 1 --json
 aoa hft book-smoke
 aoa hft book-smoke --json
 aoa hft run path/to/feed.npz --tick-size 0.01 --lot-size 0.001
+aoa workspaces status   # mesh with OpenStock / QM / VisualHFT
 ```
 
 `status` reports both lanes. `smoke` verifies the optional hftbacktest Numba
@@ -64,6 +66,17 @@ hftbacktest Rust `connector` (Binance/Bybit) as a sibling process; use
 `aoa.orderbook` only for local book state / research. See the cloud-agent
 discussion on live setup — do not wire through `Executor` without an
 explicit depth-feed design and `AOA_LIVE_ACK`.
+
+## Complementary lanes
+
+| Lane | Role |
+|------|------|
+| `aoa hft` | Tick replay + vendored LOB |
+| `aoa visualhft` | VisualHFT study math (offline) |
+| VisualHFT desktop | Live L2 UI (Windows/.NET) |
+| `aoa workspaces` | Mesh status across companions |
+
+See [workspaces.md](workspaces.md) and [visualhft-integration.md](visualhft-integration.md).
 
 ## Safety
 

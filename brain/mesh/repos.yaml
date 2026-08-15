@@ -42,6 +42,11 @@ repos:
     role: SGX A50 full LOB ML notebooks (rise/depth); Python ideas in aoa.research.sgx_orderbook_patterns
     workspace: ./SGX-Full-OrderBook-Tick-Data-Trading-Strategy
     setup: ./scripts/sgx-orderbook-setup.sh
+  - name: example-hftish
+    url: https://github.com/afidurko/example-hftish
+    role: Alpaca order-book imbalance tick-taker reference; Python ideas in aoa.research.hftish_patterns
+    workspace: ./example-hftish
+    setup: ./scripts/example-hftish-setup.sh
 
 # Vendored / local workspaces (not separate git clones)
 local:

@@ -22,6 +22,8 @@ add_folder "obsidian-skills" "obsidian-skills"
 add_folder "qm" "qm"
 add_folder "py-moomoo-api" "py-moomoo-api"
 add_folder "SGX-OrderBook" "SGX-Full-OrderBook-Tick-Data-Trading-Strategy"
+add_folder "example-hftish" "example-hftish"
+add_folder "VisualHFT" "VisualHFT"
 
 python3 - "$OUT" "${folders[@]}" <<'PY'
 import json, sys

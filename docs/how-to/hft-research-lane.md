@@ -10,8 +10,10 @@ them replace the cash-account swarm (`aoa loop`) or submit live orders.
 | **hftbacktest** | `aoa.hftbacktest` · `aoa hft status\|smoke\|run` | Optional tick L2/L3 backtest (`pip install -e ".[hftbacktest]"`) |
 | **HFT-Orderbook** | `aoa.orderbook` · `aoa hft book-smoke` | Vendored limit-order-book (add/cancel/execute locally) |
 | **SGX LOB features** | `aoa.research.sgx_orderbook_patterns` | Rise ratio + weighted depth from SGX A50 notebooks |
+| **example-hftish** | `aoa.research.hftish_patterns` · `aoa hftish` | 1¢ level-change / book-imbalance follow ideas |
+| **VisualHFT studies** | `aoa.visualhft` · `aoa visualhft` | Offline LOB imbalance, VPIN, OTR study ports |
 
-Bridge: build a book with `LimitOrderBook`, then
+Bridge SGX features onto the vendored book with
 `snapshot_from_limit_order_book` → `feature_vector` /
 `depth_pressure_side`. See [sgx-orderbook-reference.md](sgx-orderbook-reference.md)
 and [hftbacktest-integration.md](hftbacktest-integration.md).
@@ -19,20 +21,21 @@ and [hftbacktest-integration.md](hftbacktest-integration.md).
 ```bash
 python3 examples/sgx_orderbook_smoke.py
 aoa hft book-smoke --json
+aoa hftish status
+aoa visualhft status
 ```
 
-## Sibling companions (clone beside the repo)
+## Sibling clones (optional, beside the repo)
 
-| Companion | Setup | Python ports | Guide |
-|-----------|-------|--------------|-------|
-| [SGX-Full-OrderBook-…](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy) | `./scripts/sgx-orderbook-setup.sh` | `sgx_orderbook_patterns` | [sgx-orderbook-reference.md](sgx-orderbook-reference.md) |
-| [hft](https://github.com/afidurko/hft) | `./scripts/hft-setup.sh` (when merged) | `hft_patterns` (pairs/maker/MA) | [hft-reference.md](hft-reference.md) |
-| [example-hftish](https://github.com/afidurko/example-hftish) | `./scripts/example-hftish-setup.sh` (when merged) | `hftish_patterns` (1¢ imbalance follow) | [example-hftish-reference.md](example-hftish-reference.md) |
-| [VisualHFT](https://github.com/afidurko/VisualHFT) | optional sibling | `aoa.visualhft` (when merged) | [visualhft-integration.md](visualhft-integration.md) |
+| Companion | Setup | Guide |
+|-----------|-------|-------|
+| [SGX-Full-OrderBook-…](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy) | `./scripts/sgx-orderbook-setup.sh` | [sgx-orderbook-reference.md](sgx-orderbook-reference.md) |
+| [example-hftish](https://github.com/afidurko/example-hftish) | `./scripts/example-hftish-setup.sh` | [example-hftish-reference.md](example-hftish-reference.md) |
+| [VisualHFT](https://github.com/afidurko/VisualHFT) | `./scripts/visualhft-setup.sh` | [visualhft-integration.md](visualhft-integration.md) |
+| [hft](https://github.com/afidurko/hft) | `./scripts/hft-setup.sh` (when landed) | [hft-reference.md](hft-reference.md) |
 
-Open PRs may land the `hft` / `example-hftish` / `VisualHFT` wiring; until then
-the GitHub forks remain readable references. Mesh catalog:
-`brain/mesh/repos.yaml`.
+Mesh catalog: `brain/mesh/repos.yaml`. Multi-root Cursor folders:
+`./scripts/write-aoa-workspace.sh` · [workspace-mesh.md](workspace-mesh.md).
 
 ## How the pieces fit
 
@@ -43,8 +46,8 @@ aoa.orderbook (vendored LOB) ──────┘ snapshot_from_limit_order_boo
                                    │
 aoa.hftbacktest (optional) ── replay / latency research
 example-hftish ── L1 imbalance / print-follow ideas
-hft (C++) ── pairs bands / maker / MA ideas
 VisualHFT ── VPIN / OTR / imbalance study ports
+hft (C++) ── pairs bands / maker / MA ideas (optional sibling)
 ```
 
 ## Safety (Hard Floor)

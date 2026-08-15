@@ -117,6 +117,7 @@ Hard safety floor (not process bureaucracy):
 | `obsidian-second-brain` | `_CLAUDE.md` living-brain rules, capture/distill habits |
 | `AutoHedge` | Swarm/worker role separation patterns for meshing |
 | `sgx-orderbook` | SGX A50 full-LOB rise/depth ML notebooks → `aoa.research.sgx_orderbook_patterns` |
+| `example-hftish` | Alpaca OB imbalance / level-change follow ideas → `aoa.research.hftish_patterns` |
 | AOA `vault/` | Property sync + analyzers; brain mirrors into vault |
 
 ---

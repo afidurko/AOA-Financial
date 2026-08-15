@@ -68,6 +68,10 @@ algorithms:
     owner: julie
     module: aoa.research.sgx_orderbook_patterns
     companion: sgx-orderbook
+  - id: algo.hftish_patterns
+    owner: julie
+    module: aoa.research.hftish_patterns
+    companion: example-hftish
 
 spines:
   - path: spine/ATTL.md

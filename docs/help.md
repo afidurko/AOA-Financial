@@ -25,8 +25,18 @@ aoa serve
 | Resource | Role |
 |----------|------|
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Sibling market dashboard (charts, watchlists). Link from the AOA header via `AOA_OPENSTOCK_URL`. |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live Level-2 microstructure desktop app (Windows/.NET). AOA ports LOB imbalance, VPIN, and OTR offline via `aoa visualhft`. |
 
-Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md).
+Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md) ·
+[how-to/visualhft-integration.md](how-to/visualhft-integration.md).
+
+Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest):
+
+```bash
+aoa workspaces status
+```
+
+Guide: [how-to/workspaces.md](how-to/workspaces.md).
 
 ## Engineering loop
 
@@ -42,11 +52,15 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 |----------|------|
 | **[Finance](https://github.com/shashankvemuri/Finance)** | Reference library of quantitative finance Python programs (used in Tom’s knowledge context). |
 | **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full limit-order-book ML notebooks (rise ratio, weighted depth, sklearn model selection). Pure-Python idea ports: `aoa.research.sgx_orderbook_patterns`. Upstream fork of [rorysroes/…](https://github.com/rorysroes/SGX-Full-OrderBook-Tick-Data-Trading-Strategy). |
+| **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker (1¢ level changes + size imbalance). Pure-Python idea ports: `aoa.research.hftish_patterns`. Upstream fork of [alpacahq/example-hftish](https://github.com/alpacahq/example-hftish). |
 
-**In-system wiring:** clone with `./scripts/sgx-orderbook-setup.sh` (gitignored sibling).
-Vault note: `vault/system/sgx-orderbook.md`. Guide: [how-to/sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md).
-Integrates with vendored `aoa.orderbook` via `snapshot_from_limit_order_book`.
-Companion map: [how-to/hft-research-lane.md](how-to/hft-research-lane.md).
+**SGX wiring:** `./scripts/sgx-orderbook-setup.sh` · `vault/system/sgx-orderbook.md` ·
+[how-to/sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md) · LOB bridge
+`snapshot_from_limit_order_book` · map [how-to/hft-research-lane.md](how-to/hft-research-lane.md).
+
+**example-hftish wiring:** `./scripts/example-hftish-setup.sh` · `vault/system/example-hftish.md` ·
+[how-to/example-hftish-reference.md](how-to/example-hftish-reference.md) · CLI `aoa hftish status|smoke`.
+
 Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)

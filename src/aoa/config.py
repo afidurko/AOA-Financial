@@ -276,6 +276,7 @@ class Config:
     obsidian_vault_path: str = ""
     spine_enabled: bool = False
     qm_url: str = ""
+    visualhft_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
     custom_app_webhook_url: str = ""
@@ -459,6 +460,7 @@ class Config:
             obsidian_vault_path=os.environ.get("AOA_OBSIDIAN_VAULT_PATH", "").strip(),
             spine_enabled=_bool("AOA_SPINE_ENABLED", False),
             qm_url=os.environ.get("AOA_QM_URL", "").strip(),
+            visualhft_url=os.environ.get("AOA_VISUALHFT_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
             custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),
