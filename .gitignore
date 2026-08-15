@@ -253,3 +253,6 @@ brain/captures/critical-*.md
 
 # OpenStock sibling clone (AGPL upstream — not vendored)
 OpenStock/
+
+# QM sibling clone (multiplayer agent harness — not vendored)
+qm/
