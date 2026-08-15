@@ -2,9 +2,9 @@
 type: brain-mesh
 mode: auto-12
 member_count: 12
-algorithm_count: 3
+algorithm_count: 6
 required_ok: true
-last_synced: 2026-07-18 23:43 UTC
+last_synced: 2026-08-15 22:00 UTC
 ---
 # Second-brain mesh mirror
 

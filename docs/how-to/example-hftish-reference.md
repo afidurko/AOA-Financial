@@ -97,3 +97,7 @@ example-hftish/README.md       PDT warning, SNAP default, Polygon note
 Upstream requires a live Alpaca account for Polygon streaming historically.
 AOA agents should read the strategy for microstructure ideas; they should not
 execute that script from a cloud loop.
+
+## Workspace mesh
+
+All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.

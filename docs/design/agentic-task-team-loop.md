@@ -116,8 +116,11 @@ Hard safety floor (not process bureaucracy):
 | `spine` | Feature-first spine notes under `brain/spine/` |
 | `obsidian-second-brain` | `_CLAUDE.md` living-brain rules, capture/distill habits |
 | `AutoHedge` | Swarm/worker role separation patterns for meshing |
+| `hft` | C++ HFT strategy ideas (pairs bands, hedged maker, MA cross) → `aoa.research.hft_patterns` |
 | `sgx-orderbook` | SGX A50 full-LOB rise/depth ML notebooks → `aoa.research.sgx_orderbook_patterns` |
 | `example-hftish` | Alpaca OB imbalance / level-change follow ideas → `aoa.research.hftish_patterns` |
+| `avellaneda-stoikov` | Reservation-price MM math → `aoa.avellaneda_stoikov` / `aoa avellaneda` |
+| `SGX-Full-OrderBook-…` | Depth-rise / weighted book features → `aoa.research.sgx_orderbook_patterns` |
 | AOA `vault/` | Property sync + analyzers; brain mirrors into vault |
 
 ---

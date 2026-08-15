@@ -16,6 +16,8 @@ Commands:
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
   aoa hft        Offline HFT/L2 lanes: hftbacktest + vendored orderbook.
   aoa visualhft  Offline VisualHFT microstructure studies (research lane).
+  aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
+  aoa microstructure  Mesh status for all offline HFT/LOB research lanes.
   aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
@@ -1412,6 +1414,118 @@ def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
     return 0
 
 
+def cmd_avellaneda_status(*, as_json: bool) -> int:
+    from aoa.avellaneda_stoikov import probe_status
+
+    status = probe_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== Avellaneda–Stoikov research lane ===")
+    print(f"  available: {status['available']}")
+    print(f"  runtime:   {status['runtime']}")
+    print(f"  model:     {status['model']}")
+    print(f"  modes:     {', '.join(status['modes'])}")
+    print(f"  offline:   {status.get('offline_only', True)}")
+    print(f"  never_live:{status.get('never_live', True)}")
+    print(f"  fork:      {status['fork']}")
+    print(f"  docs:      {status.get('docs')}")
+    print(f"  next:      {status.get('hint')}")
+    return 0
+
+
+def cmd_avellaneda_smoke(*, n_steps: int, n_sims: int, seed: int, as_json: bool) -> int:
+    from aoa.avellaneda_stoikov import run_synthetic_smoke
+
+    try:
+        result = run_synthetic_smoke(n_steps=n_steps, n_sims=n_sims, seed=seed)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}, indent=2))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== Avellaneda–Stoikov synthetic smoke ===")
+        print(f"  ok:          {result.ok}")
+        print(f"  reservation: {result.reservation:.4f}")
+        print(f"  bid / ask:   {result.bid:.4f} / {result.ask:.4f}")
+        print(f"  spread:      {result.spread:.4f}")
+        print(f"  path PnL:    {result.final_pnl:.4f}")
+        print(f"  mean PnL:    {result.mean_pnl:.4f} (n={result.n_sims})")
+        print(f"  steps/seed:  {result.n_steps} / {result.seed}")
+    return 0 if result.ok else 1
+
+
+def cmd_avellaneda_simulate(
+    *,
+    n_steps: int,
+    seed: int,
+    ensemble: bool,
+    n_sims: int,
+    unlimited: bool,
+    as_json: bool,
+) -> int:
+    from aoa.avellaneda_stoikov.simulate import SimConfig, run_ensemble, run_simulation
+
+    limit_horizon = not unlimited
+    if ensemble:
+        payload = run_ensemble(
+            n_sims=n_sims,
+            seed=seed,
+            n_steps=n_steps,
+            limit_horizon=limit_horizon,
+        )
+        if as_json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print("=== Avellaneda–Stoikov ensemble ===")
+            print(f"  sims:     {payload['n_sims']}")
+            print(f"  mean PnL: {payload['mean_pnl']:.4f}")
+            print(f"  std PnL:  {payload['std_pnl']:.4f}")
+            print(f"  min/max:  {payload['min_pnl']:.4f} / {payload['max_pnl']:.4f}")
+            print(f"  horizon:  {'limited' if limit_horizon else 'unlimited'}")
+        return 0
+
+    result = run_simulation(
+        SimConfig(n_steps=n_steps, seed=seed, limit_horizon=limit_horizon)
+    )
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== Avellaneda–Stoikov path ===")
+        print(f"  final PnL: {result.final_pnl:.4f}")
+        print(f"  inventory: {result.final_inventory:.4f}")
+        print(f"  cash:      {result.final_cash:.4f}")
+        print(f"  mid:       {result.final_mid:.4f}")
+        print(f"  q range: {result.min_inventory:.1f} … {result.max_inventory:.1f}")
+        print(f"  horizon:   {'limited' if result.limit_horizon else 'unlimited'}")
+        print(f"  seed:      {result.seed}")
+    return 0
+
+
+def cmd_microstructure_status(*, as_json: bool) -> int:
+    from aoa.microstructure import catalog_status
+
+    status = catalog_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== Microstructure workspace mesh ===")
+    print(f"  lanes:     {status['available_count']}/{status['lane_count']} available")
+    print(f"  offline:   {status.get('offline_only', True)}")
+    print(f"  never_live:{status.get('never_live', True)}")
+    print(f"  docs:      {status.get('docs')}")
+    for row in status.get("lanes", []):
+        flag = "ok" if row.get("available") else "missing"
+        print(f"  [{flag:7}] {row.get('lane')}: {row.get('hint')}")
+        if not row.get("available") and row.get("error"):
+            print(f"           {row['error']}")
+    return 0
+
+
 def _study_cortex(cfg: Config):
     from aoa.study.cortex import StudyCortex
 
@@ -2254,6 +2368,37 @@ def main(argv: list[str] | None = None) -> int:
         "--halflife", type=int, default=63, help="Recency half-life (bars) for adaptation."
     )
 
+    av = sub.add_parser(
+        "avellaneda",
+        help="Offline Avellaneda–Stoikov market-making research (never live).",
+    )
+    av_sub = av.add_subparsers(dest="avellaneda_command", required=True)
+    av_status = av_sub.add_parser("status", help="Show Avellaneda–Stoikov research-lane status.")
+    av_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    av_smoke = av_sub.add_parser(
+        "smoke",
+        help="Check reservation quotes + a short Monte-Carlo ensemble.",
+    )
+    av_smoke.add_argument("--steps", type=int, default=200, help="Steps per path.")
+    av_smoke.add_argument("--sims", type=int, default=20, help="Ensemble size for smoke.")
+    av_smoke.add_argument("--seed", type=int, default=1, help="RNG seed.")
+    av_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    av_sim = av_sub.add_parser("simulate", help="Run one AS path or an ensemble.")
+    av_sim.add_argument("--steps", type=int, default=200, help="Steps per path.")
+    av_sim.add_argument("--seed", type=int, default=1, help="RNG seed.")
+    av_sim.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Average PnL over --sims independent seeds.",
+    )
+    av_sim.add_argument("--sims", type=int, default=50, help="Ensemble size when --ensemble.")
+    av_sim.add_argument(
+        "--unlimited",
+        action="store_true",
+        help="Use unlimited-horizon quotes instead of finite T.",
+    )
+    av_sim.add_argument("--json", action="store_true", help="Emit JSON.")
+
     vh = sub.add_parser(
         "visualhft",
         help="Offline VisualHFT microstructure studies (never live).",
@@ -2280,6 +2425,14 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Only list studies with a Python port.",
     )
+
+    ms = sub.add_parser(
+        "microstructure",
+        help="Mesh status for all offline HFT/LOB research lanes (never live).",
+    )
+    ms_sub = ms.add_subparsers(dest="microstructure_command", required=True)
+    ms_status = ms_sub.add_parser("status", help="Show aggregated lane availability.")
+    ms_status.add_argument("--json", action="store_true", help="Emit JSON.")
 
     ws = sub.add_parser(
         "workspaces",
@@ -2544,6 +2697,9 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
                 ported_only=getattr(args, "ported_only", False),
             )
+<<<<<<< HEAD
+        return 2
+=======
 
     if args.command == "workspaces":
         if args.workspaces_command == "status":
@@ -2559,6 +2715,7 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
             )
 
+>>>>>>> origin/main
     if args.command == "hft":
         if args.hft_command == "status":
             return cmd_hft_status(as_json=getattr(args, "json", False))
@@ -2580,6 +2737,44 @@ def main(argv: list[str] | None = None) -> int:
                 step_ns=getattr(args, "step_ns", 50_000_000),
                 as_json=getattr(args, "json", False),
             )
+        return 2
+    if args.command == "avellaneda":
+        if args.avellaneda_command == "status":
+            return cmd_avellaneda_status(as_json=getattr(args, "json", False))
+        if args.avellaneda_command == "smoke":
+            return cmd_avellaneda_smoke(
+                n_steps=getattr(args, "steps", 200),
+                n_sims=getattr(args, "sims", 20),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.avellaneda_command == "simulate":
+            return cmd_avellaneda_simulate(
+                n_steps=getattr(args, "steps", 200),
+                seed=getattr(args, "seed", 1),
+                ensemble=getattr(args, "ensemble", False),
+                n_sims=getattr(args, "sims", 50),
+                unlimited=getattr(args, "unlimited", False),
+                as_json=getattr(args, "json", False),
+            )
+        return 2
+    if args.command == "microstructure":
+        if args.microstructure_command == "status":
+            return cmd_microstructure_status(as_json=getattr(args, "json", False))
+        return 2
+    if args.command == "workspaces":
+        if args.workspaces_command == "status":
+            return cmd_workspaces_status(as_json=getattr(args, "json", False))
+        return 2
+    if args.command == "hftish":
+        if args.hftish_command == "status":
+            return cmd_hftish_status(as_json=getattr(args, "json", False))
+        if args.hftish_command == "smoke":
+            return cmd_hftish_smoke(
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        return 2
 
     _ensure_env_template()
     cfg = Config.from_env()
