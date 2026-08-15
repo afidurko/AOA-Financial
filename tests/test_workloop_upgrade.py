@@ -10,11 +10,13 @@ from aoa.workloop.upgrade import run_upgrade_pipeline
 def test_upgrade_pipeline_dry_run_skips_pip():
     verify_ok = {"passed": True, "ruff": {"ok": True}, "pytest": {"ok": True}}
     with patch("aoa.workloop.upgrade.run_verify", return_value=verify_ok):
-        result = run_upgrade_pipeline(dry_run=True)
+        with patch("aoa.workloop.upgrade.run_upgrade") as upgrade:
+            result = run_upgrade_pipeline(dry_run=True)
     assert result["ok"] is True
     assert result["dry_run"] is True
     assert result["phase"] == "dry-run"
     assert result["upgrade"]["message"] == "Dry-run: upgrade skipped."
+    upgrade.assert_not_called()
 
 
 def test_upgrade_pipeline_fails_on_baseline():
@@ -25,3 +27,14 @@ def test_upgrade_pipeline_fails_on_baseline():
         result = run_upgrade_pipeline(dry_run=False)
     assert result["ok"] is False
     assert result["phase"] == "baseline-verify"
+
+
+def test_upgrade_pipeline_runs_pip_then_reverify():
+    verify_ok = {"passed": True, "ruff": {"ok": True}, "pytest": {"ok": True}}
+    upgrade_ok = {"ok": True, "returncode": 0, "output": ""}
+    with patch("aoa.workloop.upgrade.run_verify", return_value=verify_ok):
+        with patch("aoa.workloop.upgrade.run_upgrade", return_value=upgrade_ok):
+            result = run_upgrade_pipeline(dry_run=False)
+    assert result["ok"] is True
+    assert result["phase"] == "complete"
+    assert result["upgrade"]["ok"] is True

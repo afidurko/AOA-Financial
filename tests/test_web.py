@@ -10,10 +10,6 @@ try:
 except ImportError:  # pragma: no cover - fallback when httpx2 extra missing
     pytest.importorskip("httpx")
 
-pytestmark = pytest.mark.filterwarnings(
-    "ignore:websockets.legacy is deprecated:DeprecationWarning",
-)
-
 from starlette.testclient import TestClient  # noqa: E402
 
 from aoa.config import Config, RiskLimits  # noqa: E402
