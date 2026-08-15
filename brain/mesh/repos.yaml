@@ -42,6 +42,9 @@ repos:
     role: C++ HFT strategy reference (simplearb/maker/MA); Python ideas in aoa.research.hft_patterns
     workspace: ./hft
     setup: ./scripts/hft-setup.sh
+  - name: example-hftish
+    url: https://github.com/afidurko/example-hftish
+    role: Alpaca order-book imbalance tick-taker reference; Python ideas in aoa.research.hftish_patterns
 
 # Vendored / local workspaces (not separate git clones)
 local:

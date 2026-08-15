@@ -25,8 +25,18 @@ aoa serve
 | Resource | Role |
 |----------|------|
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Sibling market dashboard (charts, watchlists). Link from the AOA header via `AOA_OPENSTOCK_URL`. |
+| **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live Level-2 microstructure desktop app (Windows/.NET). AOA ports LOB imbalance, VPIN, and OTR offline via `aoa visualhft`. |
 
-Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md).
+Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md) ·
+[how-to/visualhft-integration.md](how-to/visualhft-integration.md).
+
+Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest):
+
+```bash
+aoa workspaces status
+```
+
+Guide: [how-to/workspaces.md](how-to/workspaces.md).
 
 ## Engineering loop
 
@@ -43,10 +53,13 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 | **[Finance](https://github.com/shashankvemuri/Finance)** | Reference library of quantitative finance Python programs (used in Tom’s knowledge context). |
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT futures strategies (pairs arb, hedged maker, MA cross) as a sibling reference. Pure-Python idea ports: `aoa.research.hft_patterns`. Upstream fork of [keyianpai/hft](https://github.com/keyianpai/hft). |
 | **[hftbacktest](https://github.com/afidurko/hftbacktest)** | Optional offline L2/L3 tick backtest (`pip install -e ".[hftbacktest]"`). Not the same as the C++ sibling — see [hftbacktest-integration.md](how-to/hftbacktest-integration.md). |
+| **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker (1¢ level changes + size imbalance). Pure-Python idea ports: `aoa.research.hftish_patterns`. Upstream fork of [alpacahq/example-hftish](https://github.com/alpacahq/example-hftish). |
 
-**In-system wiring:** clone with `./scripts/hft-setup.sh` (gitignored sibling).
-Vault note: `vault/system/hft.md`. Guide: [how-to/hft-reference.md](how-to/hft-reference.md).
-Not an order path — research / Julie algorithm context only.
+**In-system wiring:**
+- C++ HFT sibling: `./scripts/hft-setup.sh` · `vault/system/hft.md` · [hft-reference.md](how-to/hft-reference.md)
+- example-hftish: `./scripts/example-hftish-setup.sh` · `vault/system/example-hftish.md` · [example-hftish-reference.md](how-to/example-hftish-reference.md) · CLI `aoa hftish status|smoke`
+
+Neither path submits orders — research / Julie algorithm context only.
 
 ## Local model runtime (optional)
 

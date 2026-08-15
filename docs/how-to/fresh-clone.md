@@ -158,9 +158,33 @@ export AOA_QM_URL=http://localhost:8081
 ```
 
 See [qm-integration.md](qm-integration.md). Other companions:
-[docs/help.md](../help.md).
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
 
-## 8. HFT strategy reference (optional)
+## 11. VisualHFT (optional)
+
+Clone the microstructure desktop workspace and enable the dashboard link:
+
+```bash
+./scripts/visualhft-setup.sh
+export AOA_VISUALHFT_URL=https://github.com/afidurko/VisualHFT
+aoa visualhft status
+aoa workspaces status
+```
+
+See [visualhft-integration.md](visualhft-integration.md).
+
+## 12. Workspaces (optional)
+
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+
+```bash
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+```
+
+See [workspace-mesh.md](workspace-mesh.md).
+
+## 13. HFT strategy reference (optional)
 
 Clone the C++ HFT sibling for pairs-arb / maker / MA strategy reading
 ([hft](https://github.com/afidurko/hft)). AOA does not run it:
@@ -170,4 +194,18 @@ Clone the C++ HFT sibling for pairs-arb / maker / MA strategy reading
 ```
 
 See [hft-reference.md](hft-reference.md). Python idea ports:
-`aoa.research.hft_patterns`.
+`aoa.research.hft_patterns`. Distinct from offline L2 backtest —
+[hftbacktest-integration.md](hftbacktest-integration.md).
+
+## 14. example-hftish reference (optional)
+
+Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
+reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
+not run it:
+
+```bash
+./scripts/example-hftish-setup.sh
+```
+
+See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
+`aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.

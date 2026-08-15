@@ -95,6 +95,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "obsidian_vault_path": cfg.obsidian_vault_path,
             "spine_enabled": cfg.spine_enabled,
             "qm_url": cfg.qm_url,
+            "visualhft_url": cfg.visualhft_url,
         }
 
     @app.get("/api/status")
