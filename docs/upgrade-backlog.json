@@ -16,7 +16,19 @@
     "upg-014",
     "upg-015"
   ],
-  "assumed_completed": ["upg-003", "upg-004", "upg-005", "upg-006", "upg-007"],
+  "assumed_completed": [
+    "upg-003",
+    "upg-004",
+    "upg-005",
+    "upg-006",
+    "upg-007",
+    "upg-009",
+    "upg-011",
+    "upg-012",
+    "upg-013",
+    "upg-014",
+    "upg-015"
+  ],
   "items": {
     "upg-001": {
       "title": "Default paper profiles to Alpaca broker",
