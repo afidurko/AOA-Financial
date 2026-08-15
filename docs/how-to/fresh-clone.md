@@ -160,7 +160,7 @@ export AOA_QM_URL=http://localhost:8081
 See [qm-integration.md](qm-integration.md). Other companions:
 [docs/help.md](../help.md) · [workspaces.md](workspaces.md).
 
-## 8. VisualHFT (optional)
+## 11. VisualHFT (optional)
 
 Clone the microstructure desktop workspace and enable the dashboard link:
 
@@ -172,3 +172,16 @@ aoa workspaces status
 ```
 
 See [visualhft-integration.md](visualhft-integration.md).
+
+## 12. example-hftish reference (optional)
+
+Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
+reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
+not run it:
+
+```bash
+./scripts/example-hftish-setup.sh
+```
+
+See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
+`aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.
