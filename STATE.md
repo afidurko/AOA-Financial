@@ -9,13 +9,14 @@ Last run: 2026-08-15 21:05 UTC (issues fix + workspace integration)
 
 ## Watch List
 
-- **Alpaca credentials for paper default** — paper/paper-dry use `AOA_BROKER=alpaca`; set keys in `.env` or use `profiles/moomoo-paper.env` when OpenD is local
+- **Alpaca credentials for paper** — `profiles/paper.env` uses `AOA_BROKER=alpaca` (needs keys in `.env`); `paper-dry` defaults to Moomoo + OpenD (`profiles/paper-dry.env`)
 - **Runtime env partial** — fresh clones: `cp .env.example .env` + `./scripts/knowledge-stack-setup.sh` (see docs/how-to/fresh-clone.md + workspace-mesh.md)
 - **L2 promotion pending** — daily triage still L1; see docs/loop-l2-checklist.md
 - **Fable 5 repair active** — `aoa repair triage` + `fable-repair` skill (L2)
 - **Credential split** — Fable trial = loop automation; Max 5× = setup/review; API = swarm runtime → [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
 - **Task chain automated** — `aoa tasks chain advance --complete <id>` queues next item; alerts only on human-only blockers
-- **Workspaces** — Open `AOA.code-workspace` after knowledge-stack setup; Cursor Cloud env via `.cursor/environment.json`
+- **Workspaces** — `aoa workspaces setup` then open `AOA.code-workspace`; VisualHFT Positions empty → [docs/how-to/visualhft-positions-orders.md](docs/how-to/visualhft-positions-orders.md)
+- **VisualHFT Plugin Manager (upstream #29)** — large enhancement; track [visualHFT/VisualHFT#29](https://github.com/visualHFT/VisualHFT/issues/29) (not AOA-blocking)
 
 ## Loop automation
 

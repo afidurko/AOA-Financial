@@ -79,6 +79,9 @@ print(run_synthetic_smoke(n_trades=100, seed=1).to_dict())
 
 See [workspaces.md](workspaces.md) for the full companion map.
 
+Positions/Orders tab empty on Windows? See
+[visualhft-positions-orders.md](visualhft-positions-orders.md) (upstream #46).
+
 ## Safety
 
 - Offline research only (`offline_only` / `never_live` in status JSON)

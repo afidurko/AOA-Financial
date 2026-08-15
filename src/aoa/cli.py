@@ -1091,7 +1091,20 @@ def cmd_workspaces_status(*, as_json: bool) -> int:
             print(f"      url: {row['url']}")
         print(f"      path: {row['local_path']}")
         print(f"      docs: {row['docs']}")
+        if not row["present"] and row.get("setup"):
+            print(f"      setup: {row['setup']}")
     return 0
+
+
+def cmd_workspaces_setup() -> int:
+    """Clone missing companion siblings via scripts/workspaces-setup-all.sh."""
+    script = _repo_root() / "scripts" / "workspaces-setup-all.sh"
+    if not script.is_file():
+        print(f"Missing setup script: {script}", file=sys.stderr)
+        return 1
+    print(f"Running {script} …")
+    proc = subprocess.run(["bash", str(script)], check=False)
+    return int(proc.returncode)
 
 
 def cmd_journal(cfg: Config, n: int) -> int:
@@ -2255,6 +2268,10 @@ def main(argv: list[str] | None = None) -> int:
         help="Show sibling workspace link/path status (never live).",
     )
     ws_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    ws_sub.add_parser(
+        "setup",
+        help="Clone missing companions (OpenStock/QM/VisualHFT/…) and refresh AOA.code-workspace.",
+    )
 
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
@@ -2512,6 +2529,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "workspaces":
         if args.workspaces_command == "status":
             return cmd_workspaces_status(as_json=getattr(args, "json", False))
+        if args.workspaces_command == "setup":
+            return cmd_workspaces_setup()
 
     if args.command == "hft":
         if args.hft_command == "status":

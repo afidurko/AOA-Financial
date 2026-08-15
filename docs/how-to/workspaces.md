@@ -34,9 +34,18 @@ Shows whether each companion is **linked** (env URL / install) and **present**
 | VisualHFT | `./scripts/visualhft-setup.sh` | `AOA_VISUALHFT_URL` | [visualhft-integration.md](visualhft-integration.md) |
 | hftbacktest | `pip install -e ".[hftbacktest]"` (orderbook vendored) | (optional package) | [hftbacktest-integration.md](hftbacktest-integration.md) |
 
+One-shot (all companions that have setup scripts):
+
+```bash
+aoa workspaces setup
+# or: ./scripts/workspaces-setup-all.sh
+```
+
 The HFT workspace is **linked** when the vendored orderbook is healthy and/or
 the optional `hftbacktest` extra is installed. `aoa hft`, `aoa visualhft`, and
 `aoa workspaces` are offline — they do not create `.env` or load brokerage config.
+
+VisualHFT Positions/Orders empty: [visualhft-positions-orders.md](visualhft-positions-orders.md).
 
 ## Dashboard
 

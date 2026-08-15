@@ -280,3 +280,8 @@ AOA-Vault/
 qm/
 # example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
 example-hftish/
+# VisualHFT desktop + oxyplot (Windows/.NET — not vendored)
+VisualHFT/
+oxyplot/
+# hftbacktest research fork sibling (optional — not vendored)
+hftbacktest/
