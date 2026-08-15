@@ -18,9 +18,11 @@ You are the **implementer** in a maker/checker split. Apply the smallest change 
 
 ## Before editing
 
-1. Read `loop-constraints.md` — denylist paths are binding.
-2. Run `aoa repair worktree --item-id <id>` for isolated fixes (or manual branch in `.aoa-worktrees/`).
-3. Baseline tests:
+1. Confirm the run entered via **`aoa team code`** or **`aoa attl run`** (coding /
+   fix / simplify is loop-required — no ad-hoc path).
+2. Read `loop-constraints.md` — denylist paths are binding.
+3. Run `aoa repair worktree --item-id <id>` for isolated fixes (or manual branch in `.aoa-worktrees/`).
+4. Baseline tests:
 
 ```bash
 python3 -m ruff check src tests

@@ -971,7 +971,55 @@ def cmd_repair_triage(cfg: Config, *, no_sync: bool) -> int:
     _print_repair_result(result)
     if cfg.repair_sync_state and not no_sync:
         print(f"STATE.md updated at {result.state_path}")
-    return 1 if any(i.severity == "critical" and i.fixable for i in result.run.items) else 0
+    # Exit 1 only when L2 can act (auto-fixable critical). Escalated / human-only
+    # criticals must not fail queue-sync or other discovery automations.
+    from aoa.repair.schedule_gate import item_requires_escalation
+
+    needs_l2 = any(
+        i.severity == "critical"
+        and i.fixable
+        and not item_requires_escalation(i.to_context())
+        for i in result.run.items
+    )
+    return 1 if needs_l2 else 0
+
+
+def cmd_team_code(cfg: Config, *, dry_run: bool = True) -> int:
+    """Required entry for coding / fix / simplify — health → triage → ATTL mesh."""
+    from aoa.constraints import load_constraints
+
+    cs = load_constraints()
+    print(
+        f"Constraints loaded: {cs.rule_count} rules ({cs.mode}); "
+        f"pause={cs.pause_active}"
+    )
+    if cs.pause_active:
+        print("loop-pause-all active — coding path halted.")
+        return 1
+
+    health_rc = cmd_team_health(cfg)
+    print(
+        "\nCoding / fix / simplify MUST use the ATTL loop "
+        "(not ad-hoc edits outside maker/checker)."
+    )
+    triage_rc = cmd_repair_triage(cfg, no_sync=False)
+    print("\nRunning ATTL mesh" + (" (dry-run)" if dry_run else "") + "…")
+    from aoa.attl.orchestrator import AttlOrchestrator
+
+    orch = AttlOrchestrator()
+    result = orch.run(dry_run=dry_run)
+    print(f"ATTL outcome: {result.outcome}")
+    for note in result.notes[:8]:
+        print(f"  · {note}")
+    if result.selected_task:
+        title = result.selected_task.get("title") or result.selected_task.get("id")
+        print(f"Selected task: {title}")
+        print("Maker: minimal-fix / coding-engineer → loop-verifier → draft PR")
+    if health_rc:
+        return health_rc
+    if result.outcome in {"paused", "critical-report"}:
+        return 1
+    return triage_rc
 
 
 def cmd_repair_queue(cfg: Config) -> int:
@@ -1473,6 +1521,15 @@ def main(argv: list[str] | None = None) -> int:
     team = sub.add_parser("team", help="Team-specific commands.")
     team_sub = team.add_subparsers(dest="team_command", required=True)
     team_sub.add_parser("health", help="Run Bob's health and code-integrity checks.")
+    team_code = team_sub.add_parser(
+        "code",
+        help="Required coding/fix/simplify entry: health → triage → ATTL mesh.",
+    )
+    team_code.add_argument(
+        "--apply",
+        action="store_true",
+        help="Run ATTL without --dry-run (still draft-PR only; no auto-merge).",
+    )
     team_sub.add_parser("brief", help="Run Tom→Julie→Morgan→Alan brief without trading.")
     team_sub.add_parser("assistant", help="Alex — prioritized must-do vs should-do brief.")
     team_sub.add_parser(
@@ -1714,6 +1771,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "team":
             if args.team_command == "health":
                 return cmd_team_health(cfg)
+            if args.team_command == "code":
+                return cmd_team_code(cfg, dry_run=not getattr(args, "apply", False))
             if args.team_command == "brief":
                 return cmd_team_brief(cfg)
             if args.team_command == "assistant":

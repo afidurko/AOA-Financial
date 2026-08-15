@@ -12,10 +12,10 @@ Every daily triage run:
 loop-constraints → loop-budget (start) → loop-triage → STATE.md + vault sync + loop-run-log.md → loop-budget (end)
 ```
 
-Meshed L2 / coding (prefer one command):
+Meshed L2 / coding (**required** for fix/simplify — prefer one command):
 
 ```
-aoa attl run
+aoa team code / aoa attl run
   → Nova brain sync → repair gate → Reed propose → Kai critical gate
   → worktree (when l2-allowed) → maker → verifier → draft PR (human merge)
 ```
@@ -26,8 +26,9 @@ aoa attl run
 |---------|---------|-------|-----------------|
 | Daily triage | 1d | L1 | `loop-triage` skill |
 | **Vault sync** | 1d / per-cycle | L1 | `aoa vault sync` · tier1 `vault-sync` step |
-| **ATTL mesh** | on-demand / 1d | L2-auto | `aoa attl run` · `fable-repair` |
+| **ATTL mesh** | on-demand / 1d | L2-auto | `aoa team code` / `aoa attl run` · `fable-repair` |
 | **Fable 5 repair** | inside ATTL | L2 | `aoa repair triage` + worktree |
+| **Coding / simplify** | via ATTL only | L2 | `aoa team code` · `coding-engineer` · `minimal-fix` |
 | Trading swarm | `AOA_CYCLE_SECONDS` | prod | `aoa loop` / web `LoopRunner` |
 | Work loop | `AOA_WORKLOOP_INTERVAL_SECONDS` | gated | `aoa workloop loop` |
 | **Second brain** | per ATTL run | L1/L2 | `aoa attl brain sync` · `brain/` |

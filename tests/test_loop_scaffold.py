@@ -22,6 +22,8 @@ LOOP_SKILLS = (
     "loop-triage",
     "minimal-fix",
     "loop-verifier",
+    "fable-repair",
+    "coding-engineer",
 )
 
 
@@ -52,3 +54,13 @@ def test_code_audit_includes_loop_scaffold_check() -> None:
     areas = {f.area: f for f in report.findings}
     assert "loop_scaffold" in areas
     assert areas["loop_scaffold"].status is HealthStatus.OK
+    assert "coding-via-ATTL" in areas["loop_scaffold"].detail
+
+
+def test_team_code_cli_wired() -> None:
+    cli = (REPO_ROOT / "src" / "aoa" / "cli.py").read_text(encoding="utf-8")
+    assert "cmd_team_code" in cli
+    assert 'team_command == "code"' in cli
+    constraints = (REPO_ROOT / "loop-constraints.md").read_text(encoding="utf-8").lower()
+    assert "must use the attl" in constraints
+    assert "coding, fixing, and simplifying" in constraints

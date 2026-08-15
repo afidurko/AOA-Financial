@@ -20,6 +20,7 @@ python3 -m aoa.cli repair gate --for repair
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
 python3 -m aoa.cli team health
+python3 -m aoa.cli team code
 ```
 
 Full install (web dashboard + import sweep):
@@ -48,11 +49,14 @@ pip install -e ".[dev]"
 
 ```
 loop-constraints → loop-budget (start)
-  → aoa attl run          # Nova + gate + Reed + Kai (+ worktree when allowed)
+  → aoa team code / aoa attl run   # health+triage+Nova+Reed+Kai (+ worktree)
   → maker / verifier only if coding
   → draft PR (human merge)
   → loop-budget (end)
 ```
+
+Coding / fix / simplify is **loop-required** — use `aoa team code` (or `attl run`),
+not ad-hoc edits outside maker/checker.
 
 L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 
