@@ -116,6 +116,7 @@ Hard safety floor (not process bureaucracy):
 | `spine` | Feature-first spine notes under `brain/spine/` |
 | `obsidian-second-brain` | `_CLAUDE.md` living-brain rules, capture/distill habits |
 | `AutoHedge` | Swarm/worker role separation patterns for meshing |
+| `example-hftish` | Alpaca OB imbalance / level-change follow ideas → `aoa.research.hftish_patterns` |
 | AOA `vault/` | Property sync + analyzers; brain mirrors into vault |
 
 ---

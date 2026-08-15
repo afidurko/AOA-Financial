@@ -37,6 +37,9 @@ repos:
     role: multiplayer agent harness (Slack + web); AOA_QM_URL companion
     workspace: ./qm
     setup: ./scripts/qm-setup.sh
+  - name: example-hftish
+    url: https://github.com/afidurko/example-hftish
+    role: Alpaca order-book imbalance tick-taker reference; Python ideas in aoa.research.hftish_patterns
 
 # Vendored / local workspaces (not separate git clones)
 local:
