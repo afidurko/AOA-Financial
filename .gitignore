@@ -232,7 +232,7 @@ reports/
 *.db-shm
 
 # AOA runtime state (per-environment journals, plasticity, workloop)
-data/
+/data/
 journal/*.jsonl
 
 # ATTL second-brain auto captures (keep directory via .gitkeep)
