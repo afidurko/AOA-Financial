@@ -92,6 +92,11 @@ loops:
   - id: attl-mesh
     module: aoa.attl.mesh
     cli: aoa attl run
+  - id: integrity-ten
+    module: aoa.integrity.squad
+    cli: aoa integrity run
+    roster: integrity-ten
+    feeds: [bob, julie, nova, reed, kai, aaron, alex, alan, andrea, hailey]
   - id: repair
     module: aoa.repair
     feeds: [reed, kai]

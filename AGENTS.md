@@ -19,6 +19,8 @@ python3 -m aoa.cli repair gate --for triage
 python3 -m aoa.cli repair gate --for repair
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
+python3 -m aoa.cli integrity roster
+python3 -m aoa.cli integrity run --dry-run
 python3 -m aoa.cli ship discover
 python3 -m aoa.cli ship proofread
 python3 -m aoa.cli team health
@@ -42,9 +44,10 @@ pip install -e ".[dev]"
 - Safety: `docs/safety.md`
 - Second brain: `brain/` (Nova) meshed into vault + Julie algorithms
 - Twelve-member roster: `aoa attl roster`
+- Integrity Ten: `aoa integrity` — continuous code / workspace / neural / mesh checks
 - Review: **critical-only** (Kai)
 - State: `STATE.md` · Run log: `loop-run-log.md`
-- Design: `docs/design/agentic-task-team-loop.md`
+- Design: `docs/design/agentic-task-team-loop.md` · `docs/design/integrity-ten.md`
 
 ## Canonical meshed run order
 
@@ -72,6 +75,20 @@ L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 | `loop-verifier` | Checker when verifying a PR / Kai path |
 | `coding-engineer` | Twelve-member code-health patterns |
 | `ship-loop` | Discover → fix → proofread → ready (no auto-merge) |
+
+## Integrity Ten
+
+Continuous cohesive unit (10 of 12 ATTL members) for code, workspaces, neural memory, and mesh:
+
+```bash
+aoa integrity roster
+aoa integrity run              # check + notify if corrective needs approve
+aoa integrity watch --interval 300
+aoa integrity approve <id>     # user implants corrective action
+aoa integrity reject <id>
+```
+
+Design: [docs/design/integrity-ten.md](docs/design/integrity-ten.md). Hard floor still applies; never auto-merge.
 
 Official Moomoo skill packs live under `.cursor/skills/{moomooapi,install-moomoo-opend}/` and are mirrored in `.claude/skills/` for Claude Code. Source: [opend-skills.zip](https://openapi.moomoo.com/skills/opend-skills.zip). Prefer `/moomooapi` (or natural language about quotes/orders); use `/install-moomoo-opend` to install OpenD on a local machine.
 

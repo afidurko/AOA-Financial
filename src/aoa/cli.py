@@ -26,6 +26,7 @@ Commands:
   aoa hftish     Order-book imbalance research lane (example-hftish patterns).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
+  aoa integrity  Integrity Ten — continuous code/workspace/neural/mesh checks.
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -1987,6 +1988,128 @@ def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:
     return cmd_attl_run(cfg, dry_run=False, report=True, as_json=as_json)
 
 
+def _integrity_squad(cfg: Config):
+    from aoa.config import data_dir_for
+    from aoa.integrity import IntegritySquad
+
+    return IntegritySquad(
+        repo_root=Path.cwd(),
+        data_dir=data_dir_for(cfg.env) / "integrity",
+    )
+
+
+def cmd_integrity_status(cfg: Config, *, as_json: bool = False) -> int:
+    squad = _integrity_squad(cfg)
+    status = squad.status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print(f"Unit: {status['unit']}  roster={status['roster_size']}")
+    print(f"Paused: {status['paused']}  mode={status['mode']}")
+    print(f"Pending proposals: {status['pending_proposals']}")
+    brain = status.get("brain") or {}
+    print(
+        "Brain: "
+        f"members={brain.get('members')} algos={brain.get('algorithms')} "
+        f"required_ok={brain.get('required_ok')}"
+    )
+    print(f"Queue: {status['queue_path']}")
+    return 0
+
+
+def cmd_integrity_roster(cfg: Config, *, as_json: bool = False) -> int:
+    squad = _integrity_squad(cfg)
+    rows = squad.roster()
+    if as_json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    print("Integrity Ten — cohesive integrity mesh")
+    for i, row in enumerate(rows, start=1):
+        print(f"  {i:2d}. {row['name']:<8} — {row['role']} [{row['domain']}]")
+    return 0
+
+
+def cmd_integrity_run(
+    cfg: Config,
+    *,
+    dry_run: bool = False,
+    notify: bool = True,
+    as_json: bool = False,
+) -> int:
+    squad = _integrity_squad(cfg)
+    result = squad.run(dry_run=dry_run, notify=notify)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+        return 0 if result.outcome != "paused" else 2
+    print(f"Integrity Ten — outcome: {result.outcome}")
+    print(f"Worst status: {result.worst_status}  ok={result.ok}")
+    for note in result.notes:
+        print(f"  · {note}")
+    if result.proposal:
+        print(f"Proposal: {result.proposal.get('id')} (awaiting user approve/reject)")
+        print("  aoa integrity approve <id>   # implant corrective action")
+        print("  aoa integrity reject <id>    # decline implant")
+    if result.capture:
+        print(f"Capture: {result.capture}")
+    return 0 if not result.paused else 2
+
+
+def cmd_integrity_watch(
+    cfg: Config,
+    *,
+    interval: int = 300,
+    iterations: int | None = None,
+    dry_run: bool = False,
+    notify: bool = True,
+) -> int:
+    squad = _integrity_squad(cfg)
+    print(
+        f"Integrity Ten watch — interval={interval}s "
+        f"iterations={'∞' if iterations is None else iterations}"
+    )
+    # Finite iterations for CLI safety when None not intended; default one pass
+    # unless user passes --iterations. Continuous when iterations is None.
+    results = squad.watch(
+        interval_seconds=interval,
+        iterations=iterations,
+        dry_run=dry_run,
+        notify=notify,
+    )
+    for i, result in enumerate(results, start=1):
+        print(f"[{i}] outcome={result.outcome} worst={result.worst_status}")
+        if result.proposal:
+            print(f"    proposal={result.proposal.get('id')}")
+        if result.paused:
+            return 2
+    return 0
+
+
+def cmd_integrity_approve(cfg: Config, proposal_id: str, *, note: str = "") -> int:
+    squad = _integrity_squad(cfg)
+    try:
+        result = squad.approve(proposal_id, note=note)
+    except (KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Approved and implanted: {proposal_id}")
+    applied = result.get("applied") or {}
+    if applied.get("capture"):
+        print(f"Capture: {applied['capture']}")
+    if applied.get("repair_hint_queued"):
+        print("Reed handoff queued (draft PR only — never auto-merge).")
+    return 0
+
+
+def cmd_integrity_reject(cfg: Config, proposal_id: str, *, note: str = "") -> int:
+    squad = _integrity_squad(cfg)
+    try:
+        squad.reject(proposal_id, note=note)
+    except (KeyError, ValueError) as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Rejected (no implant): {proposal_id}")
+    return 0
+
 
 def cmd_tasks_list() -> int:
     from aoa.loop.prompts import format_prompt_list
@@ -2669,6 +2792,65 @@ def main(argv: list[str] | None = None) -> int:
     at_brain_sync = at_brain_sub.add_parser("sync", help="Nova: refresh mesh + capture.")
     at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    integ = sub.add_parser(
+        "integrity",
+        help="Integrity Ten — continuous code/workspace/neural/mesh checks.",
+    )
+    integ_sub = integ.add_subparsers(dest="integrity_command", required=True)
+    integ_status = integ_sub.add_parser(
+        "status", help="Show Integrity Ten status and pending proposals."
+    )
+    integ_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    integ_roster = integ_sub.add_parser(
+        "roster", help="Print the 10-member integrity mesh."
+    )
+    integ_roster.add_argument("--json", action="store_true", help="Emit JSON.")
+    integ_run = integ_sub.add_parser(
+        "run",
+        help="One integrity cycle; notify user if corrective action needs approval.",
+    )
+    integ_run.add_argument(
+        "--dry-run", action="store_true", help="Check only; do not queue proposals."
+    )
+    integ_run.add_argument(
+        "--no-notify",
+        action="store_true",
+        help="Skip iPhone/push dispatch (still writes proposal + capture).",
+    )
+    integ_run.add_argument("--json", action="store_true", help="Emit JSON.")
+    integ_watch = integ_sub.add_parser(
+        "watch",
+        help="Continuously run Integrity Ten cycles (Ctrl-C to stop).",
+    )
+    integ_watch.add_argument(
+        "--interval",
+        type=int,
+        default=300,
+        help="Seconds between cycles (default 300).",
+    )
+    integ_watch.add_argument(
+        "--iterations",
+        type=int,
+        default=None,
+        help="Stop after N cycles (default: run until pause/Ctrl-C).",
+    )
+    integ_watch.add_argument("--dry-run", action="store_true", help="Check only.")
+    integ_watch.add_argument(
+        "--no-notify", action="store_true", help="Skip push dispatch."
+    )
+    integ_approve = integ_sub.add_parser(
+        "approve",
+        help="User approves implant of a corrective proposal.",
+    )
+    integ_approve.add_argument("proposal_id", help="Proposal id from integrity run.")
+    integ_approve.add_argument("--note", default="", help="Optional approval note.")
+    integ_reject = integ_sub.add_parser(
+        "reject",
+        help="User rejects implant of a corrective proposal.",
+    )
+    integ_reject.add_argument("proposal_id", help="Proposal id from integrity run.")
+    integ_reject.add_argument("--note", default="", help="Optional rejection note.")
+
     ship = sub.add_parser(
         "ship",
         help="Ship-ready task loop — discover issues, proofread, mark ready (no auto-merge).",
@@ -2950,6 +3132,34 @@ def main(argv: list[str] | None = None) -> int:
             if args.attl_command == "brain":
                 if args.brain_command == "sync":
                     return cmd_attl_brain_sync(cfg, as_json=getattr(args, "json", False))
+        if args.command == "integrity":
+            if args.integrity_command == "status":
+                return cmd_integrity_status(cfg, as_json=getattr(args, "json", False))
+            if args.integrity_command == "roster":
+                return cmd_integrity_roster(cfg, as_json=getattr(args, "json", False))
+            if args.integrity_command == "run":
+                return cmd_integrity_run(
+                    cfg,
+                    dry_run=getattr(args, "dry_run", False),
+                    notify=not getattr(args, "no_notify", False),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.integrity_command == "watch":
+                return cmd_integrity_watch(
+                    cfg,
+                    interval=getattr(args, "interval", 300),
+                    iterations=getattr(args, "iterations", None),
+                    dry_run=getattr(args, "dry_run", False),
+                    notify=not getattr(args, "no_notify", False),
+                )
+            if args.integrity_command == "approve":
+                return cmd_integrity_approve(
+                    cfg, args.proposal_id, note=getattr(args, "note", "") or ""
+                )
+            if args.integrity_command == "reject":
+                return cmd_integrity_reject(
+                    cfg, args.proposal_id, note=getattr(args, "note", "") or ""
+                )
         if args.command == "ship":
             if args.ship_command == "discover":
                 return cmd_ship_discover(

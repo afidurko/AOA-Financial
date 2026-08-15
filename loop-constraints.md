@@ -24,6 +24,7 @@ Meshed control plane: **brain/** + **12-member team** + **repair/task factory** 
 |---------|--------|
 | Mode | `auto-12` (`aoa attl status`) |
 | Roster | Tom · Julie · Morgan · Hailey · Alan · Andrea · Bob · Aaron · Alex · **Nova** · **Reed** · **Kai** |
+| Integrity Ten | Julie · Hailey · Alan · Andrea · Bob · Aaron · Alex · Nova · Reed · Kai (`aoa integrity`) — continuous code / workspace / neural / mesh checks; corrective implant only after user approve |
 | Review | **Critical-only** (Kai) — critical flaw, system failure, or `aoa attl report` |
 | Process gates | Relaxed — user interacts directly and can fix; no mandatory pre-ask / activate step |
 | Knowledge | Nova syncs `brain/`; Julie/algorithms read `brain_context_for_algorithms()` |
@@ -33,6 +34,7 @@ Meshed control plane: **brain/** + **12-member team** + **repair/task factory** 
 ### What auto-12 may do without asking
 
 - Run `aoa attl run` / propose / brain sync
+- Run `aoa integrity run` / watch (checks + notify); **not** implant without user approve/reject
 - Create repair worktrees for automatable items
 - Open **draft** PRs
 - Advance the task chain after a completed automatable item
@@ -67,16 +69,19 @@ Meshed control plane: **brain/** + **12-member team** + **repair/task factory** 
 loop-constraints → loop-budget (start)
   → aoa attl brain sync          # Nova
   → aoa repair triage            # discover
+  → aoa integrity run            # Integrity Ten (notify if corrective needs approve)
   → aoa attl run                 # Reed + critical Kai gate
   → (if coding) maker → tests → draft PR
   → brain capture + loop-run-log → loop-budget (end)
 ```
 
 Shortcut: `aoa attl run` performs the meshed auto cycle (pause/gate/brain/propose/critical).
+Integrity Ten: `aoa integrity run` / `aoa integrity watch` — implant only via `aoa integrity approve`.
 
 ## Docs
 
 - Design: `docs/design/agentic-task-team-loop.md`
+- Integrity Ten: `docs/design/integrity-ten.md`
 - Safety detail: `docs/safety.md`
 - Brain rules: `brain/_CLAUDE.md`
 - Mesh graph: `brain/mesh/index.yaml`
