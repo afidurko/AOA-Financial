@@ -266,6 +266,34 @@ def run_task(
                 )
             continue
 
+        if step == "ship-discover":
+            proc = _run_cmd([py, "-m", "aoa.cli", "ship", "discover"], cwd=root)
+            steps_run.append("ship-discover")
+            if proc.returncode != 0:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    gate_action=gate_action,
+                    message=proc.stderr or proc.stdout or "ship discover failed",
+                    exit_code=proc.returncode,
+                )
+            continue
+
+        if step == "ship-proofread":
+            proc = _run_cmd([py, "-m", "aoa.cli", "ship", "proofread"], cwd=root)
+            steps_run.append("ship-proofread")
+            if proc.returncode != 0:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    gate_action=gate_action,
+                    message=proc.stdout + proc.stderr,
+                    exit_code=proc.returncode,
+                )
+            continue
+
         if step == "vault-sync":
             from aoa.config import Config
             from aoa.vault.analyzers import engineering_l2_enabled

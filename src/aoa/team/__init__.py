@@ -4,18 +4,22 @@ from aoa.team.aaron import AaronAgent
 from aoa.team.alan import AlanAgent
 from aoa.team.alex import AlexAgent
 from aoa.team.bob import BobAgent
+from aoa.team.cindy import CindyAgent
+from aoa.team.jim import JimAgent
 from aoa.team.julie import JulieAgent
 from aoa.team.kai import KaiAgent
 from aoa.team.models import (
     AlgorithmReport,
     AssistantBrief,
     CEOReport,
+    CompanyAnalysisReport,
     DecisionBrief,
     HealthReport,
     HealthStatus,
     MarketContextReport,
     PriorityItem,
     PriorityLevel,
+    ShortTermReport,
     TeamMemberStatus,
     TrendDirection,
     TrendReport,
@@ -35,9 +39,12 @@ __all__ = [
     "AssistantBrief",
     "BobAgent",
     "CEOReport",
+    "CindyAgent",
+    "CompanyAnalysisReport",
     "DecisionBrief",
     "HealthReport",
     "HealthStatus",
+    "JimAgent",
     "JulieAgent",
     "KaiAgent",
     "MarketContextReport",
@@ -46,6 +53,7 @@ __all__ = [
     "PriorityItem",
     "PriorityLevel",
     "ReedAgent",
+    "ShortTermReport",
     "TWELVE_MEMBER_ROSTER",
     "TeamCycleResult",
     "TeamMemberStatus",
