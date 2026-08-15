@@ -64,7 +64,10 @@ aoa tasks run tier1-check    # gate only
 aoa tasks run tier1            # gate → repair triage → ruff → pytest → log
 aoa tasks run tier2-check      # gate repair → log if blocked
 aoa tasks run verify           # ruff + pytest only
+aoa tasks run workloop-upgrade # dependency pipeline dry-run (verify only)
 ```
+
+Weekly dependency check: see [workloop-upgrade.md](workloop-upgrade.md).
 
 Example cron: `bash scripts/install_loop_cron.example.sh --print`
 

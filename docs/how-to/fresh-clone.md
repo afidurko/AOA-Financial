@@ -158,9 +158,9 @@ export AOA_QM_URL=http://localhost:8081
 ```
 
 See [qm-integration.md](qm-integration.md). Other companions:
-[docs/help.md](../help.md) · [workspaces.md](workspaces.md).
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
 
-## 8. VisualHFT (optional)
+## 11. VisualHFT (optional)
 
 Clone the microstructure desktop workspace and enable the dashboard link:
 
@@ -172,3 +172,14 @@ aoa workspaces status
 ```
 
 See [visualhft-integration.md](visualhft-integration.md).
+
+## 12. Workspaces (optional)
+
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+
+```bash
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+```
+
+See [workspace-mesh.md](workspace-mesh.md).
