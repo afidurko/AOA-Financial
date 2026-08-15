@@ -163,6 +163,11 @@ class StudyCortex:
         cards_dir = study_dir / "cards"
         cards_dir.mkdir(parents=True, exist_ok=True)
         status = self.status()
+        mastered = status["n_mastered"]
+        total = max(1, status["n_cards"])
+        phase = "use" if mastered / total >= 0.5 else "learn"
+        if mastered / total >= 0.8:
+            phase = "distill"
         progress = VaultNote(
             path=study_dir / "progress.md",
             frontmatter={
@@ -172,7 +177,7 @@ class StudyCortex:
                 "n_due": status["n_due"],
                 "sessions": status["sessions"],
                 "last_session": mastery.updated_at or "",
-                "slm_phase": "learn",
+                "slm_phase": phase,
             },
             body=(
                 "\n# Study cortex progress\n\n"
@@ -181,6 +186,8 @@ class StudyCortex:
                 "mastery raises weight (`AOA_STUDY_USAGE_ENABLED`, default true).\n"
                 "Phase **distill**: `aoa study export` writes JSONL for LoRA/sLM via "
                 "`aoa.adapt.torch_lora`.\n"
+                f"\nCurrent phase: **{phase}** "
+                f"({mastered}/{status['n_cards']} mastered).\n"
             ),
         )
         write_note(progress)

@@ -12,3 +12,5 @@ slm_phase: learn
 Phase **learn**: spaced drills on DE / physics / economics bridges.
 Phase **use**: always-on — baseline bridges inject every cycle; mastery raises weight (`AOA_STUDY_USAGE_ENABLED`, default true).
 Phase **distill**: `aoa study export` writes JSONL for LoRA/sLM via `aoa.adapt.torch_lora`.
+
+Current phase: **learn** (0/17 mastered).

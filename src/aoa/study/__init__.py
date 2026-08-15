@@ -1,10 +1,10 @@
 """Study cortex — learn critical theory, then reuse it in AOA.
 
-Architecture (sLM-style, two phases):
+Architecture (sLM-style, three phases):
 
 1. **Learn** — curated theorem cards + spaced mastery (deterministic student model).
-2. **Use** — mastered bridges inject into swarm prompts; export JSONL for a future
-   LoRA/sLM adapter via :mod:`aoa.adapt.torch_lora`.
+2. **Use** — baseline + mastered bridges inject into swarm prompts every cycle.
+3. **Distill** — export JSONL for a future LoRA/sLM adapter via :mod:`aoa.adapt.torch_lora`.
 
 This is *not* training a neural LM in-process. It builds the corpus and mastery
 loop first; fine-tuning is optional and offline.

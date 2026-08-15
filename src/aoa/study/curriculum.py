@@ -8,8 +8,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-FIELDS = ("de", "physics", "econ", "bridge")
-
 
 @dataclass(frozen=True)
 class KnowledgeCard:
