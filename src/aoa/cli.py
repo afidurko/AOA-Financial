@@ -1286,10 +1286,9 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     return 0
 
 
-def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
+def cmd_workloop_upgrade(_cfg: Config, *, dry_run: bool) -> int:
     from aoa.workloop.upgrade import run_upgrade_pipeline
 
-    _ = cfg  # Config required for CLI consistency; pipeline uses repo root.
     result = run_upgrade_pipeline(_repo_root(), dry_run=dry_run)
     flag = "OK" if result.get("ok") else "FAIL"
     mode = "dry-run" if dry_run else "upgrade"
@@ -1299,7 +1298,7 @@ def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
         return 0
     upgrade = result.get("upgrade") or {}
     if upgrade.get("output"):
-        print(upgrade["output"][-500:])
+        print(str(upgrade["output"])[-500:])
     reverify = result.get("reverify") or {}
     if reverify and not reverify.get("passed"):
         print("Reverify failed after upgrade.")
