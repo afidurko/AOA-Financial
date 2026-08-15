@@ -50,3 +50,12 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 
 Useful when you want a local OpenAI-compatible inference path for agents without
 fitting the full model in RAM.
+
+## Market microstructure (research)
+
+| Resource | Role |
+|----------|------|
+| **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | Classic AS HFT market-making simulation + paper PDFs. AOA ports the math as an offline lane: `aoa avellaneda status|smoke|simulate`. |
+
+Guide: [how-to/avellaneda-stoikov.md](how-to/avellaneda-stoikov.md). Vault: `vault/system/avellaneda_stoikov.md`.
+Never an order path — Hard Safety Floor still applies.

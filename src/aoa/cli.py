@@ -14,6 +14,7 @@ Commands:
   aoa simulate   Monte-Carlo + scenario stress-test a symbol's forward path.
   aoa scenarios  List the built-in stress-scenario library.
   aoa watch      Live-track symbols: re-analyze & re-simulate as the market moves.
+  aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.
@@ -1124,6 +1125,91 @@ def cmd_vault_status(cfg: Config, *, as_json: bool) -> int:
     return 0
 
 
+def cmd_avellaneda_status(*, as_json: bool) -> int:
+    from aoa.avellaneda_stoikov import probe_status
+
+    status = probe_status()
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== Avellaneda–Stoikov research lane ===")
+    print(f"  available: {status['available']}")
+    print(f"  runtime:   {status['runtime']}")
+    print(f"  model:     {status['model']}")
+    print(f"  modes:     {', '.join(status['modes'])}")
+    print(f"  offline:   {status.get('offline_only', True)}")
+    print(f"  never_live:{status.get('never_live', True)}")
+    print(f"  fork:      {status['fork']}")
+    print(f"  docs:      {status.get('docs')}")
+    print(f"  next:      {status.get('hint')}")
+    return 0
+
+
+def cmd_avellaneda_smoke(*, n_steps: int, n_sims: int, seed: int, as_json: bool) -> int:
+    from aoa.avellaneda_stoikov import run_synthetic_smoke
+
+    result = run_synthetic_smoke(n_steps=n_steps, n_sims=n_sims, seed=seed)
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== Avellaneda–Stoikov synthetic smoke ===")
+        print(f"  ok:          {result.ok}")
+        print(f"  reservation: {result.reservation:.4f}")
+        print(f"  bid / ask:   {result.bid:.4f} / {result.ask:.4f}")
+        print(f"  spread:      {result.spread:.4f}")
+        print(f"  path PnL:    {result.final_pnl:.4f}")
+        print(f"  mean PnL:    {result.mean_pnl:.4f} (n={result.n_sims})")
+        print(f"  steps/seed:  {result.n_steps} / {result.seed}")
+    return 0 if result.ok else 1
+
+
+def cmd_avellaneda_simulate(
+    *,
+    n_steps: int,
+    seed: int,
+    ensemble: bool,
+    n_sims: int,
+    unlimited: bool,
+    as_json: bool,
+) -> int:
+    from aoa.avellaneda_stoikov.simulate import SimConfig, run_ensemble, run_simulation
+
+    limit_horizon = not unlimited
+    if ensemble:
+        payload = run_ensemble(
+            n_sims=n_sims,
+            seed=seed,
+            n_steps=n_steps,
+            limit_horizon=limit_horizon,
+        )
+        if as_json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print("=== Avellaneda–Stoikov ensemble ===")
+            print(f"  sims:     {payload['n_sims']}")
+            print(f"  mean PnL: {payload['mean_pnl']:.4f}")
+            print(f"  std PnL:  {payload['std_pnl']:.4f}")
+            print(f"  min/max:  {payload['min_pnl']:.4f} / {payload['max_pnl']:.4f}")
+            print(f"  horizon:  {'limited' if limit_horizon else 'unlimited'}")
+        return 0
+
+    result = run_simulation(
+        SimConfig(n_steps=n_steps, seed=seed, limit_horizon=limit_horizon)
+    )
+    if as_json:
+        print(json.dumps(result.to_dict(), indent=2))
+    else:
+        print("=== Avellaneda–Stoikov path ===")
+        print(f"  final PnL: {result.final_pnl:.4f}")
+        print(f"  inventory: {result.final_inventory:.4f}")
+        print(f"  cash:      {result.final_cash:.4f}")
+        print(f"  mid:       {result.final_mid:.4f}")
+        print(f"  q range: {result.min_inventory:.1f} … {result.max_inventory:.1f}")
+        print(f"  horizon:   {'limited' if result.limit_horizon else 'unlimited'}")
+        print(f"  seed:      {result.seed}")
+    return 0
+
+
 def _study_cortex(cfg: Config):
     from aoa.study.cortex import StudyCortex
 
@@ -1874,6 +1960,37 @@ def main(argv: list[str] | None = None) -> int:
         "--halflife", type=int, default=63, help="Recency half-life (bars) for adaptation."
     )
 
+    av = sub.add_parser(
+        "avellaneda",
+        help="Offline Avellaneda–Stoikov market-making research (never live).",
+    )
+    av_sub = av.add_subparsers(dest="avellaneda_command", required=True)
+    av_status = av_sub.add_parser("status", help="Show Avellaneda–Stoikov research-lane status.")
+    av_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    av_smoke = av_sub.add_parser(
+        "smoke",
+        help="Check reservation quotes + a short Monte-Carlo ensemble.",
+    )
+    av_smoke.add_argument("--steps", type=int, default=200, help="Steps per path.")
+    av_smoke.add_argument("--sims", type=int, default=20, help="Ensemble size for smoke.")
+    av_smoke.add_argument("--seed", type=int, default=1, help="RNG seed.")
+    av_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    av_sim = av_sub.add_parser("simulate", help="Run one AS path or an ensemble.")
+    av_sim.add_argument("--steps", type=int, default=200, help="Steps per path.")
+    av_sim.add_argument("--seed", type=int, default=1, help="RNG seed.")
+    av_sim.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Average PnL over --sims independent seeds.",
+    )
+    av_sim.add_argument("--sims", type=int, default=50, help="Ensemble size when --ensemble.")
+    av_sim.add_argument(
+        "--unlimited",
+        action="store_true",
+        help="Use unlimited-horizon quotes instead of finite T.",
+    )
+    av_sim.add_argument("--json", action="store_true", help="Emit JSON.")
+
     wl = sub.add_parser("workloop", help="Autonomous discover→merge improvement loop.")
     wl_sub = wl.add_subparsers(dest="workloop_command", required=True)
     wl_run = wl_sub.add_parser("run", help="Run the work loop.")
@@ -2148,6 +2265,25 @@ def main(argv: list[str] | None = None) -> int:
                 args.paths,
                 args.halflife,
             )
+        if args.command == "avellaneda":
+            if args.avellaneda_command == "status":
+                return cmd_avellaneda_status(as_json=getattr(args, "json", False))
+            if args.avellaneda_command == "smoke":
+                return cmd_avellaneda_smoke(
+                    n_steps=getattr(args, "steps", 200),
+                    n_sims=getattr(args, "sims", 20),
+                    seed=getattr(args, "seed", 1),
+                    as_json=getattr(args, "json", False),
+                )
+            if args.avellaneda_command == "simulate":
+                return cmd_avellaneda_simulate(
+                    n_steps=getattr(args, "steps", 200),
+                    seed=getattr(args, "seed", 1),
+                    ensemble=getattr(args, "ensemble", False),
+                    n_sims=getattr(args, "sims", 50),
+                    unlimited=getattr(args, "unlimited", False),
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "workloop":
             if args.workloop_command == "run":
                 return cmd_workloop_run(

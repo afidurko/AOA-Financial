@@ -24,3 +24,6 @@ repos:
   - name: qm
     url: https://github.com/afidurko/qm
     role: multiplayer agent harness (Slack + web); AOA_QM_URL companion
+  - name: avellaneda-stoikov
+    url: https://github.com/afidurko/avellaneda-stoikov
+    role: AS reservation-price MM reference; aoa.avellaneda_stoikov offline lane

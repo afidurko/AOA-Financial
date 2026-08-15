@@ -476,6 +476,36 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         check_keywords=("integrating factor", "mean", "variance", "theta", "stationary"),
     ),
     KnowledgeCard(
+        id="bridge-as-reservation",
+        field="bridge",
+        title="Avellaneda–Stoikov reservation price ↔ inventory risk",
+        statement=(
+            "A market maker's indifference (reservation) price skews linearly with "
+            "inventory and remaining horizon: r = s − q γ σ² (T − t), with optimal "
+            "half-spread (1/γ) log(1 + γ/k) from exponential utility vs Poisson fills."
+        ),
+        proof_sketch=(
+            "1) Mid follows diffusion dS = σ dW; inventory q is controlled by posted bid/ask.\n"
+            "2) Exponential utility + intensity λ(δ)=A e^{−kδ} ⇒ HJB for value u(t,x,q,s).\n"
+            "3) Ansatz reduces to reservation price r and reservation spread independent of q.\n"
+            "4) Long inventory (q>0) lowers r so the ask is likelier / bid less aggressive."
+        ),
+        applications=(
+            "Offline AS Monte-Carlo (aoa avellaneda simulate)",
+            "Inventory-aware quote skew diagnostics for microstructure study",
+        ),
+        aoa_mesh=(
+            "Julie may cite aoa.avellaneda_stoikov for reservation/skew math; sibling "
+            "afidurko/avellaneda-stoikov is reference-only — never an AOA order path."
+        ),
+        bridges=("bridge-ou-meanrev", "econ-hjb", "phys-diffusion"),
+        drill_prompt=(
+            "Given mid s, inventory q, risk aversion γ, volatility σ, and time-to-horizon "
+            "T−t, write r and state how positive inventory moves the ask relative to flat."
+        ),
+        check_keywords=("reservation", "inventory", "gamma", "spread", "intensity"),
+    ),
+    KnowledgeCard(
         id="bridge-free-energy",
         field="bridge",
         title="Free energy ↔ certainty-equivalent utility",

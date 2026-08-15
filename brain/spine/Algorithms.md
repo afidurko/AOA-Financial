@@ -12,3 +12,4 @@ Julie owns algorithm clarity. Brain context injects into analysis via
 - Mesh node `algo.julie` → team Julie
 - Mesh node `algo.signal_adapter` → plasticity / adapt path
 - Mesh node `algo.swarm` → trading Orchestrator
+- Research lane `aoa.avellaneda_stoikov` → AS reservation-price MM (offline; sibling repo `avellaneda-stoikov`)
