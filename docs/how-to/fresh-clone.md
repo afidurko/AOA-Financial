@@ -213,8 +213,6 @@ See [example-hftish-reference.md](example-hftish-reference.md). Python idea port
 
 ## 15. SGX order-book reference (optional)
 
-Clone the SGX A50 full-order-book notebooks sibling
-## 14. SGX order-book strategy reference (optional)
 Clone the SGX A50 full-LOB ML sibling for rise-ratio / weighted-depth reading
 ([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
 AOA does not run the notebooks:
@@ -224,7 +222,8 @@ AOA does not run the notebooks:
 ```
 
 See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
-`aoa.research.sgx_orderbook_patterns`.
+`aoa.research.sgx_orderbook_patterns`. Companion map:
+[hft-research-lane.md](hft-research-lane.md).
 
 ## 16. Avellaneda–Stoikov (optional)
 
@@ -237,5 +236,3 @@ aoa microstructure status
 ```
 
 See [avellaneda-stoikov.md](avellaneda-stoikov.md) · [microstructure-lanes.md](microstructure-lanes.md).
-`aoa.research.sgx_orderbook_patterns`. Companion map:
-[hft-research-lane.md](hft-research-lane.md).

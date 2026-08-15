@@ -49,12 +49,6 @@ repos:
   - name: SGX-Full-OrderBook-Tick-Data-Trading-Strategy
     url: https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy
     role: SGX A50 full LOB ML notebooks; Python ideas in aoa.research.sgx_orderbook_patterns
-  - name: sgx-orderbook
-    role: SGX A50 full LOB ML notebooks (rise/depth); Python ideas in aoa.research.sgx_orderbook_patterns
-    workspace: ./SGX-Full-OrderBook-Tick-Data-Trading-Strategy
-    setup: ./scripts/sgx-orderbook-setup.sh
-    workspace: ./example-hftish
-    setup: ./scripts/example-hftish-setup.sh
 
 # Vendored / local workspaces (not separate git clones)
 local:
