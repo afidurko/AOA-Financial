@@ -70,7 +70,7 @@ def run_upgrade_pipeline(
             "ts": datetime.now(timezone.utc).isoformat(),
             "ok": True,
             "dry_run": True,
-            "phase": "skipped",
+            "phase": "dry-run",
             "baseline": baseline,
             "upgrade": {"ok": True, "message": "Dry-run: upgrade skipped."},
             "reverify": baseline,

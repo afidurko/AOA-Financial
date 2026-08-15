@@ -159,3 +159,14 @@ export AOA_QM_URL=http://localhost:8081
 
 See [qm-integration.md](qm-integration.md). Other companions:
 [docs/help.md](../help.md).
+
+## 11. Workspaces (optional)
+
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+
+```bash
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+```
+
+See [workspace-mesh.md](workspace-mesh.md).

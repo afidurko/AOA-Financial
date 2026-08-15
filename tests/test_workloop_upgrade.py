@@ -13,6 +13,7 @@ def test_upgrade_pipeline_dry_run_skips_pip():
         result = run_upgrade_pipeline(dry_run=True)
     assert result["ok"] is True
     assert result["dry_run"] is True
+    assert result["phase"] == "dry-run"
     assert result["upgrade"]["message"] == "Dry-run: upgrade skipped."
 
 

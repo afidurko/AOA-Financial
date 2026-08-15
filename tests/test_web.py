@@ -5,7 +5,10 @@ from __future__ import annotations
 import pytest
 
 pytest.importorskip("fastapi")
-pytest.importorskip("httpx2")
+try:
+    import httpx2  # noqa: F401
+except ImportError:  # pragma: no cover - fallback when httpx2 extra missing
+    pytest.importorskip("httpx")
 
 pytestmark = pytest.mark.filterwarnings(
     "ignore:websockets.legacy is deprecated:DeprecationWarning",

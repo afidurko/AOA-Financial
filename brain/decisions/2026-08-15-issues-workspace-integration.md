@@ -8,20 +8,21 @@ created: 2026-08-15T21:00:00Z
 ## Context
 
 Triage High Priority still listed workloop upgrade (upg-009) though chain
-state claimed completion without `run_upgrade_pipeline` on main. Paper
-profiles still pointed at Moomoo OpenD, breaking cloud `aoa doctor`.
+state claimed completion without `run_upgrade_pipeline` on main.
 Knowledge-stack workspaces existed in docs but were not wired in this VM.
+Paper-dry must stay Moomoo-first (OpenD local); Alpaca remains opt-in for
+cloud/CI without OpenD (`AOA_BROKER=alpaca`) and for `profiles/paper.env`.
 
 ## Decision
 
 1. Land workloop upgrade CLI + dry-run task (`aoa workloop upgrade`,
    `aoa tasks run workloop-upgrade`).
-2. Default paper / paper-dry to `AOA_BROKER=alpaca` (Moomoo via
-   `moomoo-paper` / live profiles).
-3. Add `httpx2` + silence upstream `websockets.legacy` warning.
-4. Run `knowledge-stack-setup` → multi-root `AOA.code-workspace` via
-   `write-aoa-workspace.sh`; enrich `.cursor/environment.json` install
-   with `attl init` + workspace writer; expand VS Code tasks.
+2. Keep `paper-dry` on `AOA_BROKER=moomoo`; `paper` may use Alpaca; Moomoo
+   simulate orders via `moomoo-paper`.
+3. Add optional `httpx2` for Starlette TestClient; web tests fall back to `httpx`.
+4. Wire knowledge-stack + multi-root `AOA.code-workspace`; support connecting
+   external repos via `scripts/connect-workspace.sh`.
+5. Enrich `.cursor/environment.json` install with `attl init` + workspace writer.
 
 ## Follow-up (human)
 

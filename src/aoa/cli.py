@@ -1146,8 +1146,6 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
 
 
 def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
-    from pathlib import Path
-
     from aoa.workloop.upgrade import run_upgrade_pipeline
 
     _ = cfg  # Config required for CLI consistency; pipeline uses repo cwd.
@@ -1156,15 +1154,15 @@ def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
     mode = "dry-run" if dry_run else "upgrade"
     print(f"Workloop upgrade pipeline [{mode}]: {flag}")
     print(f"phase: {result.get('phase', '')}")
-    if not result.get("ok"):
-        upgrade = result.get("upgrade") or {}
-        if upgrade.get("output"):
-            print(upgrade["output"][-500:])
-        reverify = result.get("reverify") or {}
-        if reverify and not reverify.get("passed"):
-            print("Reverify failed after upgrade.")
-        return 1
-    return 0
+    if result.get("ok"):
+        return 0
+    upgrade = result.get("upgrade") or {}
+    if upgrade.get("output"):
+        print(upgrade["output"][-500:])
+    reverify = result.get("reverify") or {}
+    if reverify and not reverify.get("passed"):
+        print("Reverify failed after upgrade.")
+    return 1
 
 
 def _print_repair_result(result) -> None:

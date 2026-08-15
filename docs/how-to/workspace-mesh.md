@@ -31,16 +31,42 @@ Optional siblings: `qm` (`./scripts/qm-setup.sh`), `py-moomoo-api`.
 # File → Open Workspace from File… → AOA.code-workspace
 ```
 
-Only folders that exist on disk are included.
+Only folders that exist on disk are included. Add external repos as extra roots:
 
-VS Code / Cursor tasks: **AOA: knowledge-stack setup**, **AOA: write multi-root workspace**,
-**AOA: attl init (brain workspace)**.
+```bash
+./scripts/write-aoa-workspace.sh AOA.code-workspace /path/to/other/repo
+```
+
+## Connect an external repo to the shared vault
+
+The mesh above covers sibling clones beside AOA. To share the same second brain
+with a project living **elsewhere** on disk:
+
+```bash
+./scripts/connect-workspace.sh /path/to/other/repo   # --list to preview
+```
+
+This, in the target repo:
+
+| Step | Effect |
+|------|--------|
+| Cursor skills | Symlinks the shared `obsidian-second-brain` (+ spine, obsidian-skills) into `.cursor/skills/` |
+| MCP | Writes `.cursor/mcp.json` pointing at the shared vault (backs up any existing file) |
+| `.env` | Records `AOA_OBSIDIAN_VAULT_PATH` (+ `AOA_SPINE_ENABLED`) via the macOS-safe `env_upsert` |
+
+Then, in that workspace: restart Cursor, run `/obsidian-architect` to document it
+into the shared vault, and `/spine-capture` after commits. Because the vault,
+`~/.spine/config.json`, and the obsidian-second-brain clone are shared, every
+connected project reads and writes the **same** second brain.
 
 ## Cloud Agent environment
 
 Repo-managed bootstrap: `.cursor/environment.json` runs `pip install -e ".[dev,web]"`,
 `aoa attl init`, and `write-aoa-workspace.sh` after checkout. Knowledge-stack sibling
 clones remain local (`./scripts/knowledge-stack-setup.sh`) and are gitignored.
+
+VS Code / Cursor tasks include knowledge-stack setup, workspace writer, ATTL init,
+and `aoa workloop upgrade --dry-run`.
 
 ## Agent skills (already in-repo)
 
