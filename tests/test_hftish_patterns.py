@@ -42,6 +42,21 @@ def test_penny_spread_and_level_change():
     # Wide spread after move → ignored
     wide = TopOfBook(10.00, 10.05, 1, 1, timestamp_ms=1_200.0)
     assert detect_level_change(prev, wide) is None
+    # Float noise that is not a real move → ignored
+    noisy = TopOfBook(10.00 + 1e-12, 10.01 + 1e-12, 1, 1)
+    assert detect_level_change(prev, noisy) is None
+
+
+def test_diagnose_rejects_bad_quotes():
+    from aoa.research.hftish_patterns import diagnose_quote_book
+
+    assert diagnose_quote_book(10.02, 10.01, 100, 50).available is False
+    neg = diagnose_quote_book(10.00, 10.01, -5, 100)
+    assert neg.available is True  # negative size clamped to 0 → ask-only book
+    assert neg.side is Side.SELL
+    assert neg.bid_size == 0.0
+    both_neg = diagnose_quote_book(10.00, 10.01, -1, -1)
+    assert both_neg.available is False
 
 
 def test_imbalance_and_position_gates():

@@ -31,10 +31,13 @@ else
   need 'Run: pip install moomoo-api  (or pip install -e ".[dev]")'
 fi
 
-if grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
-  ok "ANTHROPIC_API_KEY looks set"
+if grep -qE '^AOA_LLM_PROVIDER=openai_compatible[[:space:]]*$' .env 2>/dev/null \
+  && grep -qE '^AOA_LLM_BASE_URL=https?://[^[:space:]]+' .env 2>/dev/null; then
+  ok "Local LLM (WASTE / openai_compatible) configured in .env"
+elif grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
+  ok "ANTHROPIC_API_KEY looks set (opt-in Claude provider)"
 else
-  need "Edit .env — set ANTHROPIC_API_KEY=sk-ant-..."
+  need "Start WASTE serve and keep AOA_LLM_PROVIDER=openai_compatible — docs/how-to/waste-local-llm.md"
 fi
 
 HOST="${MOOMOO_OPEND_HOST:-127.0.0.1}"
@@ -52,6 +55,7 @@ then
 else
   echo
   need "Install and start Moomoo OpenD — https://www.moomoo.com/download/OpenAPI/"
+  echo "       Agent skill: /install-moomoo-opend (Cursor/Claude)"
   echo "       macOS: bash scripts/install_moomoo_opend_macos.sh"
   echo "       Linux: bash scripts/install_moomoo_opend_linux.sh"
   echo "       Log in with your Moomoo account. Default port: 11111"

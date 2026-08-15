@@ -1,6 +1,9 @@
 # Fable 5 trial vs Claude Max 5× — operating schedule
 
-Use **two Claude surfaces** for AOA-Financial: a **time-boxed Fable 5 trial** (Cursor Cloud Agent + loop harness) and your **Claude Max 5× subscription** (interactive Claude Code). They do **not** replace the **Anthropic API key** required to run the trading swarm.
+Use **two Claude surfaces** for AOA-Financial engineering: a **time-boxed Fable 5
+trial** (Cursor Cloud Agent + loop harness) and your **Claude Max 5× subscription**
+(interactive Claude Code). The **trading swarm runtime** defaults to a **local
+WASTE** OpenAI-compatible server — not the Anthropic API.
 
 ## What each surface is
 
@@ -8,11 +11,12 @@ Use **two Claude surfaces** for AOA-Financial: a **time-boxed Fable 5 trial** (C
 |---------|------------|----------|--------------------------------|
 | **Fable 5 trial** | Cursor Cloud Agent running loop skills (`loop-triage`, `fable-repair`) with caps in `loop-budget.md` | Trial / automation credits (bounded) | No |
 | **Claude Max 5×** | claude.ai + Claude Code in your terminal/IDE ($100/mo, ~5× Pro usage) | Flat subscription | No |
-| **Anthropic API** | `ANTHROPIC_API_KEY` in `.env` — programmatic Messages API | Pay-as-you-go tokens | **Yes** |
+| **Local WASTE** | `python3 -m serve` + `AOA_LLM_PROVIDER=openai_compatible` | Your electricity / hardware | **Yes (default)** |
+| **Anthropic API** | Opt-in `AOA_LLM_PROVIDER=anthropic` + `ANTHROPIC_API_KEY` | Pay-as-you-go tokens | Only if opted in |
 
-**Rule:** Max 5× and Fable trial cover **engineering loops** (triage, fixes, setup, review). The **swarm’s agent reasoning at runtime** always bills the API key, regardless of subscription.
+**Rule:** Max 5× and Fable trial cover **engineering loops** (triage, fixes, setup, review). The **swarm’s agent reasoning at runtime** uses local WASTE by default. See `docs/how-to/waste-local-llm.md`.
 
-**Claude Code gotcha:** If `ANTHROPIC_API_KEY` is exported in the same shell as Claude Code, Claude Code bills the **API**, not Max 5×. Use separate terminals: `.env` sourced only for `aoa` commands.
+**Claude Code gotcha:** If `ANTHROPIC_API_KEY` is exported in the same shell as Claude Code, Claude Code bills the **API**, not Max 5×. Use separate terminals when you have opted into Anthropic for AOA.
 
 ---
 
@@ -47,7 +51,7 @@ Best for setup, judgment calls, and long debugging sessions.
 
 | Task | How |
 |------|-----|
-| First-time setup | `SETUP-AWAITING-YOU.md`: API key, `alpaca profile login`, `aoa doctor` |
+| First-time setup | `SETUP-AWAITING-YOU.md`: WASTE serve, Moomoo/Alpaca, `aoa doctor` |
 | Review draft PRs | Mark ready, merge after human approval |
 | Deep refactors / design | Claude Code + gstack (`/review`, `/investigate`, `/ship`) |
 | Workloop approvals | `aoa workloop approve` (Aaron gate) |
@@ -55,14 +59,15 @@ Best for setup, judgment calls, and long debugging sessions.
 
 **Do not use Max 5× for:** unattended 24/7 trading loops (use API + `aoa loop` on a host you control).
 
-### Anthropic API — runtime only
+### Local WASTE — runtime (default)
 
 | Task | When |
 |------|------|
-| `aoa run` / `aoa loop` / web auto-loop | After paper-dry verified |
+| `aoa run` / `aoa loop` / web auto-loop | After paper-dry verified + WASTE serve up |
 | `aoa_financial analyze` (live analyst) | Optional research |
 
-Tune cost in `.env`: `AOA_MODEL`, `AOA_EFFORT`, `AOA_TRADING_AGENTS_ENABLED`, universe size.
+Tune in `.env`: `AOA_MODEL`, `AOA_EFFORT`, `AOA_LLM_BASE_URL`, universe size.
+Claude/Anthropic remains opt-in only (`AOA_LLM_PROVIDER=anthropic`).
 
 ---
 

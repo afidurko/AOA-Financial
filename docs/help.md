@@ -53,13 +53,15 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 | **[Finance](https://github.com/shashankvemuri/Finance)** | Reference library of quantitative finance Python programs (used in Tom’s knowledge context). |
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT futures strategies (pairs arb, hedged maker, MA cross) as a sibling reference. Pure-Python idea ports: `aoa.research.hft_patterns`. Upstream fork of [keyianpai/hft](https://github.com/keyianpai/hft). |
 | **[hftbacktest](https://github.com/afidurko/hftbacktest)** | Optional offline L2/L3 tick backtest (`pip install -e ".[hftbacktest]"`). Not the same as the C++ sibling — see [hftbacktest-integration.md](how-to/hftbacktest-integration.md). |
+| **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full limit-order-book ML notebooks (rise ratio, weighted depth, sklearn model selection). Pure-Python idea ports: `aoa.research.sgx_orderbook_patterns`. Upstream fork of [rorysroes/SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/rorysroes/SGX-Full-OrderBook-Tick-Data-Trading-Strategy). |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker (1¢ level changes + size imbalance). Pure-Python idea ports: `aoa.research.hftish_patterns`. Upstream fork of [alpacahq/example-hftish](https://github.com/alpacahq/example-hftish). |
 
 **In-system wiring:**
 - C++ HFT sibling: `./scripts/hft-setup.sh` · `vault/system/hft.md` · [hft-reference.md](how-to/hft-reference.md)
+- SGX: `./scripts/sgx-orderbook-setup.sh` · `vault/system/sgx-orderbook.md` · [sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md) · LOB bridge `snapshot_from_limit_order_book` · map [hft-research-lane.md](how-to/hft-research-lane.md)
 - example-hftish: `./scripts/example-hftish-setup.sh` · `vault/system/example-hftish.md` · [example-hftish-reference.md](how-to/example-hftish-reference.md) · CLI `aoa hftish status|smoke`
 
-Neither path submits orders — research / Julie algorithm context only.
+None of these paths submit orders — research / Julie algorithm context only.
 
 ## Local model runtime (optional)
 

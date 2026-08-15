@@ -1,7 +1,7 @@
 """Command-line interface for the AOA Financial swarm.
 
 Commands:
-  aoa bars       Fetch recent stock and/or crypto OHLCV bars from Alpaca.
+  aoa bars       Fetch recent OHLCV bars (Moomoo OpenD or Alpaca).
   aoa doctor     Validate configuration & connectivity.
   aoa setup      One-time setup (mac, moomoo, …).
   aoa status     Show account, positions, and market clock.
@@ -46,9 +46,9 @@ from aoa.brokerage.alpaca_bars import (
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
-from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
+from aoa.data.news import AlpacaNewsFeed, MoomooNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
-from aoa.llm.client import LLMClient, LLMError
+from aoa.llm.client import LLMClient, LLMError, llm_from_config
 from aoa.repair.orchestrator import RepairOrchestrator
 from aoa.reporting import position_pnl, summarize_journal
 from aoa.simulation.live import LiveMarketTracker
@@ -79,15 +79,22 @@ def build_broker(cfg: Config) -> Broker:
 
 
 def build_llm(cfg: Config) -> LLMClient:
-    return LLMClient(cfg.anthropic_api_key, model=cfg.model, effort=cfg.effort)
+    return llm_from_config(cfg)
 
 
 def build_news(cfg: Config) -> NewsFeed:
     if not cfg.news_enabled:
         return NullNewsFeed()
     if cfg.broker == "moomoo":
-        # Headlines via Moomoo OpenAPI can be wired later; keep agents running without news.
-        return NullNewsFeed()
+        try:
+            return MoomooNewsFeed(
+                host=cfg.moomoo_opend_host,
+                port=cfg.moomoo_opend_port,
+                connect_timeout=cfg.moomoo_connect_timeout,
+            )
+        except BrokerError:
+            # OpenD down — keep the swarm running without headlines.
+            return NullNewsFeed()
     if not cfg.has_brokerage_creds:
         return NullNewsFeed()
     return AlpacaNewsFeed(
@@ -363,8 +370,9 @@ def _ensure_env_template() -> None:
         return
     env_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
     print(
-        "Created .env from .env.example — add your Alpaca paper keys there "
-        "for stock data (crypto works without keys).\n"
+        "Created .env from .env.example — defaults are Moomoo + local WASTE LLM.\n"
+        "  Start OpenD (127.0.0.1:11111) and WASTE serve (:8000), then: aoa doctor\n"
+        "  Guide: docs/how-to/moomoo-setup.md · docs/how-to/waste-local-llm.md\n"
     )
 
 
@@ -398,6 +406,26 @@ def cmd_bars(
     if not crypto and not stocks:
         print("Provide at least one symbol, e.g. BTC/USD or AAPL.", file=sys.stderr)
         return 1
+
+    if cfg.broker == "moomoo":
+        if crypto:
+            print(
+                "Crypto pairs are not available via Moomoo OpenD in AOA; "
+                "omit them or set AOA_BROKER=alpaca for crypto bars.",
+                file=sys.stderr,
+            )
+            if not stocks:
+                return 1
+        if stocks:
+            try:
+                with build_broker(cfg) as broker:
+                    for sym in stocks:
+                        bars = broker.get_bars(sym, timeframe=timeframe, limit=limit)
+                        _print_bars_table(sym, bars, asset="Stock")
+            except BrokerError as exc:
+                print(f"Moomoo bars failed: {exc}", file=sys.stderr)
+                return 1
+        return 0
 
     fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
     try:
@@ -449,6 +477,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
             f"({cfg.moomoo_market}, {'live' if cfg.moomoo_live else 'simulate'})"
         )
+        if cfg.news_enabled:
+            print("  · News feed: Moomoo headlines not wired yet (NullNewsFeed).")
     elif cfg.alpaca_auth_source:
         label = cfg.alpaca_auth_source
         if cfg.alpaca_cli_profile:
@@ -459,25 +489,26 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         label = "Offline mode" if offline else "Test environment"
         print(f"  ✓ {label} — skipping broker/LLM connectivity checks.")
         return 0
-    fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
-    try:
-        crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
-        print(
-            f"  ✓ Crypto bars API (no keys); BTC/USD last close "
-            f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
-        )
-    except BrokerError as exc:
-        print(f"  ✗ Crypto bars check failed: {exc}")
-        return 1
-    finally:
-        fetcher.close()
-    if not cfg.has_brokerage_creds:
-        print(
-            "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
-            "(crypto already works)."
-        )
-        print("  · Skipping broker account and stock-bar checks until keys are set.")
-        return 0
+    if cfg.broker == "alpaca":
+        fetcher = AlpacaBarsFetcher(bars_config_from_env(cfg))
+        try:
+            crypto_bar = fetcher.verify_crypto("BTC/USD", limit=1)
+            print(
+                f"  ✓ Crypto bars API (no keys); BTC/USD last close "
+                f"${crypto_bar.close:,.2f} ({crypto_bar.timestamp.date()})."
+            )
+        except BrokerError as exc:
+            print(f"  ✗ Crypto bars check failed: {exc}")
+            return 1
+        finally:
+            fetcher.close()
+        if not cfg.has_brokerage_creds:
+            print(
+                "  · Stock bars need ALPACA_API_KEY_ID / ALPACA_API_SECRET_KEY in .env "
+                "(crypto already works)."
+            )
+            print("  · Skipping broker account and stock-bar checks until keys are set.")
+            return 0
     try:
         broker = build_broker(cfg)
         acct = broker.get_account()
@@ -488,6 +519,7 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
                 f"  ✓ Live bars API; SPY last close ${latest.close:,.2f} "
                 f"({latest.timestamp.date()})."
             )
+            print("  · News: Moomoo OpenD get_search_news (moomooapi skill).")
         else:
             feed = cfg.alpaca_data_feed or cfg.bar_feed
             print(
@@ -500,7 +532,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         return 1
     try:
         llm = build_llm(cfg)
-        print("  ✓ LLM client initialized.")
+        base = f", base_url={cfg.llm_base_url}" if cfg.llm_provider == "openai_compatible" else ""
+        print(f"  ✓ LLM client initialized (provider={cfg.llm_provider}{base}).")
         llm.ping()
         print(f"  ✓ LLM reachable (model={cfg.model}).")
     except LLMError as exc:
@@ -2061,6 +2094,8 @@ def cmd_setup_moomoo(cfg: Config) -> int:
         return 1
     print("Running Moomoo setup helper…")
     print(f"  Broker: {cfg.broker} | OpenD: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port}")
+    print("  Skills: .cursor/skills/moomooapi + install-moomoo-opend (official OpenD pack)")
+    print("  Install OpenD via agent skill `/install-moomoo-opend` or scripts/install_moomoo_opend_*.sh")
     result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
     return int(result.returncode)
 
