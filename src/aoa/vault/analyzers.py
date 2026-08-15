@@ -292,6 +292,11 @@ def _analyze_brain_mesh(ctx: AnalyzerContext) -> dict[str, Any]:
     }
 
 
+def _analyze_companion_static(ctx: AnalyzerContext) -> dict[str, Any]:
+    """No-op for human-managed companion notes — preserve frontmatter as-is."""
+    return {}
+
+
 register("loop_engineering", _analyze_loop_engineering)
 register("cycle_summary", _analyze_cycle_summary)
 register("symbol_view", _analyze_symbol_view)
@@ -300,6 +305,7 @@ register("workloop_summary", _analyze_workloop_summary)
 register("study_progress", _analyze_study_progress)
 register("study_card", _analyze_study_card)
 register("brain_mesh", _analyze_brain_mesh)
+register("companion_static", _analyze_companion_static)
 
 
 def engineering_l2_enabled(repo_root: Path) -> bool:

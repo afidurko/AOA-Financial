@@ -95,3 +95,16 @@ export AOA_OPENSTOCK_URL=http://localhost:3000
 ```
 
 See [openstock-integration.md](openstock-integration.md) for Docker and env details.
+
+## 7. QM harness (optional)
+
+Link the multiplayer agent harness ([qm](https://github.com/afidurko/qm)) from
+the AOA dashboard header:
+
+```bash
+./scripts/qm-setup.sh
+export AOA_QM_URL=http://localhost:8081
+```
+
+See [qm-integration.md](qm-integration.md). Other companions:
+[docs/help.md](../help.md).

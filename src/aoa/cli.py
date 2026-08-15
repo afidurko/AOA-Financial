@@ -420,6 +420,10 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
     print("  ✓ Configuration looks complete.")
     print(f"  ✓ Bar timeframes: {tf_keys}")
     print(f"  ✓ Broker: {cfg.broker} | bar feed: {cfg.bar_feed} | news limit: {cfg.news_limit}")
+    if cfg.openstock_url:
+        print(f"  ✓ OpenStock link: {cfg.openstock_url}")
+    if cfg.qm_url:
+        print(f"  ✓ QM harness link: {cfg.qm_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "

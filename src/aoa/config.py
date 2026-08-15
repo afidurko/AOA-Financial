@@ -273,6 +273,7 @@ class Config:
     web_port: int = 8080
     web_auto_loop: bool = False
     openstock_url: str = ""
+    qm_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
     custom_app_webhook_url: str = ""
@@ -453,6 +454,7 @@ class Config:
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),
+            qm_url=os.environ.get("AOA_QM_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
             custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),

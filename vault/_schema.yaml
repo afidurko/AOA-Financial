@@ -193,3 +193,30 @@ note_types:
     type: string
     source: brain_mesh
     refresh: every_run
+
+  # Human-managed companion links (OpenStock, QM, …). Analyzer is a no-op.
+  system-companion:
+  - name: name
+    type: string
+    source: companion_static
+    refresh: every_run
+  - name: enabled
+    type: boolean
+    source: companion_static
+    refresh: every_run
+  - name: url_env
+    type: string
+    source: companion_static
+    refresh: every_run
+  - name: setup
+    type: string
+    source: companion_static
+    refresh: every_run
+  - name: docs
+    type: string
+    source: companion_static
+    refresh: every_run
+  - name: repo
+    type: string
+    source: companion_static
+    refresh: every_run
