@@ -52,7 +52,7 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "--ignore=tests/test_core.py"
 filterwarnings = [
-    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+    "ignore:.*websockets\\.legacy is deprecated.*:DeprecationWarning",
 ]
 
 [tool.ruff]
