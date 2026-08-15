@@ -229,6 +229,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         {name:'Cindy',role:'Company / FV',data:r.company_analyses,count:(r.company_analyses||[]).length},
         {name:'Alan',role:'Decision',data:r.decision,summary:r.decision?.summary},
         {name:'Andrea',role:'Risk',data:r.risk_plans,count:(r.risk_plans||[]).length},
+        {name:'Nova',role:'Brain mesh',data:r.ceo,summary:'ATTL second-brain'},
+        {name:'Reed',role:'Task loops',data:r.ceo,summary:'ATTL factory'},
+        {name:'Kai',role:'Critical only',data:r.ceo,summary:'ATTL sentinel'},
         {name:'Aaron',role:'CEO',data:r.ceo,summary:r.ceo?.summary},
         {name:'Alex',role:'Assistant',data:r.assistant,summary:r.assistant?.focus},
       ];
