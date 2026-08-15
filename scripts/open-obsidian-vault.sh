@@ -3,18 +3,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-VAULT_DIR="${AOA_OBSIDIAN_VAULT_PATH:-$ROOT/AOA-Vault}"
 
-if [[ -f "$ROOT/.env" ]]; then
-  val="$(grep -E '^AOA_OBSIDIAN_VAULT_PATH=' "$ROOT/.env" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-  if [[ -n "$val" ]]; then
-    if [[ "$val" = /* ]]; then
-      VAULT_DIR="$val"
-    else
-      VAULT_DIR="$ROOT/$val"
-    fi
-  fi
-fi
+# shellcheck source=scripts/lib/env-file.sh
+source "$ROOT/scripts/lib/env-file.sh"
+
+VAULT_DIR="$(resolve_vault_dir "$ROOT")"
 
 if [[ ! -d "$VAULT_DIR" ]]; then
   echo "Vault not found at $VAULT_DIR — run ./scripts/knowledge-stack-setup.sh first." >&2

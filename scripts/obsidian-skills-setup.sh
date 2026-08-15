@@ -7,21 +7,12 @@ SKILLS_REPO_DIR="${OBSIDIAN_SKILLS_DIR:-$ROOT/obsidian-skills}"
 SKILLS_REPO="${OBSIDIAN_SKILLS_REPO:-https://github.com/afidurko/obsidian-skills.git}"
 CURSOR_SKILLS="$ROOT/.cursor/skills"
 
-if [[ ! -d "$SKILLS_REPO_DIR/.git" ]]; then
-  echo "Cloning obsidian-skills into $SKILLS_REPO_DIR"
-  git clone "$SKILLS_REPO" "$SKILLS_REPO_DIR"
-else
-  echo "obsidian-skills already present at $SKILLS_REPO_DIR"
-fi
+# shellcheck source=scripts/lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
 
-mkdir -p "$CURSOR_SKILLS"
-linked=0
-for skill_dir in "$SKILLS_REPO_DIR"/skills/*/; do
-  [[ -d "$skill_dir" ]] || continue
-  name="$(basename "$skill_dir")"
-  ln -snf "$skill_dir" "$CURSOR_SKILLS/$name"
-  linked=$((linked + 1))
-done
+git_clone_if_missing "$SKILLS_REPO_DIR" "$SKILLS_REPO" "obsidian-skills"
+
+linked="$(link_cursor_skills "$SKILLS_REPO_DIR" "$CURSOR_SKILLS")"
 
 echo ""
 echo "obsidian-skills ready."

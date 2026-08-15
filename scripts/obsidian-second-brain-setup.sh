@@ -9,12 +9,10 @@ VAULT_DIR="${AOA_OBSIDIAN_VAULT_PATH:-$ROOT/AOA-Vault}"
 CURSOR_SKILLS="$ROOT/.cursor/skills"
 CURSOR_MCP="$ROOT/.cursor/mcp.json"
 
-if [[ ! -d "$OSB_DIR/.git" ]]; then
-  echo "Cloning obsidian-second-brain into $OSB_DIR"
-  git clone "$OSB_REPO" "$OSB_DIR"
-else
-  echo "obsidian-second-brain already present at $OSB_DIR"
-fi
+# shellcheck source=scripts/lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
+
+git_clone_if_missing "$OSB_DIR" "$OSB_REPO" "obsidian-second-brain"
 
 if [[ ! -d "$VAULT_DIR" ]]; then
   echo "Creating AOA vault at $VAULT_DIR"

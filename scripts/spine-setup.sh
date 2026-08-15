@@ -8,22 +8,12 @@ SPINE_REPO="${SPINE_REPO:-https://github.com/afidurko/spine.git}"
 CURSOR_SKILLS="$ROOT/.cursor/skills"
 VAULT_DIR="${AOA_OBSIDIAN_VAULT_PATH:-$ROOT/AOA-Vault}"
 
-if [[ ! -d "$SPINE_DIR/.git" ]]; then
-  echo "Cloning Spine into $SPINE_DIR"
-  git clone "$SPINE_REPO" "$SPINE_DIR"
-else
-  echo "Spine already present at $SPINE_DIR"
-fi
+# shellcheck source=scripts/lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
 
-mkdir -p "$CURSOR_SKILLS"
-linked=0
-for skill_dir in "$SPINE_DIR"/skills/*/; do
-  [[ -d "$skill_dir" ]] || continue
-  name="$(basename "$skill_dir")"
-  dest="$CURSOR_SKILLS/$name"
-  ln -snf "$skill_dir" "$dest"
-  linked=$((linked + 1))
-done
+git_clone_if_missing "$SPINE_DIR" "$SPINE_REPO" "Spine"
+
+linked="$(link_cursor_skills "$SPINE_DIR" "$CURSOR_SKILLS")"
 echo "Linked $linked Spine skills into $CURSOR_SKILLS"
 
 if [[ -x "$ROOT/scripts/sync-spine-config.sh" ]]; then
