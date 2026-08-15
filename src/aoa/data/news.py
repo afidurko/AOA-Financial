@@ -131,14 +131,12 @@ class MoomooNewsFeed(NewsFeed):
         host: str = "127.0.0.1",
         port: int = 11111,
         connect_timeout: float = 3.0,
-        market: str = "US",
     ) -> None:
         from aoa.brokerage.moomoo import probe_opend
 
         self._host = host
         self._port = int(port)
         self._connect_timeout = float(connect_timeout)
-        self._market = market.upper()
         self._cache: dict[str, list[NewsItem]] = {}
         probe_opend(self._host, self._port, timeout=self._connect_timeout)
 
@@ -162,28 +160,29 @@ class MoomooNewsFeed(NewsFeed):
         ctx = ft.OpenQuoteContext(host=self._host, port=self._port)
         try:
             for sym in missing:
-                try:
-                    ret, data = ctx.get_search_news(
-                        sym, max(1, min(limit, 100)), news_sub_type=news_sub
-                    )
-                    if ret != ft.RET_OK or data is None or len(data) == 0:
-                        self._cache[sym] = []
-                        continue
-                    items: list[NewsItem] = []
-                    for _, row in data.iterrows():
-                        item = _parse_moomoo_news_row(row, default_symbol=sym)
-                        if item is not None:
-                            items.append(item)
-                        if len(items) >= limit:
-                            break
-                    self._cache[sym] = items
-                except Exception:  # noqa: BLE001 — per-symbol soft fail
-                    self._cache[sym] = []
+                self._cache[sym] = self._fetch_symbol(ctx, ft, sym, limit=limit, news_sub=news_sub)
         finally:
             close = getattr(ctx, "close", None)
             if callable(close):
                 close()
         return {s: list(self._cache.get(s, [])) for s in normalized}
+
+    @staticmethod
+    def _fetch_symbol(ctx: Any, ft: Any, sym: str, *, limit: int, news_sub: Any) -> list[NewsItem]:
+        try:
+            ret, data = ctx.get_search_news(sym, max(1, min(limit, 100)), news_sub_type=news_sub)
+            if ret != ft.RET_OK or data is None or len(data) == 0:
+                return []
+            items: list[NewsItem] = []
+            for _, row in data.iterrows():
+                item = _parse_moomoo_news_row(row, default_symbol=sym)
+                if item is not None:
+                    items.append(item)
+                if len(items) >= limit:
+                    break
+            return items
+        except Exception:  # noqa: BLE001 — per-symbol soft fail
+            return []
 
 
 def _parse_news_row(row: dict) -> NewsItem | None:
@@ -212,46 +211,40 @@ def _parse_news_row(row: dict) -> NewsItem | None:
 
 def _parse_moomoo_news_row(row: Any, *, default_symbol: str) -> NewsItem | None:
     """Map moomooapi ``get_search_news`` fields → ``NewsItem``."""
+    from aoa.brokerage.moomoo import _row_value
 
-    def _get(key: str, default: Any = "") -> Any:
-        if hasattr(row, "get"):
-            return row.get(key, default)
-        try:
-            return row[key]
-        except (KeyError, TypeError, IndexError):
-            return default
-
-    headline = str(_get("title") or _get("headline") or "").strip()
+    headline = str(_row_value(row, "title", "") or _row_value(row, "headline", "")).strip()
     if not headline:
         return None
-    summary = str(_get("content") or _get("summary") or "").strip()
+    summary = str(_row_value(row, "content", "") or _row_value(row, "summary", "")).strip()
     if len(summary) > 500:
         summary = summary[:497] + "..."
-    created = _get("publish_time") or _get("created_at") or ""
+    created = _row_value(row, "publish_time", "") or _row_value(row, "created_at", "")
     if isinstance(created, datetime):
         created = created.isoformat()
-    related = _get("related_securities", None)
-    symbols: list[str] = []
-    if isinstance(related, str) and related.strip():
-        for part in related.replace(";", ",").split(","):
-            token = part.strip().upper()
-            if "." in token:
-                token = token.split(".", 1)[1]
-            if token:
-                symbols.append(token)
-    elif isinstance(related, (list, tuple)):
-        for part in related:
-            token = str(part).strip().upper()
-            if "." in token:
-                token = token.split(".", 1)[1]
-            if token:
-                symbols.append(token)
-    if not symbols:
-        symbols = [default_symbol.upper()]
+    symbols = _related_symbols(_row_value(row, "related_securities", None), default_symbol)
     return NewsItem(
         headline=headline,
         summary=summary,
-        source=str(_get("source") or "moomoo"),
+        source=str(_row_value(row, "source", "") or "moomoo"),
         created_at=str(created),
         symbols=tuple(symbols),
     )
+
+
+def _related_symbols(related: Any, default_symbol: str) -> list[str]:
+    symbols: list[str] = []
+    parts: list[Any]
+    if isinstance(related, str) and related.strip():
+        parts = related.replace(";", ",").split(",")
+    elif isinstance(related, (list, tuple)):
+        parts = list(related)
+    else:
+        parts = []
+    for part in parts:
+        token = str(part).strip().upper()
+        if "." in token:
+            token = token.split(".", 1)[1]
+        if token:
+            symbols.append(token)
+    return symbols or [default_symbol.upper()]

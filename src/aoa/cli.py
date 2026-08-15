@@ -43,7 +43,7 @@ from aoa.brokerage.alpaca_bars import (
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.moomoo import MoomooBroker
 from aoa.config import Config
-from aoa.data.news import AlpacaNewsFeed, NewsFeed, NullNewsFeed
+from aoa.data.news import AlpacaNewsFeed, MoomooNewsFeed, NewsFeed, NullNewsFeed
 from aoa.journal.store import Journal
 from aoa.llm.client import LLMClient, LLMError
 from aoa.repair.orchestrator import RepairOrchestrator
@@ -84,13 +84,10 @@ def build_news(cfg: Config) -> NewsFeed:
         return NullNewsFeed()
     if cfg.broker == "moomoo":
         try:
-            from aoa.data.news import MoomooNewsFeed
-
             return MoomooNewsFeed(
                 host=cfg.moomoo_opend_host,
                 port=cfg.moomoo_opend_port,
                 connect_timeout=cfg.moomoo_connect_timeout,
-                market=cfg.moomoo_market,
             )
         except BrokerError:
             # OpenD down — keep the swarm running without headlines.

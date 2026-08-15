@@ -132,32 +132,32 @@ def _snapshot_price(row: Any, key: str) -> float:
 def _position_avg_cost(row: Any) -> float:
     """Prefer ``average_cost`` over diluted ``cost_price`` (FIELD_MAPPING.md)."""
     avg = _f(_row_value(row, "average_cost", 0))
-    if avg > 0:
-        return avg
-    return _f(_row_value(row, "cost_price", 0))
+    return avg if avg > 0 else _f(_row_value(row, "cost_price", 0))
 
 
 def _position_unrealized_pl(row: Any) -> float:
     """Prefer ``unrealized_pl`` over diluted ``pl_val`` (FIELD_MAPPING.md)."""
-    if _row_has_key(row, "unrealized_pl"):
+    if _has_field(row, "unrealized_pl"):
         return _f(_row_value(row, "unrealized_pl", 0))
     return _f(_row_value(row, "pl_val", 0))
 
 
-def _row_has_key(row: Any, key: str) -> bool:
-    try:
-        index = getattr(row, "index", None)
-        if index is not None and key in index:
-            return True
-    except TypeError:
-        pass
-    if hasattr(row, "keys"):
+def _has_field(row: Any, key: str) -> bool:
+    """True when ``row`` exposes ``key`` (DataFrame row, mapping, or dict)."""
+    index = getattr(row, "index", None)
+    if index is not None:
         try:
-            return key in row.keys()
+            return key in index
         except TypeError:
             pass
     if isinstance(row, dict):
         return key in row
+    keys = getattr(row, "keys", None)
+    if callable(keys):
+        try:
+            return key in keys()
+        except TypeError:
+            pass
     return False
 
 
@@ -171,6 +171,12 @@ def _rank_codes(ret: int, data: Any, *, sdk: Any, limit: int) -> list[str]:
     if columns:
         return [from_moomoo_code(str(v)) for v in data[columns[0]].tolist()[:limit]]
     return []
+
+
+def _order_id_from(data: Any) -> str:
+    if data is None or len(data) == 0:
+        return ""
+    return str(_row_value(data.iloc[0], "order_id", ""))
 
 
 def _check_ret(ret: int, data: Any, *, action: str) -> Any:
@@ -555,10 +561,9 @@ class MoomooBroker(Broker):
             remark="AOA",
         )
         _check_ret(ret, data, action="place_order")
-        if data is None or len(data) == 0:
+        entry_id = _order_id_from(data)
+        if not entry_id:
             raise BrokerError("Moomoo place_order returned no order id.")
-        row = data.iloc[0]
-        entry_id = str(_row_value(row, "order_id", ""))
         protective: list[dict[str, str]] = []
         if (
             request.is_protected
@@ -573,10 +578,7 @@ class MoomooBroker(Broker):
             side=request.side,
             status="submitted",
             asset_class=request.asset_class,
-            raw={
-                "order_id": entry_id,
-                "protective_legs": protective,
-            },
+            raw={"order_id": entry_id, "protective_legs": protective},
         )
 
     @staticmethod
@@ -612,8 +614,9 @@ class MoomooBroker(Broker):
                 remark="AOA-SL",
             )
             _check_ret(ret, data, action="place_order(stop_loss)")
-            oid = str(_row_value(data.iloc[0], "order_id", "")) if data is not None and len(data) else ""
-            legs.append({"kind": "stop_loss", "order_id": oid, "price": str(stop_px)})
+            legs.append(
+                {"kind": "stop_loss", "order_id": _order_id_from(data), "price": str(stop_px)}
+            )
         if request.take_profit_price is not None:
             tp_px = float(request.take_profit_price)
             ret, data = self._trade_ctx.place_order(
@@ -629,8 +632,9 @@ class MoomooBroker(Broker):
                 remark="AOA-TP",
             )
             _check_ret(ret, data, action="place_order(take_profit)")
-            oid = str(_row_value(data.iloc[0], "order_id", "")) if data is not None and len(data) else ""
-            legs.append({"kind": "take_profit", "order_id": oid, "price": str(tp_px)})
+            legs.append(
+                {"kind": "take_profit", "order_id": _order_id_from(data), "price": str(tp_px)}
+            )
         return legs
 
     def list_orders(self, status: str = "open") -> list[Order]:

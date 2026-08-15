@@ -50,8 +50,7 @@ Per-symbol analysis runs **in parallel** when `AOA_PARALLEL_WORKERS > 1`
 
 ```
  broker (Moomoo OpenD default · Alpaca optional)
-   │  account, positions, quotes, multi-TF bars, news*, option chains
-   │  *news: Alpaca feed when broker=alpaca; Moomoo uses NullNewsFeed today
+   │  account, positions, quotes, multi-TF bars, news, option chains
    ▼
 ┌──────────────┐   shortlist    ┌──────────────┐   signals    ┌────────────────┐
 │   Scanner    │ ─────────────▶ │  Technical   │ ───────────▶ │   Meshing    │
