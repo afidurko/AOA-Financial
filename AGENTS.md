@@ -19,6 +19,8 @@ python3 -m aoa.cli repair gate --for triage
 python3 -m aoa.cli repair gate --for repair
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
+python3 -m aoa.cli ship discover
+python3 -m aoa.cli ship proofread
 python3 -m aoa.cli team health
 ```
 
@@ -69,5 +71,6 @@ L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 | `minimal-fix` | Maker — smallest coding fix |
 | `loop-verifier` | Checker when verifying a PR / Kai path |
 | `coding-engineer` | Twelve-member code-health patterns |
+| `ship-loop` | Discover → fix → proofread → ready (no auto-merge) |
 
-Official Moomoo skill packs are vendored under `.cursor/skills/{moomooapi,install-moomoo-opend}/` and mirrored in `.claude/skills/` (Claude Code). Source: [opend-skills.zip](https://openapi.moomoo.com/skills/opend-skills.zip). Use `/moomooapi` or natural language about quotes/orders; use `/install-moomoo-opend` to install OpenD on a local machine.
+Official Moomoo skill packs live under `.cursor/skills/{moomooapi,install-moomoo-opend}/` and are mirrored in `.claude/skills/` for Claude Code. Source: [opend-skills.zip](https://openapi.moomoo.com/skills/opend-skills.zip). Prefer `/moomooapi` (or natural language about quotes/orders); use `/install-moomoo-opend` to install OpenD on a local machine.
