@@ -36,6 +36,8 @@ add_folder "VisualHFT" "VisualHFT" "$ROOT/VisualHFT"
 add_folder "oxyplot" "oxyplot" "$ROOT/oxyplot"
 add_folder "hftbacktest" "hftbacktest" "$ROOT/hftbacktest"
 add_folder "example-hftish" "example-hftish" "$ROOT/example-hftish"
+add_folder "SGX-OrderBook" "SGX-Full-OrderBook-Tick-Data-Trading-Strategy" \
+  "$ROOT/SGX-Full-OrderBook-Tick-Data-Trading-Strategy"
 
 # External roots (absolute paths) — e.g. repos connected via connect-workspace.sh.
 for extra in "${EXTRA_ROOTS[@]}"; do

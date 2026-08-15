@@ -34,10 +34,13 @@ else
 fi
 
 # --- Anthropic ---
-if grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
-  ok "ANTHROPIC_API_KEY looks set in .env"
+if grep -qE '^AOA_LLM_PROVIDER=openai_compatible[[:space:]]*$' .env 2>/dev/null \
+  && grep -qE '^AOA_LLM_BASE_URL=https?://[^[:space:]]+' .env 2>/dev/null; then
+  ok "Local LLM (WASTE / openai_compatible) configured in .env"
+elif grep -q '^ANTHROPIC_API_KEY=sk-' .env 2>/dev/null; then
+  ok "ANTHROPIC_API_KEY looks set in .env (opt-in Claude provider)"
 else
-  need "Edit .env — set ANTHROPIC_API_KEY=sk-ant-... (from console.anthropic.com)"
+  need "Start WASTE serve — docs/how-to/waste-local-llm.md (default LLM is local, not Claude)"
 fi
 
 # --- Alpaca CLI ---
