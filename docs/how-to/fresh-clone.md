@@ -120,4 +120,5 @@ AOA does not run the notebooks:
 ```
 
 See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
-`aoa.research.sgx_orderbook_patterns`.
+`aoa.research.sgx_orderbook_patterns`. Companion map:
+[hft-research-lane.md](hft-research-lane.md).

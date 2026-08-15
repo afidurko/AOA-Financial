@@ -22,8 +22,9 @@ AOA Financial keeps it as an **optional sibling reference** — same pattern as
 
 AOA stays bar-based (Alpaca / Moomoo equities &amp; cash options). There is no SGX
 A50 feed, no microsecond L2 history store, and no HFT execution path in this
-repo. Combine with the optional `aoa.orderbook` / `aoa hft` lanes when those
-land for offline L2 experiments.
+repo. For offline L2, use the vendored `aoa.orderbook` + optional
+`aoa hft` lane — see [hftbacktest-integration.md](hftbacktest-integration.md)
+and the companion map [hft-research-lane.md](hft-research-lane.md).
 
 ## Safety (Hard Floor)
 
@@ -45,35 +46,36 @@ gitignored.
 ## Use the Python patterns
 
 ```python
+from aoa.orderbook import LimitOrderBook, Order
 from aoa.research.sgx_orderbook_patterns import (
-    BookLevel,
-    BookSnapshot,
     combine_pressure,
     depth_from_snapshot,
     depth_pressure_side,
     feature_vector,
     rise_pressure_side,
-    rise_ratio,
+    snapshot_from_limit_order_book,
 )
 
-book = BookSnapshot(
-    bids=(BookLevel(99.0, 40.0), BookLevel(98.0, 20.0), BookLevel(97.0, 10.0)),
-    asks=(BookLevel(100.0, 30.0), BookLevel(101.0, 25.0), BookLevel(102.0, 15.0)),
-)
-depth = depth_from_snapshot(book)
+book = LimitOrderBook()
+book.process(Order(uid=1, is_bid=True, size=40, price=99.0))
+book.process(Order(uid=2, is_bid=False, size=30, price=100.0))
+snap = snapshot_from_limit_order_book(book, levels=3)
+depth = depth_from_snapshot(snap)
 side = combine_pressure(
     depth_pressure_side(depth.imbalance),
     rise_pressure_side(0.08),
 )
-feats = feature_vector(book, prior_ask=99.5, prior_bid=98.5)
+feats = feature_vector(snap, prior_ask=99.5, prior_bid=98.5)
 ```
+
+Smoke: `python3 examples/sgx_orderbook_smoke.py`.
 
 ## Map to Julie / study cortex
 
 - Mesh: `brain/mesh/repos.yaml` entry `sgx-orderbook`
 - Spine: `brain/spine/Algorithms.md`
 - Curriculum: `bridge-sgx-depth-rise`
-- Catalog: [docs/help.md](../help.md)
+- Catalog: [docs/help.md](../help.md) · [hft-research-lane.md](hft-research-lane.md)
 
 ## Upstream layout (cheat sheet)
 

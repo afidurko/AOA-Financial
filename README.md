@@ -602,6 +602,8 @@ aoa hft status
 aoa hft smoke                           # synthetic L2 depth smoke (no orders)
 aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # See docs/how-to/hftbacktest-integration.md
+# SGX LOB features: docs/how-to/sgx-orderbook-reference.md · examples/sgx_orderbook_smoke.py
+# Companion map: docs/how-to/hft-research-lane.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,

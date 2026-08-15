@@ -72,3 +72,12 @@ explicit depth-feed design and `AOA_LIVE_ACK`.
 - Hard safety floor still applies: no live order submission from loops
 - Vendored LOB license: MIT (Nils Diefenbach / Crypto-toolbox); see
   `src/aoa/orderbook/vendor/LICENSE`
+
+## Related research lanes
+
+SGX rise/depth features over the same vendored book:
+[sgx-orderbook-reference.md](sgx-orderbook-reference.md) ·
+`snapshot_from_limit_order_book` · `examples/sgx_orderbook_smoke.py`.
+
+Full companion map (hft / example-hftish / VisualHFT):
+[hft-research-lane.md](hft-research-lane.md).

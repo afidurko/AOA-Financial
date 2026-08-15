@@ -45,6 +45,8 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 
 **In-system wiring:** clone with `./scripts/sgx-orderbook-setup.sh` (gitignored sibling).
 Vault note: `vault/system/sgx-orderbook.md`. Guide: [how-to/sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md).
+Integrates with vendored `aoa.orderbook` via `snapshot_from_limit_order_book`.
+Companion map: [how-to/hft-research-lane.md](how-to/hft-research-lane.md).
 Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)
