@@ -43,8 +43,6 @@ def test_first_book_level_list_and_scalar():
 def test_get_quotes_many_maps_bid_ask_sizes():
     import pandas as pd
 
-    from aoa.brokerage.moomoo import MoomooBroker
-
     class FakeCtx:
         def get_market_snapshot(self, codes):
             df = pd.DataFrame(
