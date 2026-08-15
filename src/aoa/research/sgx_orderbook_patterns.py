@@ -1,8 +1,8 @@
 """Pure-Python helpers from afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy.
 
-Research / educational only: rise ratio, weighted depth, and forward tradeability
-labels from the SGX A50 notebooks — no sklearn, Jupyter, or order path.
-Works with plain level tuples or ``aoa.orderbook.LimitOrderBook`` snapshots.
+Research only: rise ratio, weighted depth, and forward tradeability labels from
+the SGX A50 notebooks. No sklearn, Jupyter, or order path. Accepts plain level
+tuples or ``aoa.orderbook.LimitOrderBook`` via :func:`snapshot_from_limit_order_book`.
 """
 
 from __future__ import annotations
@@ -74,6 +74,29 @@ def mid_from_top(bid: float, ask: float) -> float:
     return (bid + ask) / 2.0
 
 
+def _pct_change(price: float, base: float) -> float:
+    if base == 0:
+        return 0.0
+    return round((price - base) / base * 100.0, 5)
+
+
+def _bid_lifts_asks(bid: float, ask_window: Sequence[float]) -> bool:
+    return bool(ask_window) and bid > min(ask_window)
+
+
+def _pad_levels(levels: Sequence[BookLevel], count: int) -> list[BookLevel]:
+    out = list(levels[:count])
+    while len(out) < count:
+        out.append(BookLevel(price=0.0, quantity=0.0))
+    return out
+
+
+def _levels_from_raw(raw_levels: Sequence[Any], *, limit: int) -> tuple[BookLevel, ...]:
+    return tuple(
+        BookLevel(float(lvl.price), float(lvl.size)) for lvl in list(raw_levels)[:limit]
+    )
+
+
 def rise_ratio(
     prices: Sequence[float],
     timestamps: Sequence[float],
@@ -82,10 +105,9 @@ def rise_ratio(
 ) -> list[RisePoint]:
     """Percent rise vs the first print in ``[t - before_time, t]``.
 
-    Matches notebook ``rise_ask``: warmup samples (before the first timestamp
-    ≥ ``before_time``) rise vs ``prices[0]``; later samples use a trailing
-    window. Zero prices are replaced by the series mean. Timestamps should be
-    non-decreasing.
+    Warmup samples (before the first timestamp ≥ ``before_time``) rise vs
+    ``prices[0]``; later samples use a trailing window. Zero prices become the
+    series mean. Timestamps should be non-decreasing.
     """
     if len(prices) != len(timestamps):
         raise ValueError("prices and timestamps must have equal length")
@@ -110,9 +132,13 @@ def rise_ratio(
             while start < i and ts[start] < target:
                 start += 1
             window_start = start if start < i else 0
-        base = cleaned[window_start]
-        rise = 0.0 if base == 0 else round((price - base) / base * 100.0, 5)
-        out.append(RisePoint(index=i, rise_pct=rise, window_start_index=window_start))
+        out.append(
+            RisePoint(
+                index=i,
+                rise_pct=_pct_change(price, cleaned[window_start]),
+                window_start_index=window_start,
+            )
+        )
     return out
 
 
@@ -122,11 +148,7 @@ def weighted_depth(
     *,
     weights: Sequence[float] = (1.0, 1.0, 1.0),
 ) -> WeightedDepth:
-    """Weighted multi-level depth ratios (SGX Feature_Selection notebooks).
-
-    ``ask_over_bid = W_ask / W_bid`` and
-    ``imbalance = (W_ask - W_bid) / (W_ask + W_bid)``.
-    """
+    """Weighted multi-level depth ratios (SGX Feature_Selection notebooks)."""
     if len(ask_quantities) != len(bid_quantities):
         raise ValueError("ask_quantities and bid_quantities must match")
     n = len(ask_quantities)
@@ -149,16 +171,6 @@ def weighted_depth(
         ask_over_bid=ask_over_bid,
         imbalance=imbalance,
     )
-
-
-def _pad_levels(
-    levels: Sequence[BookLevel],
-    count: int,
-) -> list[BookLevel]:
-    out = list(levels[:count])
-    while len(out) < count:
-        out.append(BookLevel(price=0.0, quantity=0.0))
-    return out
 
 
 def depth_from_snapshot(
@@ -191,33 +203,32 @@ def snapshot_from_limit_order_book(
     """
     if levels < 1:
         raise ValueError("levels must be >= 1")
-    if book.best_bid is None and book.best_ask is None:
-        return BookSnapshot(bids=(), asks=(), timestamp=timestamp)
+    # Vendor ``levels()`` needs both tops; fall back to single-side tops.
     if book.best_bid is None or book.best_ask is None:
-        bids: tuple[BookLevel, ...] = ()
-        asks: tuple[BookLevel, ...] = ()
-        if book.best_bid is not None:
-            bids = (BookLevel(float(book.best_bid.price), float(book.best_bid.size)),)
-        if book.best_ask is not None:
-            asks = (BookLevel(float(book.best_ask.price), float(book.best_ask.size)),)
+        bids = (
+            (BookLevel(float(book.best_bid.price), float(book.best_bid.size)),)
+            if book.best_bid is not None
+            else ()
+        )
+        asks = (
+            (BookLevel(float(book.best_ask.price), float(book.best_ask.size)),)
+            if book.best_ask is not None
+            else ()
+        )
         return BookSnapshot(bids=bids, asks=asks, timestamp=timestamp)
 
     raw = book.levels(levels)
-    bids = tuple(
-        BookLevel(float(lvl.price), float(lvl.size)) for lvl in raw.get("bids", [])[:levels]
+    return BookSnapshot(
+        bids=_levels_from_raw(raw.get("bids", []), limit=levels),
+        asks=_levels_from_raw(raw.get("asks", []), limit=levels),
+        timestamp=timestamp,
     )
-    asks = tuple(
-        BookLevel(float(lvl.price), float(lvl.size)) for lvl in raw.get("asks", [])[:levels]
-    )
-    return BookSnapshot(bids=bids, asks=asks, timestamp=timestamp)
 
 
 def top_imbalance(bid_qty: float, ask_qty: float) -> float:
     """L1 size imbalance ``(ask - bid) / (ask + bid)`` (0 when empty)."""
     total = ask_qty + bid_qty
-    if total == 0:
-        return 0.0
-    return (ask_qty - bid_qty) / total
+    return 0.0 if total == 0 else (ask_qty - bid_qty) / total
 
 
 def depth_pressure_side(imbalance: float, *, threshold: float = 0.15) -> Side:
@@ -265,8 +276,7 @@ def forward_tradeable(
         raise ValueError("bid_prices and ask_prices must match")
     if horizon < 1:
         raise ValueError("horizon must be >= 1")
-    window = ask_prices[index : index + horizon]
-    return bool(window) and bid_prices[index] > min(window)
+    return _bid_lifts_asks(bid_prices[index], ask_prices[index : index + horizon])
 
 
 def label_forward_tradeable(
@@ -280,12 +290,10 @@ def label_forward_tradeable(
         raise ValueError("bid_prices and ask_prices must match")
     if horizon < 1:
         raise ValueError("horizon must be >= 1")
-    n = len(bid_prices)
-    out: list[int] = []
-    for i in range(n):
-        window = ask_prices[i : i + horizon]
-        out.append(1 if window and bid_prices[i] > min(window) else 0)
-    return out
+    return [
+        1 if _bid_lifts_asks(bid_prices[i], ask_prices[i : i + horizon]) else 0
+        for i in range(len(bid_prices))
+    ]
 
 
 def feature_vector(
@@ -316,7 +324,7 @@ def feature_vector(
     if depth.ask_over_bid != float("inf"):
         feats["ask_over_bid"] = depth.ask_over_bid
     if prior_ask is not None and prior_ask != 0:
-        feats["ask_rise_pct"] = round((best_ask - prior_ask) / prior_ask * 100.0, 5)
+        feats["ask_rise_pct"] = _pct_change(best_ask, prior_ask)
     if prior_bid is not None and prior_bid != 0:
-        feats["bid_rise_pct"] = round((best_bid - prior_bid) / prior_bid * 100.0, 5)
+        feats["bid_rise_pct"] = _pct_change(best_bid, prior_bid)
     return feats

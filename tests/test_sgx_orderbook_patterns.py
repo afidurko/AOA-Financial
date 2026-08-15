@@ -158,6 +158,17 @@ def test_snapshot_from_empty_book():
     assert snap.asks == ()
 
 
+def test_snapshot_from_one_sided_book():
+    from aoa.orderbook import LimitOrderBook, Order
+    from aoa.research.sgx_orderbook_patterns import snapshot_from_limit_order_book
+
+    lob = LimitOrderBook()
+    lob.process(Order(uid=1, is_bid=True, size=7, price=50.0))
+    snap = snapshot_from_limit_order_book(lob, levels=2)
+    assert snap.bids == (BookLevel(50.0, 7.0),)
+    assert snap.asks == ()
+
+
 def test_invalid_inputs():
     with pytest.raises(ValueError):
         rise_ratio([1.0], [1.0, 2.0], before_time=1.0)
@@ -167,3 +178,5 @@ def test_invalid_inputs():
         depth_pressure_side(0.0, threshold=-1.0)
     with pytest.raises(IndexError):
         forward_tradeable([1.0], [1.0], index=5, horizon=1)
+    with pytest.raises(ValueError):
+        label_forward_tradeable([1.0], [1.0], horizon=0)
