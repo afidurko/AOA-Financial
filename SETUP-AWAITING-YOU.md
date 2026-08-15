@@ -99,16 +99,30 @@ See `bash scripts/setup_alpaca_auth.sh` for the full Alpaca checklist.
 
 ---
 
-## Live trading (later)
+## Live trading (Moomoo real-money account)
 
-Only when you intentionally move to real money:
+Only when you intentionally move to real money. **OpenD must be logged into your live Moomoo account.**
+
+```bash
+export AOA_PROFILE=moomoo-live
+# In .env (never commit):
+#   AOA_LIVE_ACK=I_UNDERSTAND
+#   MOOMOO_UNLOCK_PASSWORD=your-trading-unlock-pin
+AOA_PROFILE=moomoo-live aoa doctor
+AOA_PROFILE=moomoo-live aoa run   # one cycle
+```
+
+Equivalent vars:
 
 ```bash
 AOA_ENV=live
-AOA_LIVE_ACK=I_UNDERSTAND
+AOA_BROKER=moomoo
 MOOMOO_LIVE=true
+AOA_LIVE_ACK=I_UNDERSTAND
 MOOMOO_UNLOCK_PASSWORD=your-trading-password
 ```
+
+Profile file: `profiles/moomoo-live.env` · template: `profiles/live.env.example` · guide: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md)
 
 ---
 

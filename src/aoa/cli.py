@@ -1883,7 +1883,7 @@ def _repo_root() -> Path:
     return Path.cwd()
 
 
-def cmd_setup_moomoo(cfg: Config) -> int:
+def cmd_setup_moomoo(cfg: Config, *, live: bool = False) -> int:
     """Run the Moomoo OpenD setup helper script."""
     script = _repo_root() / "scripts" / "setup_moomoo_auth.sh"
     if not script.is_file():
@@ -1891,7 +1891,12 @@ def cmd_setup_moomoo(cfg: Config) -> int:
         return 1
     print("Running Moomoo setup helper…")
     print(f"  Broker: {cfg.broker} | OpenD: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port}")
-    result = subprocess.run(["bash", str(script)], cwd=_repo_root(), check=False)
+    if live:
+        print("  Mode: LIVE checklist (real-money Moomoo account)")
+    cmd = ["bash", str(script)]
+    if live:
+        cmd.append("--live")
+    result = subprocess.run(cmd, cwd=_repo_root(), check=False)
     return int(result.returncode)
 
 
@@ -1917,9 +1922,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     setup = sub.add_parser("setup", help="One-time broker and environment setup helpers.")
     setup_sub = setup.add_subparsers(dest="setup_command", required=True)
-    setup_sub.add_parser(
+    setup_moomoo = setup_sub.add_parser(
         "moomoo",
         help="Install checks for Moomoo OpenD + moomoo-api (runs scripts/setup_moomoo_auth.sh).",
+    )
+    setup_moomoo.add_argument(
+        "--live",
+        action="store_true",
+        help="Print LIVE Moomoo account checklist (real money; requires unlock password in .env).",
     )
     setup_sub.add_parser(
         "mac",
@@ -2271,7 +2281,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_doctor(cfg, offline=getattr(args, "offline", False))
         if args.command == "setup":
             if args.setup_command == "moomoo":
-                return cmd_setup_moomoo(cfg)
+                return cmd_setup_moomoo(cfg, live=getattr(args, "live", False))
             if args.setup_command == "mac":
                 return cmd_setup_mac(cfg)
         if args.command == "status":
