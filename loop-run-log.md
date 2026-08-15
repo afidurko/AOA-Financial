@@ -30,3 +30,5 @@
 | 2026-08-15 20:31 | advisor-verify | L1 | report-only | Re-verified failure: OpenD ECONNREFUSED (doctor fail-fast), template Anthropic key. STATE updated. tier1-check OK. tokens_estimate=6000 |
 | 2026-08-15 20:35 | moomoo-path | L1 | report-only | User chose Moomoo. Locked docs/STATE to OpenD path; setup moomoo OK; OpenD still down. tokens_estimate=5000 |
 | 2026-08-15 20:50 | moomoo-skills | L2 | acted | Integrated moomooapi skills into MoomooBroker/NewsFeed; doctor Moomoo path; 423 tests pass. tokens_estimate=25000 |
+| 2026-08-15 21:05 | fable-repair | L2 | fixed+workspaces | upg-009 pipeline + upg-001 alpaca paper + httpx2; knowledge-stack verify OK; env.json + VS Code tasks. 430 tests. tokens_estimate=12000 |
+| 2026-08-15 22:05 | ship-loop | L2 | proofread | Simplified Moomoo helpers; merge-base catch-up; 466+ tests pass; Moomoo kept as paper default. tokens_estimate=15000 |

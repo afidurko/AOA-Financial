@@ -1246,6 +1246,26 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     return 0
 
 
+def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
+    from aoa.workloop.upgrade import run_upgrade_pipeline
+
+    _ = cfg  # Config required for CLI consistency; pipeline uses repo cwd.
+    result = run_upgrade_pipeline(Path.cwd(), dry_run=dry_run)
+    flag = "OK" if result.get("ok") else "FAIL"
+    mode = "dry-run" if dry_run else "upgrade"
+    print(f"Workloop upgrade pipeline [{mode}]: {flag}")
+    print(f"phase: {result.get('phase', '')}")
+    if result.get("ok"):
+        return 0
+    upgrade = result.get("upgrade") or {}
+    if upgrade.get("output"):
+        print(upgrade["output"][-500:])
+    reverify = result.get("reverify") or {}
+    if reverify and not reverify.get("passed"):
+        print("Reverify failed after upgrade.")
+    return 1
+
+
 def _print_repair_result(result) -> None:
     run = result.run
     print(f"\n=== Fable 5 repair triage ({run.run_id}) ===")
@@ -2285,6 +2305,15 @@ def main(argv: list[str] | None = None) -> int:
     wl_approve.add_argument("--note", default="", help="Optional approval note.")
     wl_log = wl_sub.add_parser("log", help="Tail the work-loop audit log.")
     wl_log.add_argument("-n", type=int, default=20, help="Number of entries to show.")
+    wl_up = wl_sub.add_parser(
+        "upgrade",
+        help="Dependency upgrade pipeline: verify → pip upgrade → reverify.",
+    )
+    wl_up.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Run baseline verify only; skip pip upgrade.",
+    )
 
     rp = sub.add_parser(
         "repair",
@@ -2475,7 +2504,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
 
-    # Offline research lane — no .env template and no Config/broker side effects.
+    # Offline research lanes — no .env template and no Config/broker side effects.
     if args.command == "visualhft":
         if args.visualhft_command == "status":
             return cmd_visualhft_status(as_json=getattr(args, "json", False))
@@ -2494,6 +2523,28 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "workspaces":
         if args.workspaces_command == "status":
             return cmd_workspaces_status(as_json=getattr(args, "json", False))
+
+    if args.command == "hft":
+        if args.hft_command == "status":
+            return cmd_hft_status(as_json=getattr(args, "json", False))
+        if args.hft_command == "smoke":
+            return cmd_hft_smoke(
+                n_events=getattr(args, "events", 400),
+                steps=getattr(args, "steps", 20),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.hft_command == "book-smoke":
+            return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
+        if args.hft_command == "run":
+            return cmd_hft_run(
+                data=args.data,
+                tick_size=args.tick_size,
+                lot_size=args.lot_size,
+                steps=getattr(args, "steps", 20),
+                step_ns=getattr(args, "step_ns", 50_000_000),
+                as_json=getattr(args, "json", False),
+            )
 
     _ensure_env_template()
     cfg = Config.from_env()
@@ -2546,27 +2597,6 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
-        if args.command == "hft":
-            if args.hft_command == "status":
-                return cmd_hft_status(as_json=getattr(args, "json", False))
-            if args.hft_command == "smoke":
-                return cmd_hft_smoke(
-                    n_events=args.events,
-                    steps=args.steps,
-                    seed=args.seed,
-                    as_json=getattr(args, "json", False),
-                )
-            if args.hft_command == "book-smoke":
-                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
-            if args.hft_command == "run":
-                return cmd_hft_run(
-                    data=args.data,
-                    tick_size=args.tick_size,
-                    lot_size=args.lot_size,
-                    steps=args.steps,
-                    step_ns=args.step_ns,
-                    as_json=getattr(args, "json", False),
-                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
@@ -2594,6 +2624,10 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_workloop_approve(cfg, approver=approver, note=args.note)
             if args.workloop_command == "log":
                 return cmd_workloop_log(cfg, args.n)
+            if args.workloop_command == "upgrade":
+                return cmd_workloop_upgrade(
+                    cfg, dry_run=getattr(args, "dry_run", False)
+                )
         if args.command == "repair":
             if args.repair_command == "triage":
                 return cmd_repair_triage(cfg, no_sync=getattr(args, "no_sync", False))

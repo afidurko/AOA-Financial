@@ -158,7 +158,7 @@ export AOA_QM_URL=http://localhost:8081
 ```
 
 See [qm-integration.md](qm-integration.md). Other companions:
-[docs/help.md](../help.md) · [workspaces.md](workspaces.md).
+[docs/help.md](../help.md) · [workspaces.md](workspaces.md) · [workspace-mesh.md](workspace-mesh.md).
 
 ## 11. VisualHFT (optional)
 
@@ -173,7 +173,18 @@ aoa workspaces status
 
 See [visualhft-integration.md](visualhft-integration.md).
 
-## 12. example-hftish reference (optional)
+## 12. Workspaces (optional)
+
+Open the whole stack in one Cursor window, and share the vault with your other repos:
+
+```bash
+./scripts/write-aoa-workspace.sh                     # multi-root AOA.code-workspace
+./scripts/connect-workspace.sh /path/to/other/repo   # join the shared second brain
+```
+
+See [workspace-mesh.md](workspace-mesh.md).
+
+## 13. example-hftish reference (optional)
 
 Clone the Alpaca order-book imbalance sibling for tick-taker / level-change
 reading ([example-hftish](https://github.com/afidurko/example-hftish)). AOA does
