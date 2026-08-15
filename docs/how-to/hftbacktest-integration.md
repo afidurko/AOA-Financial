@@ -89,3 +89,9 @@ See [workspaces.md](workspaces.md) and [visualhft-integration.md](visualhft-inte
 ## Workspace mesh
 
 All offline HFT/LOB lanes: [microstructure-lanes.md](microstructure-lanes.md) · `aoa microstructure status`.
+## Related research lanes
+SGX rise/depth features over the same vendored book:
+[sgx-orderbook-reference.md](sgx-orderbook-reference.md) ·
+`snapshot_from_limit_order_book` · `examples/sgx_orderbook_smoke.py`.
+Full companion map (hft / example-hftish / VisualHFT):
+[hft-research-lane.md](hft-research-lane.md).

@@ -68,6 +68,9 @@ algorithms:
     owner: julie
     module: aoa.research.hft_patterns
     companion: hft
+  - id: algo.sgx_orderbook_patterns
+    module: aoa.research.sgx_orderbook_patterns
+    companion: sgx-orderbook
   - id: algo.hftish_patterns
     owner: julie
     module: aoa.research.hftish_patterns

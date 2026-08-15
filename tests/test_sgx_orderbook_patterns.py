@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import pytest
 
 from aoa.research.sgx_orderbook_patterns import (
@@ -116,7 +114,59 @@ def test_feature_vector_keys():
     assert "depth_imbalance" in feats
     assert "ask_rise_pct" in feats
     assert "bid_rise_pct" in feats
-    assert math.isfinite(feats["ask_over_bid"])
+    assert "ask_over_bid" in feats
+
+
+def test_feature_vector_omits_infinite_ask_over_bid():
+    book = BookSnapshot(
+        bids=(BookLevel(99.0, 0.0),),
+        asks=(BookLevel(100.0, 5.0),),
+    )
+    feats = feature_vector(book, levels=1)
+    assert "ask_over_bid" not in feats
+    assert feats["depth_imbalance"] == pytest.approx(1.0)
+
+
+def test_snapshot_from_limit_order_book():
+    from aoa.orderbook import LimitOrderBook, Order
+    from aoa.research.sgx_orderbook_patterns import snapshot_from_limit_order_book
+
+    lob = LimitOrderBook()
+    lob.process(Order(uid=1, is_bid=True, size=10, price=99.0))
+    lob.process(Order(uid=2, is_bid=True, size=4, price=98.0))
+    lob.process(Order(uid=3, is_bid=False, size=6, price=101.0))
+    lob.process(Order(uid=4, is_bid=False, size=3, price=102.0))
+
+    snap = snapshot_from_limit_order_book(lob, levels=2, timestamp=42.0)
+    assert snap.timestamp == 42.0
+    assert snap.bids[0] == BookLevel(99.0, 10.0)
+    assert snap.asks[0] == BookLevel(101.0, 6.0)
+    depth = depth_from_snapshot(snap, levels=2)
+    assert depth.weight_bid == 14.0
+    assert depth.weight_ask == 9.0
+    feats = feature_vector(snap, levels=2)
+    assert feats["best_bid"] == 99.0
+    assert feats["best_ask"] == 101.0
+
+
+def test_snapshot_from_empty_book():
+    from aoa.orderbook import LimitOrderBook
+    from aoa.research.sgx_orderbook_patterns import snapshot_from_limit_order_book
+
+    snap = snapshot_from_limit_order_book(LimitOrderBook(), levels=3)
+    assert snap.bids == ()
+    assert snap.asks == ()
+
+
+def test_snapshot_from_one_sided_book():
+    from aoa.orderbook import LimitOrderBook, Order
+    from aoa.research.sgx_orderbook_patterns import snapshot_from_limit_order_book
+
+    lob = LimitOrderBook()
+    lob.process(Order(uid=1, is_bid=True, size=7, price=50.0))
+    snap = snapshot_from_limit_order_book(lob, levels=2)
+    assert snap.bids == (BookLevel(50.0, 7.0),)
+    assert snap.asks == ()
 
 
 def test_invalid_inputs():
@@ -128,3 +178,5 @@ def test_invalid_inputs():
         depth_pressure_side(0.0, threshold=-1.0)
     with pytest.raises(IndexError):
         forward_tradeable([1.0], [1.0], index=5, horizon=1)
+    with pytest.raises(ValueError):
+        label_forward_tradeable([1.0], [1.0], horizon=0)

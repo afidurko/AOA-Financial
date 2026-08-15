@@ -14,6 +14,7 @@ Julie owns algorithm clarity. Brain context injects into analysis via
 - Mesh node `algo.swarm` → trading Orchestrator
 - Research lane `aoa.avellaneda_stoikov` → AS reservation-price MM (offline; sibling repo `avellaneda-stoikov`; study bridge `bridge-as-reservation`)
 - Mesh node `algo.hft_patterns` → educational pairs/maker/MA helpers (`aoa.research.hft_patterns`)
+- Mesh node `algo.sgx_orderbook_patterns` → LOB rise/depth helpers (`aoa.research.sgx_orderbook_patterns`)
 - Mesh node `algo.hftish_patterns` → educational OB imbalance helpers (`aoa.research.hftish_patterns`)
 - Mesh node `algo.sgx_orderbook` → educational depth-rise helpers (`aoa.research.sgx_orderbook_patterns`)
 - Mesh catalog `aoa.microstructure` → `aoa microstructure status` (all offline HFT/LOB lanes)
@@ -33,6 +34,17 @@ futures HFT strategies. Distilled Python helpers live in
 `aoa.research.hft_patterns` (no broker calls). Study bridge:
 `bridge-hft-spread`. Setup: `./scripts/hft-setup.sh` ·
 [docs/how-to/hft-reference.md](../../docs/how-to/hft-reference.md).
+
+## SGX order-book companion (reference only)
+
+Sibling [afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)
+documents full-LOB feature engineering (rise ratio, weighted depth) and
+sklearn model selection on SGX A50 ticks. Distilled Python helpers live in
+`aoa.research.sgx_orderbook_patterns` (no broker calls); bridge from the
+vendored LOB via `snapshot_from_limit_order_book`. Study bridge:
+`bridge-sgx-depth-rise`. Setup: `./scripts/sgx-orderbook-setup.sh` ·
+[docs/how-to/sgx-orderbook-reference.md](../../docs/how-to/sgx-orderbook-reference.md) ·
+[docs/how-to/hft-research-lane.md](../../docs/how-to/hft-research-lane.md).
 
 ## example-hftish companion (reference only)
 
