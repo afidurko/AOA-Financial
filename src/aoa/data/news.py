@@ -1,8 +1,9 @@
 """News feed abstraction — headlines for the fundamental agent.
 
-The default provider uses Alpaca's market-data news endpoint (included with
-standard Alpaca data credentials). When news is unavailable the feed returns
-empty lists and the fundamental agent falls back to qualitative reasoning.
+Providers:
+- ``AlpacaNewsFeed`` — Alpaca market-data news (when ``AOA_BROKER=alpaca``)
+- ``MoomooNewsFeed`` — OpenD ``get_search_news`` (moomooapi skill; default broker)
+- ``NullNewsFeed`` — empty headlines when news is disabled or unreachable
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from alpaca.common.exceptions import APIError
 from alpaca.data.historical.news import NewsClient
@@ -43,6 +45,7 @@ class NewsFeed(ABC):
 
     def clear_cache(self) -> None:
         """No-op unless a concrete feed caches per-cycle results."""
+        return None
 
 
 class NullNewsFeed(NewsFeed):
@@ -119,6 +122,69 @@ class AlpacaNewsFeed(NewsFeed):
         return {s: list(self._cache.get(s, [])) for s in normalized}
 
 
+class MoomooNewsFeed(NewsFeed):
+    """Fetch headlines via OpenD ``get_search_news`` (moomooapi skill)."""
+
+    def __init__(
+        self,
+        *,
+        host: str = "127.0.0.1",
+        port: int = 11111,
+        connect_timeout: float = 3.0,
+    ) -> None:
+        from aoa.brokerage.moomoo import probe_opend
+
+        self._host = host
+        self._port = int(port)
+        self._connect_timeout = float(connect_timeout)
+        self._cache: dict[str, list[NewsItem]] = {}
+        probe_opend(self._host, self._port, timeout=self._connect_timeout)
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+    def headlines(self, symbols: list[str], *, limit: int = 5) -> dict[str, list[NewsItem]]:
+        if not symbols:
+            return {}
+        try:
+            import moomoo as ft
+        except ImportError as exc:  # pragma: no cover
+            raise BrokerError("moomoo-api is not installed. Run: pip install moomoo-api") from exc
+
+        normalized = [s.upper() for s in symbols if s]
+        missing = [s for s in normalized if s not in self._cache]
+        if not missing:
+            return {s: list(self._cache.get(s, [])) for s in normalized}
+
+        news_sub = getattr(getattr(ft, "NewsSubType", None), "NEWS", "NEWS")
+        ctx = ft.OpenQuoteContext(host=self._host, port=self._port)
+        try:
+            for sym in missing:
+                self._cache[sym] = self._fetch_symbol(ctx, ft, sym, limit=limit, news_sub=news_sub)
+        finally:
+            close = getattr(ctx, "close", None)
+            if callable(close):
+                close()
+        return {s: list(self._cache.get(s, [])) for s in normalized}
+
+    @staticmethod
+    def _fetch_symbol(ctx: Any, ft: Any, sym: str, *, limit: int, news_sub: Any) -> list[NewsItem]:
+        try:
+            ret, data = ctx.get_search_news(sym, max(1, min(limit, 100)), news_sub_type=news_sub)
+            if ret != ft.RET_OK or data is None or len(data) == 0:
+                return []
+            items: list[NewsItem] = []
+            for _, row in data.iterrows():
+                item = _parse_moomoo_news_row(row, default_symbol=sym)
+                if item is not None:
+                    items.append(item)
+                if len(items) >= limit:
+                    break
+            return items
+        except Exception:  # noqa: BLE001 — per-symbol soft fail
+            return []
+
+
 def _parse_news_row(row: dict) -> NewsItem | None:
     headline = (row.get("headline") or "").strip()
     if not headline:
@@ -141,3 +207,44 @@ def _parse_news_row(row: dict) -> NewsItem | None:
         created_at=str(created),
         symbols=symbols,
     )
+
+
+def _parse_moomoo_news_row(row: Any, *, default_symbol: str) -> NewsItem | None:
+    """Map moomooapi ``get_search_news`` fields → ``NewsItem``."""
+    from aoa.brokerage.moomoo import _row_value
+
+    headline = str(_row_value(row, "title", "") or _row_value(row, "headline", "")).strip()
+    if not headline:
+        return None
+    summary = str(_row_value(row, "content", "") or _row_value(row, "summary", "")).strip()
+    if len(summary) > 500:
+        summary = summary[:497] + "..."
+    created = _row_value(row, "publish_time", "") or _row_value(row, "created_at", "")
+    if isinstance(created, datetime):
+        created = created.isoformat()
+    symbols = _related_symbols(_row_value(row, "related_securities", None), default_symbol)
+    return NewsItem(
+        headline=headline,
+        summary=summary,
+        source=str(_row_value(row, "source", "") or "moomoo"),
+        created_at=str(created),
+        symbols=tuple(symbols),
+    )
+
+
+def _related_symbols(related: Any, default_symbol: str) -> list[str]:
+    symbols: list[str] = []
+    parts: list[Any]
+    if isinstance(related, str) and related.strip():
+        parts = related.replace(";", ",").split(",")
+    elif isinstance(related, (list, tuple)):
+        parts = list(related)
+    else:
+        parts = []
+    for part in parts:
+        token = str(part).strip().upper()
+        if "." in token:
+            token = token.split(".", 1)[1]
+        if token:
+            symbols.append(token)
+    return symbols or [default_symbol.upper()]

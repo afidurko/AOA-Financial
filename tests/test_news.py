@@ -9,7 +9,13 @@ from aoa.agents.fundamental import FundamentalAgent
 from aoa.brokerage.models import Bar, Quote
 from aoa.data import indicators
 from aoa.data.market_data import SymbolSnapshot
-from aoa.data.news import AlpacaNewsFeed, NewsItem, NullNewsFeed, _parse_news_row
+from aoa.data.news import (
+    AlpacaNewsFeed,
+    NewsItem,
+    NullNewsFeed,
+    _parse_moomoo_news_row,
+    _parse_news_row,
+)
 
 
 def test_volume_metrics_ratio():
@@ -67,6 +73,23 @@ def test_null_news_feed():
     feed = NullNewsFeed()
     result = feed.headlines(["AAPL", "MSFT"], limit=3)
     assert result == {"AAPL": [], "MSFT": []}
+
+
+def test_parse_moomoo_news_row_maps_skill_fields():
+    item = _parse_moomoo_news_row(
+        {
+            "title": "Apple beats estimates",
+            "content": "Strong iPhone sales.",
+            "source": "Reuters",
+            "publish_time": "2025-01-15 14:00:00",
+            "related_securities": "US.AAPL",
+        },
+        default_symbol="MSFT",
+    )
+    assert item is not None
+    assert item.headline == "Apple beats estimates"
+    assert item.symbols == ("AAPL",)
+    assert item.source == "Reuters"
 
 
 def test_alpaca_news_feed_groups_by_symbol(monkeypatch):

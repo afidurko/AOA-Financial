@@ -2,16 +2,17 @@
 
 An autonomous, multi-agent swarm that analyzes the US stock market for
 opportunities and executes **stock and options** trades in a **cash account**
-through a live brokerage. The brokerage ([Alpaca](https://alpaca.markets)) is
-both the **information source** (quotes, bars, option chains, account, positions)
-and the **order executor**. Agents reason via a **local WASTE** OpenAI-compatible
-LLM by default (Claude is opt-in only).
+through a live brokerage. The default brokerage is **[Moomoo](https://www.moomoo.com)**
+via local **OpenD** (`AOA_BROKER=moomoo`) — quotes, bars, option chains, account,
+positions, and order execution. **[Alpaca](https://alpaca.markets)** remains an
+optional path (`AOA_BROKER=alpaca`). Agents reason via a **local WASTE**
+OpenAI-compatible LLM by default (Claude / Anthropic API is opt-in).
 
 > ⚠️ **This software can place real orders with real money.** It defaults to
-> **paper trading** (`ALPACA_LIVE=false`). Set `ALPACA_LIVE=true` only when you
-> intentionally route orders to a live account. Hard, deterministic risk
-> guardrails always apply, but **you are responsible for any trades it makes.**
-> Start in the paper sandbox. Nothing here is financial advice.
+> **paper / dry-run** (`AOA_ENV=paper-dry`, `MOOMOO_LIVE=false`). Enable live
+> Moomoo or Alpaca trading only intentionally (`AOA_ENV=live` + required acks).
+> Hard, deterministic risk guardrails always apply, but **you are responsible
+> for any trades it makes.** Start in the paper sandbox. Nothing here is financial advice.
 
 ---
 
@@ -21,7 +22,7 @@ This repo contains **two complementary packages** that can be used independently
 
 | Package | Role | Entry point |
 |---------|------|-------------|
-| **`src/aoa/`** | Live **autonomous trading swarm** — Alpaca brokerage, options, cash-account guardrails, web dashboard | `aoa` |
+| **`src/aoa/`** | Live **autonomous trading swarm** — Moomoo (default) / Alpaca brokerage, options, cash-account guardrails, web dashboard | `aoa` |
 | **`aoa_financial/`** | Optional **deep analysis & forecasting engine** — SQLite history (back to 1960), factor/regime models, walk-forward backtest. **Does not place orders.** | `python -m aoa_financial` |
 
 The sections below document the trading swarm (`src/aoa/`). For the optional research engine, see [Optional: Deep analysis engine (`aoa_financial/`)](#optional-deep-analysis-engine-aoa_financial).
@@ -49,7 +50,7 @@ Per-symbol analysis runs **in parallel** when `AOA_PARALLEL_WORKERS > 1`
 (technical + fundamental concurrently per symbol, symbols analyzed concurrently).
 
 ```
- broker (Alpaca)
+ broker (Moomoo OpenD default · Alpaca optional)
    │  account, positions, quotes, multi-TF bars, news, option chains
    ▼
 ┌──────────────┐   shortlist    ┌──────────────┐   signals    ┌────────────────┐
@@ -106,7 +107,7 @@ portfolio sizing, risk, and execution:
 |-------|------|
 | **Scanner** | Narrows the universe to a shortlist of the strongest setups. |
 | **Technical** | Multi-timeframe indicators (1m→yearly: SMA/EMA/RSI/MACD/Bollinger/ATR/vol) → signal. |
-| **Fundamental** | Alpaca news headlines + catalyst/event-risk view (never fabricates news). |
+| **Fundamental** | Moomoo `get_search_news` (or Alpaca news when `AOA_BROKER=alpaca`) + catalyst/event-risk view (never fabricates news). |
 | **Meshing** | Synthesizes specialist signals into a cohesive, editable per-symbol view. |
 | **Options strategist** | Proposes a cash-account-appropriate options structure from the live chain. |
 | **Portfolio manager** | Synthesizes all signals + team brief + positions + account into target trades. |
@@ -532,33 +533,33 @@ Configuration loads in this order (lowest → highest priority):
 
 ```bash
 cp .env.example .env
-export AOA_PROFILE=paper-dry    # recommended starting point
-# Edit .env: start local WASTE serve (see docs/how-to/waste-local-llm.md).
-# Moomoo OpenD or Alpaca paper keys as needed.
-# Leave ALPACA_LIVE=false / MOOMOO_LIVE=false for paper first.
-# Optional market-data tuning:
-#   ALPACA_DATA_FEED=iex          # sip | iex | boats | otc (blank = Alpaca default)
-#   ALPACA_BAR_ADJUSTMENT=split   # raw | split | dividend | all | spin-off
+export AOA_PROFILE=paper-dry    # recommended starting point (Moomoo + dry-run)
+# Start Moomoo OpenD on 127.0.0.1:11111 (see docs/how-to/moomoo-setup.md)
+# Start local WASTE serve on :8000 (see docs/how-to/waste-local-llm.md)
+aoa setup moomoo
 aoa doctor && aoa run
 ```
 
 ### Named environments
 
-| `AOA_ENV` | Broker | Orders | Use case |
-|-----------|--------|--------|----------|
+| `AOA_ENV` / profile | Broker | Orders | Use case |
+|---------------------|--------|--------|----------|
 | `test` | n/a | dry-run | Unit tests / CI (no API keys required) |
-| `paper-dry` | Alpaca paper | dry-run | Watch decisions without submitting |
-| `paper` | Alpaca paper | enabled | Paper trading with real sandbox fills |
-| `live` | Alpaca live | enabled | Real money — requires `AOA_LIVE_ACK=I_UNDERSTAND` |
+| `paper-dry` | Moomoo OpenD | dry-run | Watch decisions without submitting |
+| `moomoo-paper` / `paper` | Moomoo simulate | enabled | Paper fills via OpenD |
+| `live` | Moomoo live | enabled | Real money — `AOA_LIVE_ACK` + `MOOMOO_UNLOCK_PASSWORD` |
+| *(optional)* `AOA_BROKER=alpaca` | Alpaca paper/live | per env | See `scripts/setup_alpaca_auth.sh` |
 
 Runtime state (journal, daily-loss baseline) is isolated under `data/{AOA_ENV}/`.
 
-Profiles live in `profiles/` — e.g. `profiles/paper-dry.env`. Override the data
-root with `AOA_DATA_DIR` or the journal file with `AOA_JOURNAL_PATH`.
+Profiles live in `profiles/` — e.g. `profiles/paper-dry.env`, `profiles/moomoo-paper.env`.
+Override the data root with `AOA_DATA_DIR` or the journal file with `AOA_JOURNAL_PATH`.
 
-Get free Alpaca **Trading API** paper keys (`PK...`) at <https://alpaca.markets>.
-These are **not** the same as Broker API OAuth credentials (`authx.alpaca.markets`).
-Options trading requires options approval on the account (the swarm checks `options_level`).
+**Moomoo (default):** install OpenD from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/),
+log in, keep it on `127.0.0.1:11111`. Full guide: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md).
+
+**Optional Alpaca:** set `AOA_BROKER=alpaca` and use Trading API paper keys (`PK...`) from
+<https://alpaca.markets> (not Broker API OAuth `authx` keys).
 
 ## Run
 
@@ -810,8 +811,8 @@ falls back to qualitative reasoning without fabricating headlines.
 └──────┬──────────────────┬──────────────────┬────────────────────┘
        │                  │                  │
        ▼                  ▼                  ▼
-  Alpaca/Moomoo      Local WASTE LLM    Journal (JSONL)
-  (data + orders)    (agent reasoning)  + SwarmEnvironment
+  Moomoo / Alpaca    Local WASTE LLM    Journal (JSONL)
+  broker             (agent reasoning)  + SwarmEnvironment
 ```
 
 ---
@@ -821,7 +822,7 @@ falls back to qualitative reasoning without fabricating headlines.
 ```
 src/aoa/                   # live trading swarm (primary package)
   config.py                # env-driven configuration + risk limits
-  brokerage/               # broker abstraction (base) + Alpaca impl + neutral models
+  brokerage/               # broker abstraction + Moomoo/Alpaca impls + neutral models
   data/                    # market-data assembly + pure-Python indicators
   simulation/              # trend analysis, scenario library, Monte-Carlo + live tracker
   llm/                     # LLM client — WASTE/openai_compatible by default; Claude opt-in
