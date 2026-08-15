@@ -28,3 +28,4 @@
 | 2026-07-06 23:40 | daily-triage | L1 | report-only | skipped: daily-triage run cap reached for last 24h. tokens_estimate=500 |
 | 2026-07-08 02:32 | maintenance | — | integrated | Task chain automation: docs/upgrade-backlog.json + aoa tasks chain. Bootstrapped upg-009. 359 tests pass. tokens_estimate=9000 |
 | 2026-08-15 20:31 | advisor-verify | L1 | report-only | Re-verified failure: OpenD ECONNREFUSED (doctor fail-fast), template Anthropic key. STATE updated. tier1-check OK. tokens_estimate=6000 |
+| 2026-08-15 20:35 | moomoo-path | L1 | report-only | User chose Moomoo. Locked docs/STATE to OpenD path; setup moomoo OK; OpenD still down. tokens_estimate=5000 |

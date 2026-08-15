@@ -1,17 +1,17 @@
 # Loop State — AOA-Financial
 
-Last run: 2026-08-15 20:31 UTC (advisor-failure verify + STATE update; L1)
+Last run: 2026-08-15 20:35 UTC (Moomoo path locked; OpenD still required)
 
 ## High Priority (loop is acting or waiting on human)
 
-- **Advisor blocked: Moomoo OpenD + API key** — `aoa doctor` fails: OpenD `ECONNREFUSED` at `127.0.0.1:11111`; `.env` has template `ANTHROPIC_API_KEY=sk-ant-...` (passes validate, LLM 401). Next: start OpenD **or** `AOA_BROKER=alpaca` + real Anthropic/Alpaca keys; then `aoa doctor && aoa run` (~S)
+- **Start Moomoo OpenD** — broker path is Moomoo (`AOA_BROKER=moomoo`). OpenD not listening on `127.0.0.1:11111`. On your machine: install/start OpenD ([download](https://www.moomoo.com/download/OpenAPI/)), log in, then `aoa setup moomoo && aoa doctor && aoa run`. Guides: [docs/how-to/moomoo-setup.md](docs/how-to/moomoo-setup.md), `SETUP-AWAITING-YOU.md` (~S)
+- **Set real ANTHROPIC_API_KEY** — template `sk-ant-...` passes validate but LLM auth fails; agents need a real key in `.env` (~S)
 - **Workloop discover→upgrade→verify pipeline** — Document and schedule periodic dependency upgrades via workloop UpgradeStage.  
   Source: `state` | Skill: `fable-repair` | id: `095e7bfe`
 
 ## Watch List
 
-- **Moomoo OpenD offline** — OpenD not running; doctor fails fast (~3s) with clear error (improved vs Jul hang); stock data needs OpenD or Alpaca (~S)
-- **Placeholder Anthropic key** — non-empty template bypasses `Config.validate()`; agents still cannot reason until a real key is set (~S)
+- **Moomoo OpenD offline (cloud)** — this agent host cannot run OpenD without your Moomoo login; Docker not available here. Human starts OpenD locally.
 - **Runtime env partial** — fresh clones lack `.env`; see docs/how-to/fresh-clone.md
 - **L2 promotion pending** — daily triage still L1; see docs/loop-l2-checklist.md
 - **Fable 5 repair active** — `aoa repair triage` + `fable-repair` skill (L2)
@@ -36,11 +36,10 @@ Machine-readable queue: `data/{AOA_ENV}/repair/queue.json` (7 items)
 
 ## Post-Run Critique (from last run)
 
-- **Verified 2026-08-15:** Advisor failure is environmental, not code. `tier1-check` OK; doctor fails on Moomoo OpenD with a clear fast-fail message.
-- **Root causes still active:** `AOA_BROKER=moomoo` without OpenD; Anthropic key is template/`sk-ant-...` (empty key before `.env` copy also blocks LLM).
-- **Platform improvement since Jul 6:** OpenD check no longer hangs on long SDK retries — doctor returns `Broker check failed: Moomoo OpenD unreachable...`.
-- **Not a failure:** market-closed / 0-candidate cycles are normal (last good Alpaca run 2026-07-04).
-- **Human next:** real `ANTHROPIC_API_KEY` + either OpenD or Alpaca paper path.
+- **Broker choice:** human selected **Moomoo** — Alpaca optional path de-emphasized in README/STATE.
+- **Config verified:** `AOA_BROKER=moomoo`, profile `paper-dry`, OpenD target `127.0.0.1:11111`, `moomoo-api` installed, `aoa setup moomoo` OK offline.
+- **Still blocked:** OpenD `ECONNREFUSED` (doctor fail-fast ~3s) + real Anthropic key required.
+- **Cannot complete in cloud:** OpenD needs local install + Moomoo account login (no Docker on this host).
 
 ---
 Run log: loop-run-log.md
