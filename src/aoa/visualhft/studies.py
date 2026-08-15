@@ -49,11 +49,16 @@ def order_to_trade_ratio(
     """L2 order-to-trade ratio from VisualHFT ``OrderToTradeRatioStudy``.
 
     ``OTR = (addedΔ + deletedΔ + 2×updatedΔ) / max(trades, floor) - 1``
+
+    Deltas are non-negative counter increments (VisualHFT L2 mode). ``floor``
+    must be ≥ 1 so the denominator never collapses to zero.
     """
+    if floor < 1:
+        raise ValueError("floor must be >= 1")
+    if min(added_delta, deleted_delta, updated_delta, trade_count) < 0:
+        raise ValueError("deltas and trade_count must be >= 0")
     order_events = int(added_delta) + int(deleted_delta) + 2 * int(updated_delta)
     denom = max(int(trade_count), int(floor))
-    if denom == 0:
-        return 0.0
     return order_events / denom - 1.0
 
 
@@ -101,6 +106,11 @@ class VPINState:
         if self._count <= 0:
             return 0.0
         return self._rolling_sum / self._count
+
+    @property
+    def completed_buckets(self) -> int:
+        """Number of completed volume buckets in the rolling window."""
+        return self._count
 
     def set_mid(self, mid: float) -> float:
         self.mid_price = float(mid)

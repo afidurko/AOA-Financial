@@ -37,7 +37,9 @@ aoa visualhft smoke --trades 200 --seed 1 --json
 
 `status` / `studies` describe the fork and which formulas are ported.
 `smoke` runs LOB imbalance, VPIN, and order-to-trade ratio on a synthetic tape
-(no venue sockets, no orders).
+(no venue sockets, no orders). Requires `--trades >= 20` so at least one VPIN
+bucket completes. These commands are offline-only and do not create or load
+`.env`.
 
 ## Library API
 

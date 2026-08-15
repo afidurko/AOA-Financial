@@ -855,22 +855,29 @@ def cmd_visualhft_status(*, as_json: bool) -> int:
         print(json.dumps(status, indent=2))
         return 0
     print("=== VisualHFT research lane ===")
-    print(f"  available: {status['available']}")
-    print(f"  runtime:   {status['runtime']}")
-    print(f"  desktop:   {status['desktop_host']}")
-    print(f"  studies:   {', '.join(status['studies_ported'])}")
-    print(f"  offline:   {status.get('offline_only', True)}")
-    print(f"  never_live:{status.get('never_live', True)}")
-    print(f"  fork:      {status['fork']}")
-    print(f"  upstream:  {status['upstream']}")
-    print(f"  next:      {status.get('hint')}")
+    print(f"  available:  {status['available']}")
+    print(f"  runtime:    {status['runtime']}")
+    print(f"  desktop:    {status['desktop_host']}")
+    print(f"  studies:    {', '.join(status['studies_ported'])}")
+    print(f"  offline:    {status.get('offline_only', True)}")
+    print(f"  never_live: {status.get('never_live', True)}")
+    print(f"  fork:       {status['fork']}")
+    print(f"  upstream:   {status['upstream']}")
+    print(f"  next:       {status.get('hint')}")
     return 0
 
 
 def cmd_visualhft_smoke(*, n_trades: int, seed: int, as_json: bool) -> int:
     from aoa.visualhft import run_synthetic_smoke
 
-    result = run_synthetic_smoke(n_trades=n_trades, seed=seed)
+    try:
+        result = run_synthetic_smoke(n_trades=n_trades, seed=seed)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+        else:
+            print(str(exc), file=sys.stderr)
+        return 1
     if as_json:
         print(json.dumps(result.to_dict(), indent=2))
     else:
@@ -881,6 +888,7 @@ def cmd_visualhft_smoke(*, n_trades: int, seed: int, as_json: bool) -> int:
         print(f"  otr:       {result.order_to_trade_ratio:.4f}")
         print(f"  mid:       {result.mid_price}")
         print(f"  trades:    {result.n_trades}")
+        print(f"  buckets:   {result.vpin_buckets}")
         print(f"  seed:      {result.seed}")
     return 0 if result.ok else 1
 
@@ -2009,6 +2017,23 @@ def main(argv: list[str] | None = None) -> int:
     at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
 
     args = parser.parse_args(argv)
+
+    # Offline research lane — no .env template and no Config/broker side effects.
+    if args.command == "visualhft":
+        if args.visualhft_command == "status":
+            return cmd_visualhft_status(as_json=getattr(args, "json", False))
+        if args.visualhft_command == "smoke":
+            return cmd_visualhft_smoke(
+                n_trades=getattr(args, "trades", 200),
+                seed=getattr(args, "seed", 1),
+                as_json=getattr(args, "json", False),
+            )
+        if args.visualhft_command == "studies":
+            return cmd_visualhft_studies(
+                as_json=getattr(args, "json", False),
+                ported_only=getattr(args, "ported_only", False),
+            )
+
     _ensure_env_template()
     cfg = Config.from_env()
 
@@ -2070,20 +2095,6 @@ def main(argv: list[str] | None = None) -> int:
                 args.paths,
                 args.halflife,
             )
-        if args.command == "visualhft":
-            if args.visualhft_command == "status":
-                return cmd_visualhft_status(as_json=getattr(args, "json", False))
-            if args.visualhft_command == "smoke":
-                return cmd_visualhft_smoke(
-                    n_trades=getattr(args, "trades", 200),
-                    seed=getattr(args, "seed", 1),
-                    as_json=getattr(args, "json", False),
-                )
-            if args.visualhft_command == "studies":
-                return cmd_visualhft_studies(
-                    as_json=getattr(args, "json", False),
-                    ported_only=getattr(args, "ported_only", False),
-                )
         if args.command == "workloop":
             if args.workloop_command == "run":
                 return cmd_workloop_run(

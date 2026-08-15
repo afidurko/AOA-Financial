@@ -22,15 +22,27 @@ from __future__ import annotations
 
 from aoa.visualhft.catalog import STUDY_CATALOG, list_studies
 from aoa.visualhft.probe import FORK_URL, UPSTREAM_URL, probe_status
+from aoa.visualhft.studies import (
+    TradePrint,
+    VPINState,
+    lob_imbalance,
+    order_to_trade_ratio,
+    vpin_from_trades,
+)
 
 __all__ = [
     "FORK_URL",
     "STUDY_CATALOG",
+    "TradePrint",
     "UPSTREAM_URL",
+    "VPINState",
     "SmokeResult",
     "list_studies",
+    "lob_imbalance",
+    "order_to_trade_ratio",
     "probe_status",
     "run_synthetic_smoke",
+    "vpin_from_trades",
 ]
 
 
