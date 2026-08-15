@@ -1,6 +1,6 @@
 ---
 type: cycle-summary
-timestamp: 2026-07-08 02:11 UTC
+timestamp: 2026-08-15 22:00 UTC
 mode: dry-run
 equity: 100000.0
 n_candidates: 1

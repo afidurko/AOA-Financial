@@ -1,7 +1,7 @@
 # Machine-readable ATTL mesh — agents, algorithms, brain spines
 version: 1
 mode: auto-12
-updated_at: "2026-07-18T23:40:00+00:00"
+updated_at: "2026-08-15T20:45:00+00:00"
 
 members:
   - id: tom
@@ -104,3 +104,10 @@ loops:
   - id: vault
     module: aoa.vault
     feeds: [nova]
+  - id: knowledge-stack
+    setup: scripts/knowledge-stack-setup.sh
+    docs: docs/how-to/workspace-mesh.md
+    feeds: [nova, reed]
+  - id: moomoo-skills
+    path: .cursor/skills/moomooapi
+    feeds: [bob, julie, reed]

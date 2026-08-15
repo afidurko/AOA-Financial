@@ -62,6 +62,8 @@ L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 
 | Skill | Purpose |
 |-------|---------|
+| `moomooapi` | Moomoo OpenAPI — quotes, klines, orders, positions, subscriptions (official OpenD Skills) |
+| `install-moomoo-opend` | Install/upgrade Moomoo OpenD + `moomoo-api` SDK (official OpenD Skills) |
 | `loop-constraints` | Hard floor + auto-12 (runs first) |
 | `loop-budget` | Token caps and run-log enforcement |
 | `loop-triage` | Daily engineering triage → `STATE.md` |
@@ -69,4 +71,17 @@ L1 triage still: `loop-triage` + `aoa repair triage` (report-only discovery).
 | `minimal-fix` | Maker — smallest coding fix |
 | `loop-verifier` | Checker when verifying a PR / Kai path |
 | `coding-engineer` | Twelve-member code-health patterns |
-| `ship-loop` | Discover→fix→proofread→ready (no auto-merge) |
+| `ship-loop` | Discover → fix → proofread → ready (no auto-merge) |
+
+Official Moomoo skill packs live under `.cursor/skills/{moomooapi,install-moomoo-opend}/` and are mirrored in `.claude/skills/` for Claude Code. Source: [opend-skills.zip](https://openapi.moomoo.com/skills/opend-skills.zip). Prefer `/moomooapi` (or natural language about quotes/orders); use `/install-moomoo-opend` to install OpenD on a local machine.
+
+## Multi-root workspaces
+
+Companion vault/skills stack (Obsidian + Spine + Moomoo):
+
+```bash
+./scripts/knowledge-stack-setup.sh
+./scripts/write-aoa-workspace.sh   # → AOA.code-workspace
+```
+
+See [docs/how-to/workspace-mesh.md](docs/how-to/workspace-mesh.md). Mesh map: `brain/mesh/repos.yaml`.

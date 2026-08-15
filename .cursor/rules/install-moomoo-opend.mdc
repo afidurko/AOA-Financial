@@ -1,0 +1,14 @@
+---
+description: Install or upgrade moomoo OpenD and moomoo-api SDK. Prefer the install-moomoo-opend project skill.
+alwaysApply: false
+---
+
+# Install Moomoo OpenD
+
+When the user asks to install, download, launch, or upgrade OpenD / `moomoo-api`, follow:
+
+`.cursor/skills/install-moomoo-opend/SKILL.md`
+
+Platform scripts: `.cursor/skills/install-moomoo-opend/scripts/`.
+
+On macOS, prefer the repo helper `bash scripts/install_moomoo_opend_macos.sh` when present, then verify with `aoa setup moomoo` / `aoa doctor`.

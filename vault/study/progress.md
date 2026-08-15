@@ -1,8 +1,8 @@
 ---
 type: study-progress
-n_cards: 17
+n_cards: 21
 n_mastered: 0
-n_due: 17
+n_due: 21
 sessions: 0
 last_session: ''
 slm_phase: learn

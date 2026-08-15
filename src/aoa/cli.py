@@ -2603,6 +2603,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         if args.command == "scenarios":
             return cmd_scenarios(cfg)
+        if args.command == "hft":
+            if args.hft_command == "status":
+                return cmd_hft_status(as_json=getattr(args, "json", False))
+            if args.hft_command == "smoke":
+                return cmd_hft_smoke(
+                    n_events=args.events,
+                    steps=args.steps,
+                    seed=args.seed,
+                    as_json=getattr(args, "json", False),
+                )
+            if args.hft_command == "book-smoke":
+                return cmd_hft_book_smoke(as_json=getattr(args, "json", False))
+            if args.hft_command == "run":
+                return cmd_hft_run(
+                    data=args.data,
+                    tick_size=args.tick_size,
+                    lot_size=args.lot_size,
+                    steps=args.steps,
+                    step_ns=args.step_ns,
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "watch":
             return cmd_watch(
                 cfg,
