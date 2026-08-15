@@ -7,20 +7,16 @@ QM_DIR="${QM_DIR:-$ROOT/qm}"
 QM_REPO="${QM_REPO:-https://github.com/afidurko/qm.git}"
 QM_PORT="${QM_PORT:-8081}"
 
-if [[ ! -d "$QM_DIR/.git" ]]; then
-  echo "Cloning QM into $QM_DIR"
-  git clone "$QM_REPO" "$QM_DIR"
-else
-  echo "QM already present at $QM_DIR"
-fi
+# shellcheck source=scripts/lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
+# shellcheck source=scripts/lib/env-file.sh
+source "$ROOT/scripts/lib/env-file.sh"
+
+git_clone_if_missing "$QM_DIR" "$QM_REPO" "QM"
 
 if [[ ! -f "$QM_DIR/.env" && -f "$QM_DIR/.env.example" ]]; then
   cp "$QM_DIR/.env.example" "$QM_DIR/.env"
-  if grep -q '^PORT=' "$QM_DIR/.env"; then
-    sed -i "s|^PORT=.*|PORT=${QM_PORT}|" "$QM_DIR/.env"
-  else
-    echo "PORT=${QM_PORT}" >>"$QM_DIR/.env"
-  fi
+  env_upsert PORT "$QM_PORT" "$QM_DIR/.env"
   echo "Created $QM_DIR/.env from .env.example (PORT=${QM_PORT})"
 fi
 
