@@ -15,6 +15,8 @@ from aoa.swarm.stages import _cycle_memory_context
 def test_curriculum_has_all_fields_and_bridges():
     cards = all_cards()
     assert len(cards) >= 12
+    ids = [c.id for c in cards]
+    assert len(ids) == len(set(ids)), f"duplicate curriculum ids: {ids}"
     fields = {c.field for c in cards}
     assert {"de", "physics", "econ", "bridge"} <= fields
     # Every bridge id referenced should resolve.

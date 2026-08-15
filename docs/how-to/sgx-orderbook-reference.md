@@ -72,7 +72,7 @@ Smoke: `python3 examples/sgx_orderbook_smoke.py`.
 
 ## Map to Julie / study cortex
 
-- Mesh: `brain/mesh/repos.yaml` entry `sgx-orderbook`
+- Mesh: `brain/mesh/repos.yaml` entry `SGX-Full-OrderBook-Tick-Data-Trading-Strategy`
 - Spine: `brain/spine/Algorithms.md`
 - Curriculum: `bridge-sgx-depth-rise`
 - Catalog: [docs/help.md](../help.md) · [hft-research-lane.md](hft-research-lane.md)

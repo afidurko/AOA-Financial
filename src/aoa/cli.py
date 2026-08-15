@@ -18,7 +18,7 @@ Commands:
   aoa visualhft  Offline VisualHFT microstructure studies (research lane).
   aoa avellaneda Offline Avellaneda–Stoikov market-making research lane.
   aoa microstructure  Mesh status for all offline HFT/LOB research lanes.
-  aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, HFT).
+  aoa workspaces Companion workspace mesh (OpenStock, QM, VisualHFT, hftbacktest).
   aoa workloop   Run the autonomous discover→merge improvement loop.
   aoa repair     Fable 5 repair loop — discover issues and queue fixes.
   aoa vault      Sync schema-driven vault property notes.

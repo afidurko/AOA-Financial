@@ -7,12 +7,15 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SGX_DIR="${SGX_DIR:-$ROOT/SGX-Full-OrderBook-Tick-Data-Trading-Strategy}"
 SGX_REPO="${SGX_REPO:-https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy.git}"
 
-if [[ ! -d "$SGX_DIR/.git" ]]; then
-  echo "Cloning SGX order-book strategy reference into $SGX_DIR"
-  git clone "$SGX_REPO" "$SGX_DIR"
-else
-  echo "SGX order-book strategy already present at $SGX_DIR"
+# shellcheck source=scripts/lib/common.sh
+source "$ROOT/scripts/lib/common.sh"
+
+if [[ -e "$SGX_DIR" && ! -d "$SGX_DIR/.git" ]]; then
+  echo "error: $SGX_DIR exists but is not a git clone; remove or set SGX_DIR elsewhere" >&2
+  exit 1
 fi
+
+git_clone_if_missing "$SGX_DIR" "$SGX_REPO" "SGX order-book"
 
 echo ""
 echo "SGX sibling ready (reference only — notebooks not executed by AOA)."
