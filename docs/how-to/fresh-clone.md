@@ -20,7 +20,9 @@ cp .env.example .env
 
 Edit `.env` and set at minimum:
 
-- `ANTHROPIC_API_KEY` — Claude API access for agent reasoning
+- **Local WASTE LLM** — `AOA_LLM_PROVIDER=openai_compatible` (default) and a running
+  `python3 -m serve … --port 8000`. See [waste-local-llm.md](waste-local-llm.md).
+  AOA does **not** use Claude unless you opt in with `AOA_LLM_PROVIDER=anthropic`.
 - **Moomoo OpenD** — install from [moomoo.com/download/OpenAPI](https://www.moomoo.com/download/OpenAPI/), log in, keep running on `127.0.0.1:11111`
 
 See `SETUP-AWAITING-YOU.md`, [moomoo-setup.md](moomoo-setup.md), and run `aoa setup moomoo` (or `bash scripts/setup_moomoo_auth.sh`).
@@ -196,3 +198,17 @@ not run it:
 
 See [example-hftish-reference.md](example-hftish-reference.md). Python idea ports:
 `aoa.research.hftish_patterns`. CLI: `aoa hftish status|smoke`.
+
+## 14. SGX order-book strategy reference (optional)
+
+Clone the SGX A50 full-LOB ML sibling for rise-ratio / weighted-depth reading
+([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
+AOA does not run the notebooks:
+
+```bash
+./scripts/sgx-orderbook-setup.sh
+```
+
+See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
+`aoa.research.sgx_orderbook_patterns`. Companion map:
+[hft-research-lane.md](hft-research-lane.md).

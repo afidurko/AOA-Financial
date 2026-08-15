@@ -1,13 +1,15 @@
 # Moomoo broker setup
 
-AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`). Stock quotes and orders flow through **OpenD**, a local gateway that must run on the same machine as AOA.
+AOA defaults to **Moomoo** (`AOA_BROKER=moomoo`) plus a **local WASTE LLM**
+(not Claude). Stock quotes and orders flow through **OpenD**; agent reasoning
+hits WASTE on `:8000`.
 
 ## Quick start
 
 ```bash
 pip install -e ".[dev,web]"    # includes moomoo-api
-cp .env.example .env           # set ANTHROPIC_API_KEY
-aoa setup moomoo               # guided checks (+ points at OpenD skills)
+cp .env.example .env           # Moomoo + WASTE defaults
+aoa setup moomoo               # guided OpenD checks (+ OpenD skills)
 ```
 
 Agent skills (official OpenD pack, vendored under `.cursor/skills/`):
@@ -21,12 +23,14 @@ AOA runtime wires the same OpenAPI surface into `MoomooBroker` and `MoomooNewsFe
 (`get_search_news`, `OrderType.MARKET` / `STOP`, `average_cost` / `unrealized_pl`,
 `get_top_movers_rank`).
 
-With OpenD running:
+With OpenD running (and WASTE on `:8000`):
 
 ```bash
 aoa doctor
-aoa run                         # paper-dry: no orders submitted
+aoa run                        # paper-dry: no orders submitted
 ```
+
+WASTE serve: [waste-local-llm.md](waste-local-llm.md).
 
 ## 1. Install OpenD
 
@@ -61,13 +65,18 @@ MOOMOO_OPEND_HOST=127.0.0.1
 MOOMOO_OPEND_PORT=11111
 MOOMOO_LIVE=false                 # simulate unless AOA_ENV=live
 MOOMOO_UNLOCK_PASSWORD=           # required only for live trading
+
+# Local LLM (default — not Claude)
+AOA_LLM_PROVIDER=openai_compatible
+AOA_LLM_BASE_URL=http://127.0.0.1:8000/v1
+AOA_MODEL=kimi-linear
 ```
 
 ## 3. Verify connectivity
 
 ```bash
 aoa doctor --offline   # config only (~instant)
-aoa doctor             # full check; fails fast in ~3s if OpenD is down
+aoa doctor             # OpenD + bars + WASTE; fails fast ~3s if OpenD is down
 ```
 
 Expected when healthy:
@@ -76,17 +85,21 @@ Expected when healthy:
 ✓ Broker: moomoo
 ✓ Moomoo OpenD target: 127.0.0.1:11111 (US, simulate)
 ✓ Broker reachable (moomoo-paper); equity $...
-✓ LLM reachable (model=...)
+✓ LLM client initialized (provider=openai_compatible, base_url=http://127.0.0.1:8000/v1)
+✓ LLM reachable (model=kimi-linear)
 ```
+
+`aoa doctor` does **not** require Alpaca keys when `AOA_BROKER=moomoo`.
 
 ## 4. Troubleshooting
 
 | Symptom | Fix |
 |---------|-----|
-| `OpenD unreachable` | Start OpenD; check host/port |
+| `OpenD unreachable` / broker check failed | Start OpenD; check host/port |
 | `moomoo-api is not installed` | `pip install -e ".[dev]"` |
 | Doctor hangs (old builds) | Upgrade to build with TCP probe (`AOA_MOOMOO_CONNECT_TIMEOUT`) |
 | No stock bars | Log into OpenD; confirm US market data subscription |
+| LLM check failed | Start WASTE: `python3 -m serve MODEL --port 8000` |
 | Cloud / CI environment | OpenD must run locally — use Alpaca for headless: `AOA_BROKER=alpaca` |
 
 ## 5. Live trading (later)

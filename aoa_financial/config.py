@@ -74,10 +74,36 @@ class Config:
     epoch_start: date = EPOCH_START
 
     # --- LLM analyst -----------------------------------------------------
-    # Default to the most capable Claude model per Anthropic guidance.
-    llm_model: str = field(default_factory=lambda: _env("LLM_MODEL", "claude-opus-4-8"))
-    llm_effort: str = field(default_factory=lambda: _env("LLM_EFFORT", "high"))
+    # Prefer local WASTE (AOA_LLM_* / AOA_MODEL). Claude is opt-in.
+    llm_model: str = field(
+        default_factory=lambda: (
+            os.environ.get("AOA_LLM_MODEL")
+            or os.environ.get("AOA_MODEL")
+            or _env("LLM_MODEL", "kimi-linear")
+        )
+    )
+    llm_effort: str = field(
+        default_factory=lambda: (
+            os.environ.get("AOA_EFFORT")
+            or _env("LLM_EFFORT", "high")
+        )
+    )
     llm_max_tokens: int = field(default_factory=lambda: int(_env("LLM_MAX_TOKENS", "8000")))
+    llm_provider: str = field(
+        default_factory=lambda: _env("LLM_PROVIDER", "openai_compatible").lower()
+    )
+    llm_base_url: str = field(
+        default_factory=lambda: _env(
+            "LLM_BASE_URL", "http://127.0.0.1:8000/v1"
+        ).rstrip("/")
+    )
+    llm_api_key: str = field(
+        default_factory=lambda: (
+            os.environ.get("AOA_LLM_API_KEY")
+            or os.environ.get("ANTHROPIC_API_KEY")
+            or "local"
+        )
+    )
 
     # --- swarm weighting -------------------------------------------------
     # Relative trust placed in each specialist agent before confidence
