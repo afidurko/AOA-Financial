@@ -8,9 +8,9 @@ order path. AOA remains bar-based and cash-account; nothing here submits orders.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Sequence
 
 
 class Side(str, Enum):
