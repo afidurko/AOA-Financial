@@ -93,12 +93,14 @@ jobs:
       - name: Paper dry-run smoke test
         env:
           AOA_PROFILE: paper-dry
+          AOA_BROKER: alpaca
+          AOA_LLM_PROVIDER: anthropic
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ALPACA_API_KEY_ID: ${{ secrets.ALPACA_API_KEY_ID }}
           ALPACA_API_SECRET_KEY: ${{ secrets.ALPACA_API_SECRET_KEY }}
         run: |
           if [ -z "$ANTHROPIC_API_KEY" ] || [ -z "$ALPACA_API_KEY_ID" ]; then
-            echo "Skipping integration — API secrets not configured in repository."
+            echo "Skipping integration — CI has no local WASTE/OpenD; secrets not configured."
             exit 0
           fi
           aoa doctor
