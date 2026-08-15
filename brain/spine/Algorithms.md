@@ -16,7 +16,6 @@ Julie owns algorithm clarity. Brain context injects into analysis via
 - Mesh node `algo.hft_patterns` → educational pairs/maker/MA helpers (`aoa.research.hft_patterns`)
 - Mesh node `algo.sgx_orderbook_patterns` → LOB rise/depth helpers (`aoa.research.sgx_orderbook_patterns`)
 - Mesh node `algo.hftish_patterns` → educational OB imbalance helpers (`aoa.research.hftish_patterns`)
-- Mesh node `algo.sgx_orderbook` → educational depth-rise helpers (`aoa.research.sgx_orderbook_patterns`)
 - Mesh catalog `aoa.microstructure` → `aoa microstructure status` (all offline HFT/LOB lanes)
 
 ## Avellaneda–Stoikov companion (reference only)
@@ -54,11 +53,3 @@ helpers live in `aoa.research.hftish_patterns` (no broker calls). Julie/Morgan
 inject `diagnose_snapshot_quote` into prompts; CLI `aoa hftish`. Study bridge:
 `bridge-hftish-imbalance`. Setup: `./scripts/example-hftish-setup.sh` ·
 [docs/how-to/example-hftish-reference.md](../../docs/how-to/example-hftish-reference.md).
-
-## SGX order-book companion (reference only)
-
-Sibling [afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)
-notebooks for SGX A50 full-book features. Distilled Python helpers live in
-`aoa.research.sgx_orderbook_patterns` (no broker calls). Study bridge:
-`bridge-sgx-depth-rise`. Setup: `./scripts/sgx-orderbook-setup.sh` ·
-[docs/how-to/sgx-orderbook-reference.md](../../docs/how-to/sgx-orderbook-reference.md).

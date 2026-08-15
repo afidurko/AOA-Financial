@@ -344,6 +344,7 @@ __all__ = [
     "mid_from_top",
     "rise_pressure_side",
     "rise_ratio",
+    "snapshot_from_limit_order_book",
     "top_imbalance",
     "weighted_depth",
 ]

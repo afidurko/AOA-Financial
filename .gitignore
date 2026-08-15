@@ -289,8 +289,6 @@ VisualHFT/
 oxyplot/
 # hftbacktest research fork sibling (optional — not vendored)
 hftbacktest/
-# SGX order-book sibling alias (reference — not vendored)
-sgx-orderbook/
 # Avellaneda–Stoikov sibling clone (reference — not vendored)
 avellaneda-stoikov/
 loop-state/

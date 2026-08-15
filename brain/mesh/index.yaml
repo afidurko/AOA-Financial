@@ -69,16 +69,13 @@ algorithms:
     module: aoa.research.hft_patterns
     companion: hft
   - id: algo.sgx_orderbook_patterns
+    owner: julie
     module: aoa.research.sgx_orderbook_patterns
-    companion: sgx-orderbook
+    companion: SGX-Full-OrderBook-Tick-Data-Trading-Strategy
   - id: algo.hftish_patterns
     owner: julie
     module: aoa.research.hftish_patterns
     companion: example-hftish
-  - id: algo.sgx_orderbook
-    owner: julie
-    module: aoa.research.sgx_orderbook_patterns
-    companion: SGX-Full-OrderBook-Tick-Data-Trading-Strategy
 
 spines:
   - path: spine/ATTL.md
