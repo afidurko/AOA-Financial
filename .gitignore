@@ -282,3 +282,4 @@ qm/
 SGX-Full-OrderBook-Tick-Data-Trading-Strategy/
 # example-hftish sibling clone (Alpaca OB imbalance reference — not vendored)
 example-hftish/
+loop-state/

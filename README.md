@@ -535,7 +535,7 @@ Configuration loads in this order (lowest → highest priority):
 cp .env.example .env
 export AOA_PROFILE=paper-dry    # recommended starting point (Moomoo + dry-run)
 # Start Moomoo OpenD on 127.0.0.1:11111 (see docs/how-to/moomoo-setup.md)
-# Start local WASTE serve on :8000 (see docs/how-to/waste-local-llm.md)
+# Optional LLM: local WASTE (docs/how-to/waste-local-llm.md), Ollama, or ANTHROPIC_API_KEY.
 aoa setup moomoo
 aoa doctor && aoa run
 ```
@@ -549,7 +549,6 @@ aoa doctor && aoa run
 | `moomoo-paper` / `paper` | Moomoo simulate | enabled | Paper fills via OpenD |
 | `live` | Moomoo live | enabled | Real money — `AOA_LIVE_ACK` + `MOOMOO_UNLOCK_PASSWORD` |
 | *(optional)* `AOA_BROKER=alpaca` | Alpaca paper/live | per env | See `scripts/setup_alpaca_auth.sh` |
-
 Runtime state (journal, daily-loss baseline) is isolated under `data/{AOA_ENV}/`.
 
 Profiles live in `profiles/` — e.g. `profiles/paper-dry.env`, `profiles/moomoo-paper.env`.

@@ -21,6 +21,7 @@ from aoa.loop.user_brief import build_loop_user_brief, repair_queue_summary
 from aoa.notify.response_router import ResponseError, route_response
 from aoa.research.loop import ResearchLoop
 from aoa.team.orchestrator import TeamCycleResult
+from aoa.version import package_version
 from aoa.web.dashboard_html import DASHBOARD_HTML
 from aoa.web.loop_runner import CycleBusyError, LoopRunner
 
@@ -62,7 +63,7 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     app = FastAPI(
         title="AOA Financial",
-        version="0.2.0",
+        version=package_version(),
         docs_url="/api/docs",
         lifespan=lifespan,
     )

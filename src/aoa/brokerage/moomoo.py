@@ -81,6 +81,15 @@ def _f(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def _first_book_level(value: Any, default: float = 0.0) -> float:
+    """Return the top-of-book price/size from a scalar or list-like snapshot field."""
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return default
+        return _f(value[0], default)
+    return _f(value, default)
+
+
 def _parse_ts(value: Any) -> datetime | None:
     if value is None or value == "":
         return None
@@ -118,15 +127,13 @@ def _row_value(row: Any, key: str, default: Any = "") -> Any:
 
 
 def _snapshot_price(row: Any, key: str) -> float:
-    """Read bid/ask from a snapshot row (scalar or first list element).
+    """Read bid/ask/size from a snapshot row (scalar or first list element).
 
     Official moomooapi ``get_snapshot`` treats ``bid_price`` / ``ask_price`` as
-    scalars; older snapshots may return lists.
+    scalars; older snapshots may return lists. Same shape for ``bid_vol`` /
+    ``ask_vol``.
     """
-    raw = _row_value(row, key, 0)
-    if isinstance(raw, (list, tuple)):
-        return _f(raw[0] if raw else 0)
-    return _f(raw)
+    return _first_book_level(_row_value(row, key, 0))
 
 
 def _position_avg_cost(row: Any) -> float:
@@ -374,6 +381,8 @@ class MoomooBroker(Broker):
             sym = from_moomoo_code(code)
             bid = _snapshot_price(row, "bid_price")
             ask = _snapshot_price(row, "ask_price")
+            bid_size = _snapshot_price(row, "bid_vol")
+            ask_size = _snapshot_price(row, "ask_vol")
             last = _f(_row_value(row, "last_price", 0))
             if bid <= 0 and last > 0:
                 bid = last
@@ -383,6 +392,8 @@ class MoomooBroker(Broker):
                 symbol=sym,
                 bid=bid,
                 ask=ask,
+                bid_size=bid_size,
+                ask_size=ask_size,
                 timestamp=_parse_ts(_row_value(row, "update_time", None)),
             )
         return out

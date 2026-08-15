@@ -11,6 +11,7 @@ from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, OrderRequest, OrderType, Side
 from aoa.brokerage.moomoo import (
     MoomooBroker,
+    _first_book_level,
     _parse_moomoo_option,
     _parse_option_tail,
     _position_avg_cost,
@@ -30,6 +31,43 @@ def test_to_moomoo_code_us():
 
 def test_from_moomoo_code():
     assert from_moomoo_code("US.NVDA") == "NVDA"
+
+
+def test_first_book_level_list_and_scalar():
+    assert _first_book_level([12.5, 11.0]) == 12.5
+    assert _first_book_level(9) == 9.0
+    assert _first_book_level([]) == 0.0
+    assert _first_book_level(None) == 0.0
+
+
+def test_get_quotes_many_maps_bid_ask_sizes():
+    import pandas as pd
+
+    class FakeCtx:
+        def get_market_snapshot(self, codes):
+            df = pd.DataFrame(
+                [
+                    {
+                        "code": "US.AAPL",
+                        "bid_price": [100.0, 99.9],
+                        "ask_price": [100.1, 100.2],
+                        "bid_vol": [500, 200],
+                        "ask_vol": [300, 100],
+                        "last_price": 100.05,
+                        "update_time": "2024-01-02 15:00:00",
+                    }
+                ]
+            )
+            return 0, df
+
+    broker = MoomooBroker.__new__(MoomooBroker)
+    broker._market = "US"
+    broker._quote_ctx = FakeCtx()
+    quote = broker.get_quotes_many(["AAPL"])["AAPL"]
+    assert quote.bid == 100.0
+    assert quote.ask == 100.1
+    assert quote.bid_size == 500.0
+    assert quote.ask_size == 300.0
 
 
 def test_parse_option_tail():
