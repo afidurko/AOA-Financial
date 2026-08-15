@@ -1,0 +1,14 @@
+---
+description: Moomoo OpenAPI market data & trading assistant (quotes, orders, OpenD). Prefer the moomooapi project skill.
+alwaysApply: false
+---
+
+# Moomoo API
+
+When the user asks about Moomoo quotes, orders, OpenD, options, crypto via Moomoo, or `moomoo-api`, follow the project skill at:
+
+`.cursor/skills/moomooapi/SKILL.md`
+
+Scripts and docs live under `.cursor/skills/moomooapi/scripts/` and `.cursor/skills/moomooapi/docs/`.
+
+Defaults: paper trading (`TrdEnv.SIMULATE`); OpenD at `127.0.0.1:11111`. For OpenD install/upgrade, use `.cursor/skills/install-moomoo-opend/SKILL.md`.
