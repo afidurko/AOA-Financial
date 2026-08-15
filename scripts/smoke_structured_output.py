@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""Smoke-test structured JSON output from Claude for agent schemas.
+"""Smoke-test structured JSON output against the configured LLM backend.
 
-Exercises representative agent JSON schemas against the live LLM API to confirm
-structured output (or prompt fallback) returns parseable, schema-shaped payloads.
+Default backend is local WASTE (``AOA_LLM_PROVIDER=openai_compatible``).
+Claude/Anthropic is opt-in. Exercises representative agent JSON schemas to
+confirm structured output (or prompt fallback) returns parseable payloads.
 
 Usage:
   python scripts/smoke_structured_output.py
   python scripts/smoke_structured_output.py --only ping,technical,portfolio
-  ANTHROPIC_API_KEY=sk-... python scripts/smoke_structured_output.py
+  # WASTE: start serve first, then use defaults from .env.example
+  # Claude: AOA_LLM_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-... ...
 
 Exits 0 when all selected cases pass; 1 on any failure. Skips gracefully when
-ANTHROPIC_API_KEY is unset (exit 0) unless --require-key is passed.
+the active provider is unconfigured (exit 0) unless --require-key is passed.
 """
 
 from __future__ import annotations
@@ -34,7 +36,7 @@ from aoa.agents import scanner as scanner_mod
 from aoa.agents import sentiment as sentiment_mod
 from aoa.agents import technical as technical_mod
 from aoa.config import Config
-from aoa.llm.client import LLMClient, LLMError
+from aoa.llm.client import LLMClient, LLMError, llm_from_config
 
 
 @dataclass(frozen=True)
@@ -221,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-key",
         action="store_true",
-        help="Exit 1 when ANTHROPIC_API_KEY is unset (default: skip with exit 0).",
+        help="Exit 1 when the active LLM provider is unconfigured (default: skip).",
     )
     parser.add_argument(
         "--max-tokens",
@@ -232,8 +234,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = Config.from_env()
-    if not cfg.anthropic_api_key:
-        msg = "ANTHROPIC_API_KEY not set — skipping structured output smoke test."
+    ready = (
+        (cfg.llm_provider == "openai_compatible" and bool(cfg.llm_base_url))
+        or (cfg.llm_provider == "anthropic" and bool(cfg.anthropic_api_key))
+    )
+    if not ready:
+        msg = (
+            f"LLM provider {cfg.llm_provider!r} is not configured — "
+            "skipping structured output smoke test."
+        )
         print(msg)
         return 1 if args.require_key else 0
 
@@ -246,13 +255,12 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Unknown case names: {', '.join(sorted(unknown))}", file=sys.stderr)
             return 1
 
-    llm = LLMClient(
-        cfg.anthropic_api_key,
-        model=cfg.model,
-        effort=cfg.effort,
-    )
+    llm = llm_from_config(cfg)
 
-    print(f"Model: {cfg.model} | effort: {cfg.effort}")
+    print(
+        f"Provider: {cfg.llm_provider} | model: {cfg.model} | effort: {cfg.effort}"
+        + (f" | base_url: {cfg.llm_base_url}" if cfg.llm_provider == "openai_compatible" else "")
+    )
     try:
         llm.ping()
         print("PASS  ping")

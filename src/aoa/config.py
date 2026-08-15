@@ -25,6 +25,7 @@ from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec, parse_timefra
 
 VALID_BROKERS = frozenset({"moomoo", "alpaca"})
 VALID_ENVS = frozenset({"test", "paper-dry", "paper", "live"})
+VALID_LLM_PROVIDERS = frozenset({"anthropic", "openai_compatible"})
 _ENV_DEFAULTS: dict[str, dict[str, bool]] = {
     "test": {"dry_run": True, "alpaca_live": False},
     "paper-dry": {"dry_run": True, "alpaca_live": False},
@@ -207,9 +208,13 @@ class Config:
     repair_path: Path = field(default_factory=lambda: repair_path_for("paper-dry"))
     study_path: Path = field(default_factory=lambda: study_path_for("paper-dry"))
 
-    # LLM
+    # LLM — default is local OpenAI-compatible (WASTE). Claude/Anthropic is opt-in.
+    # provider: openai_compatible | anthropic
+    llm_provider: str = "openai_compatible"
+    llm_base_url: str = "http://127.0.0.1:8000/v1"
+    llm_api_key: str = ""
     anthropic_api_key: str = ""
-    model: str = "claude-sonnet-4-6"
+    model: str = "kimi-linear"
     effort: str = "high"
 
     # Broker selection (default: Moomoo via OpenD)
@@ -405,8 +410,31 @@ class Config:
             analytics_db_path=analytics_db_path_for(env),
             repair_path=repair_path_for(env),
             study_path=study_path_for(env),
+            llm_provider=(
+                os.environ.get("AOA_LLM_PROVIDER", "openai_compatible").strip().lower()
+                or "openai_compatible"
+            ),
+            llm_base_url=(
+                os.environ.get("AOA_LLM_BASE_URL", "http://127.0.0.1:8000/v1")
+                .strip()
+                .rstrip("/")
+                or "http://127.0.0.1:8000/v1"
+            ),
+            llm_api_key=os.environ.get("AOA_LLM_API_KEY", "").strip(),
             anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
-            model=os.environ.get("AOA_MODEL", "claude-sonnet-4-6"),
+            model=(
+                os.environ.get("AOA_MODEL", "").strip()
+                or (
+                    "claude-sonnet-4-6"
+                    if (
+                        os.environ.get("AOA_LLM_PROVIDER", "openai_compatible")
+                        .strip()
+                        .lower()
+                        == "anthropic"
+                    )
+                    else "kimi-linear"
+                )
+            ),
             effort=os.environ.get("AOA_EFFORT", "high"),
             broker=os.environ.get("AOA_BROKER", "moomoo").strip().lower() or "moomoo",
             moomoo_opend_host=os.environ.get("MOOMOO_OPEND_HOST", "127.0.0.1").strip() or "127.0.0.1",
@@ -537,9 +565,25 @@ class Config:
             problems.append(
                 f"AOA_BROKER must be one of {sorted(VALID_BROKERS)} (got {self.broker!r})."
             )
+        if self.llm_provider not in VALID_LLM_PROVIDERS:
+            problems.append(
+                f"AOA_LLM_PROVIDER must be one of {sorted(VALID_LLM_PROVIDERS)} "
+                f"(got {self.llm_provider!r})."
+            )
+        if not (self.model or "").strip():
+            problems.append("AOA_MODEL must be a non-empty model id.")
         if self.env != "test":
-            if not self.anthropic_api_key:
-                problems.append("ANTHROPIC_API_KEY is not set — the agents cannot reason.")
+            if self.llm_provider == "anthropic" and not self.anthropic_api_key:
+                problems.append(
+                    "ANTHROPIC_API_KEY is not set — required only when "
+                    "AOA_LLM_PROVIDER=anthropic (default is local WASTE)."
+                )
+            if self.llm_provider == "openai_compatible" and not self.llm_base_url:
+                problems.append(
+                    "AOA_LLM_BASE_URL is required when AOA_LLM_PROVIDER=openai_compatible "
+                    "(default http://127.0.0.1:8000/v1 — start WASTE with "
+                    "`python3 -m serve MODEL --port 8000`)."
+                )
             if self.broker == "alpaca" and not self.has_brokerage_creds:
                 problems.append(
                     "Alpaca credentials missing — set ALPACA_API_KEY_ID and "

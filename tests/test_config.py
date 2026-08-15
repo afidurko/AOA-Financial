@@ -34,10 +34,46 @@ def test_trading_mode_paper_vs_live():
 
 
 def test_validate_flags_missing_credentials():
+    # Default LLM is local WASTE — no Anthropic key required.
     cfg = Config(env="paper-dry", broker="moomoo")
     problems = cfg.validate()
-    assert any("ANTHROPIC_API_KEY" in p for p in problems)
+    assert not any("ANTHROPIC_API_KEY" in p for p in problems)
     assert not any("ALPACA" in p for p in problems)
+    assert cfg.validate() == []
+
+
+def test_validate_anthropic_requires_key_when_opted_in():
+    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="anthropic")
+    problems = cfg.validate()
+    assert any("ANTHROPIC_API_KEY" in p for p in problems)
+
+
+def test_validate_openai_compatible_requires_base_url():
+    cfg = Config(
+        env="paper-dry",
+        broker="moomoo",
+        llm_provider="openai_compatible",
+        llm_base_url="",
+    )
+    problems = cfg.validate()
+    assert any("AOA_LLM_BASE_URL" in p for p in problems)
+    assert not any("ANTHROPIC_API_KEY" in p for p in problems)
+
+
+def test_validate_openai_compatible_clean():
+    cfg = Config(
+        env="paper-dry",
+        broker="moomoo",
+        llm_provider="openai_compatible",
+        llm_base_url="http://127.0.0.1:8000/v1",
+    )
+    assert cfg.validate() == []
+
+
+def test_validate_rejects_unknown_llm_provider():
+    cfg = Config(env="paper-dry", broker="moomoo", llm_provider="ollama")
+    problems = cfg.validate()
+    assert any("AOA_LLM_PROVIDER" in p for p in problems)
 
 
 def test_validate_alpaca_broker_requires_keys():
@@ -55,7 +91,6 @@ def test_validate_clean_config():
     cfg = Config(
         env="paper-dry",
         broker="moomoo",
-        anthropic_api_key="x",
     )
     assert cfg.validate() == []
 
@@ -64,7 +99,6 @@ def test_validate_clean_config_alpaca():
     cfg = Config(
         env="paper-dry",
         broker="alpaca",
-        anthropic_api_key="x",
         alpaca_key_id="k",
         alpaca_secret_key="s",
     )
@@ -72,7 +106,12 @@ def test_validate_clean_config_alpaca():
 
 
 def test_has_brokerage_creds_accepts_oauth():
-    cfg = Config(alpaca_oauth_token="oauth-token")
+    cfg = Config(broker="alpaca", alpaca_oauth_token="oauth-token")
+    assert cfg.has_brokerage_creds is True
+
+
+def test_moomoo_has_brokerage_creds_without_alpaca():
+    cfg = Config(broker="moomoo")
     assert cfg.has_brokerage_creds is True
 
 
@@ -85,15 +124,41 @@ def test_from_env_loads_alpaca_cli_oauth_profile(tmp_path, monkeypatch):
         encoding="utf-8",
     )
     monkeypatch.setenv("ALPACA_CONFIG_DIR", str(config_dir))
+    monkeypatch.setenv("AOA_BROKER", "alpaca")
     monkeypatch.delenv("ALPACA_API_KEY_ID", raising=False)
     monkeypatch.delenv("ALPACA_API_SECRET_KEY", raising=False)
     monkeypatch.delenv("ALPACA_API_KEY", raising=False)
     monkeypatch.delenv("ALPACA_SECRET_KEY", raising=False)
 
     cfg = Config.from_env(load_dotenv=False)
+    assert cfg.broker == "alpaca"
     assert cfg.alpaca_oauth_token == "cli-oauth-token"
     assert cfg.alpaca_auth_source == "cli-oauth"
     assert cfg.has_brokerage_creds is True
+
+
+def test_from_env_llm_defaults_to_waste(monkeypatch):
+    monkeypatch.delenv("AOA_LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("AOA_LLM_BASE_URL", raising=False)
+    monkeypatch.delenv("AOA_MODEL", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.llm_provider == "openai_compatible"
+    assert cfg.llm_base_url == "http://127.0.0.1:8000/v1"
+    assert cfg.model == "kimi-linear"
+    assert cfg.validate() == []
+
+
+def test_from_env_empty_base_url_falls_back(monkeypatch):
+    monkeypatch.setenv("AOA_LLM_BASE_URL", "   ")
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.llm_base_url == "http://127.0.0.1:8000/v1"
+
+
+def test_validate_rejects_empty_model():
+    cfg = Config(model="")
+    problems = cfg.validate()
+    assert any("AOA_MODEL" in p for p in problems)
 
 
 def test_validate_rejects_bad_effort():
