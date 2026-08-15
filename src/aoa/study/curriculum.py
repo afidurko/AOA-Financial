@@ -532,6 +532,35 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         ),
         check_keywords=("martingale", "equivalent", "no-arbitrage", "measure", "discount"),
     ),
+    KnowledgeCard(
+        id="bridge-sgx-depth-rise",
+        field="bridge",
+        title="LOB depth imbalance ↔ short-horizon rise",
+        statement=(
+            "Weighted ask/bid depth imbalance and a trailing rise ratio are classical "
+            "full-order-book features; agreeing signs are a short-horizon pressure cue, "
+            "while a forward bid-lifts-ask label is a research hit-rate target only."
+        ),
+        proof_sketch=(
+            "1) W_a, W_b aggregate multi-level sizes; imbalance=(W_a−W_b)/(W_a+W_b).\n"
+            "2) Rise ratio is percent change vs the first print in [t−Δ, t].\n"
+            "3) Label bid[i] > min(ask[i:i+h]) scores foresight — not an AOA fill model."
+        ),
+        applications=(
+            "Offline LOB feature engineering (SGX notebook companion)",
+            "Julie microstructure study context alongside VisualHFT / orderbook lanes",
+        ),
+        aoa_mesh=(
+            "aoa.research.sgx_orderbook_patterns never calls a broker; swarm stays "
+            "bar/L1. Mesh companion sgx-orderbook is reference-only under the hard floor."
+        ),
+        bridges=("bridge-ou-meanrev", "bridge-sdf-martingale"),
+        drill_prompt=(
+            "Define weighted depth imbalance and rise ratio; explain why AOA treats "
+            "a forward tradeable label as research-only."
+        ),
+        check_keywords=("depth", "imbalance", "rise", "order book", "research"),
+    ),
 )
 
 

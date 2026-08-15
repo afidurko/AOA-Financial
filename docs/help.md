@@ -41,6 +41,11 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 | Resource | Role |
 |----------|------|
 | **[Finance](https://github.com/shashankvemuri/Finance)** | Reference library of quantitative finance Python programs (used in Tom’s knowledge context). |
+| **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full limit-order-book ML notebooks (rise ratio, weighted depth, sklearn model selection). Pure-Python idea ports: `aoa.research.sgx_orderbook_patterns`. Upstream fork of [rorysroes/…](https://github.com/rorysroes/SGX-Full-OrderBook-Tick-Data-Trading-Strategy). |
+
+**In-system wiring:** clone with `./scripts/sgx-orderbook-setup.sh` (gitignored sibling).
+Vault note: `vault/system/sgx-orderbook.md`. Guide: [how-to/sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md).
+Not an order path — research / Julie algorithm context only.
 
 ## Local model runtime (optional)
 

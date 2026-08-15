@@ -108,3 +108,16 @@ export AOA_QM_URL=http://localhost:8081
 
 See [qm-integration.md](qm-integration.md). Other companions:
 [docs/help.md](../help.md).
+
+## 8. SGX order-book strategy reference (optional)
+
+Clone the SGX A50 full-LOB ML sibling for rise-ratio / weighted-depth reading
+([SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)).
+AOA does not run the notebooks:
+
+```bash
+./scripts/sgx-orderbook-setup.sh
+```
+
+See [sgx-orderbook-reference.md](sgx-orderbook-reference.md). Python idea ports:
+`aoa.research.sgx_orderbook_patterns`.

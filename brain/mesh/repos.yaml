@@ -24,3 +24,6 @@ repos:
   - name: qm
     url: https://github.com/afidurko/qm
     role: multiplayer agent harness (Slack + web); AOA_QM_URL companion
+  - name: sgx-orderbook
+    url: https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy
+    role: SGX A50 full LOB ML notebooks (rise/depth); Python ideas in aoa.research.sgx_orderbook_patterns

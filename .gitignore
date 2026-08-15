@@ -256,3 +256,6 @@ OpenStock/
 
 # QM sibling clone (multiplayer agent harness — not vendored)
 qm/
+
+# SGX full-order-book ML strategy sibling (notebooks — not vendored)
+SGX-Full-OrderBook-Tick-Data-Trading-Strategy/
