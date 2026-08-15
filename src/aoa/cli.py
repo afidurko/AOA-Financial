@@ -1273,10 +1273,9 @@ def cmd_workloop_log(cfg: Config, n: int) -> int:
     return 0
 
 
-def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
+def cmd_workloop_upgrade(_cfg: Config, *, dry_run: bool) -> int:
     from aoa.workloop.upgrade import run_upgrade_pipeline
 
-    _ = cfg  # Config required for CLI consistency; pipeline uses repo root.
     result = run_upgrade_pipeline(_repo_root(), dry_run=dry_run)
     flag = "OK" if result.get("ok") else "FAIL"
     mode = "dry-run" if dry_run else "upgrade"
@@ -1286,7 +1285,7 @@ def cmd_workloop_upgrade(cfg: Config, *, dry_run: bool) -> int:
         return 0
     upgrade = result.get("upgrade") or {}
     if upgrade.get("output"):
-        print(upgrade["output"][-500:])
+        print(str(upgrade["output"])[-500:])
     reverify = result.get("reverify") or {}
     if reverify and not reverify.get("passed"):
         print("Reverify failed after upgrade.")
@@ -2697,13 +2696,12 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=getattr(args, "json", False),
                 ported_only=getattr(args, "ported_only", False),
             )
-<<<<<<< HEAD
         return 2
-=======
 
     if args.command == "workspaces":
         if args.workspaces_command == "status":
             return cmd_workspaces_status(as_json=getattr(args, "json", False))
+        return 2
 
     # Offline research lane — no .env template and no Config/broker side effects.
     if args.command == "hftish":
@@ -2714,8 +2712,8 @@ def main(argv: list[str] | None = None) -> int:
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )
+        return 2
 
->>>>>>> origin/main
     if args.command == "hft":
         if args.hft_command == "status":
             return cmd_hft_status(as_json=getattr(args, "json", False))
@@ -2761,19 +2759,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "microstructure":
         if args.microstructure_command == "status":
             return cmd_microstructure_status(as_json=getattr(args, "json", False))
-        return 2
-    if args.command == "workspaces":
-        if args.workspaces_command == "status":
-            return cmd_workspaces_status(as_json=getattr(args, "json", False))
-        return 2
-    if args.command == "hftish":
-        if args.hftish_command == "status":
-            return cmd_hftish_status(as_json=getattr(args, "json", False))
-        if args.hftish_command == "smoke":
-            return cmd_hftish_smoke(
-                seed=getattr(args, "seed", 7),
-                as_json=getattr(args, "json", False),
-            )
         return 2
 
     _ensure_env_template()

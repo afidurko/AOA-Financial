@@ -16,7 +16,7 @@ aoa workloop upgrade
 aoa workloop upgrade --dry-run
 ```
 
-Pipeline: **baseline verify** (ruff + pytest) → **pip install -e ".[dev,web]" --upgrade`** → **reverify**.
+Pipeline: **baseline verify** (ruff + pytest) → `pip install -e ".[dev,web]" --upgrade` → **reverify**.
 
 ## Loop automation
 
@@ -28,7 +28,7 @@ Pipeline: **baseline verify** (ruff + pytest) → **pip install -e ".[dev,web]" 
 Example cron (Sundays 12:00 UTC):
 
 ```cron
-0 12 * * 0 cd /path/to/AOA-Financial && pip install -e ".[dev,web]" -q && aoa workloop upgrade >> logs/workloop-upgrade.log 2>&1
+0 12 * * 0 cd /path/to/AOA-Financial && aoa workloop upgrade >> logs/workloop-upgrade.log 2>&1
 ```
 
 ## Workloop full cycle
