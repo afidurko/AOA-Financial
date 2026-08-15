@@ -178,6 +178,7 @@ def _seed_minimal_repo(root: Path) -> None:
         path.write_text(f"# {path.name}\n", encoding="utf-8")
     (root / "brain" / "captures").mkdir(parents=True, exist_ok=True)
     (root / "brain" / "decisions").mkdir(parents=True, exist_ok=True)
+    (root / "brain" / "mesh").mkdir(parents=True, exist_ok=True)
     members = "\n".join(
         f"  - id: {n.lower()}\n    name: {n}\n    role: x\n    feeds: []"
         for n in roster_names()
