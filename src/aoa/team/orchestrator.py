@@ -344,6 +344,24 @@ class TeamOrchestrator:
         svc = TeamExpansionService(self.llm, self.analytics.store, self.journal)
         return svc.propose_all(replace_pending=replace_pending)
 
+    def start_quant_hire_round(self, *, replace_pending: bool = True):
+        """Riley opens a 5-seat econophysics quant desk interview round."""
+        if self.analytics is None:
+            raise RuntimeError("Analytics must be enabled (AOA_ANALYTICS_ENABLED=1)")
+        from aoa.team.interview import QuantHireService
+
+        svc = QuantHireService(self.llm, self.analytics.store, self.journal)
+        return svc.start_round(replace_pending=replace_pending)
+
+    def latest_quant_hire_round(self):
+        """Return the most recent quant hire interview round, if any."""
+        if self.analytics is None:
+            raise RuntimeError("Analytics must be enabled (AOA_ANALYTICS_ENABLED=1)")
+        from aoa.team.interview import QuantHireService
+
+        svc = QuantHireService(self.llm, self.analytics.store, self.journal)
+        return svc.latest_round()
+
     def _run_assistant(self, result: TeamCycleResult) -> AssistantBrief:
         brief = self.alex.prioritize(
             cycle=result,

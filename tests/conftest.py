@@ -257,6 +257,18 @@ class FakeLLM:
             "members",
         }
     )
+    _RILEY = frozenset(
+        {
+            "seat_id",
+            "candidate_name",
+            "score",
+            "recommendation",
+            "strengths",
+            "gaps",
+            "transcript_notes",
+            "hire",
+        }
+    )
     _NEWS = frozenset({"direction", "conviction", "summary", "key_events", "macro_risk"})
     _SENTIMENT = frozenset(
         {"direction", "conviction", "sentiment_score", "summary", "drivers"}
@@ -501,6 +513,38 @@ class FakeLLM:
                     }
                 ],
                 "can_wait": [],
+            }
+        if required == self._RILEY:
+            seat_id = "microstructure"
+            for key, needle in (
+                ("networks", "Network Contagion"),
+                ("abm", "Agent-Based"),
+                ("critical", "Critical Phenomena"),
+                ("execution", "Signal Translation"),
+                ("microstructure", "Microstructure"),
+            ):
+                if needle in prompt:
+                    seat_id = key
+                    break
+            names = {
+                "microstructure": "Dr. Lena Voss",
+                "networks": "Dr. Omar Okonkwo",
+                "abm": "Dr. Priya Sen",
+                "critical": "Dr. Elias Brandt",
+                "execution": "Morgan Hale",
+            }
+            return {
+                "seat_id": seat_id,
+                "candidate_name": names.get(seat_id, "Candidate"),
+                "score": 0.8 if seat_id == "execution" else 0.74,
+                "recommendation": "hire",
+                "strengths": ["JPhys Complexity–aligned methods", "Clear falsifiability"],
+                "gaps": ["Needs AOA risk-guard dry run"],
+                "transcript_notes": [
+                    "Covered must-cover topics with concrete market examples.",
+                    "Linked research claims to executable constraints.",
+                ],
+                "hire": True,
             }
         if required == self._EXPANSION:
             lead = "Lead"

@@ -472,3 +472,89 @@ class CEOReport:
             "fixes_applied": self.fixes_applied,
             "iphone_notifications_sent": self.iphone_notifications_sent,
         }
+
+
+class HireRecommendation(str, Enum):
+    STRONG_HIRE = "strong_hire"
+    HIRE = "hire"
+    LEAN_HIRE = "lean_hire"
+    HOLD = "hold"
+    NO_HIRE = "no_hire"
+
+
+@dataclass
+class QuantSeat:
+    """Open role on the econophysics quant trading desk."""
+
+    seat_id: str
+    title: str
+    domain: str
+    research_bar: str
+    must_cover: tuple[str, ...] = ()
+
+    def to_context(self) -> dict:
+        return {
+            "seat_id": self.seat_id,
+            "title": self.title,
+            "domain": self.domain,
+            "research_bar": self.research_bar,
+            "must_cover": list(self.must_cover),
+        }
+
+
+@dataclass
+class InterviewScorecard:
+    """Riley's scored interview for one quant seat."""
+
+    seat_id: str
+    seat_title: str
+    candidate_name: str
+    candidate_background: str
+    score: float
+    recommendation: HireRecommendation
+    strengths: list[str] = field(default_factory=list)
+    gaps: list[str] = field(default_factory=list)
+    transcript_notes: list[str] = field(default_factory=list)
+    hire: bool = False
+
+    def to_context(self) -> dict:
+        return {
+            "seat_id": self.seat_id,
+            "seat_title": self.seat_title,
+            "candidate_name": self.candidate_name,
+            "candidate_background": self.candidate_background,
+            "score": round(self.score, 2),
+            "recommendation": self.recommendation.value,
+            "strengths": self.strengths,
+            "gaps": self.gaps,
+            "transcript_notes": self.transcript_notes,
+            "hire": self.hire,
+        }
+
+
+@dataclass
+class InterviewRound:
+    """Full 5-seat quant desk hiring round awaiting human approval."""
+
+    round_id: str
+    team_name: str
+    journal_anchor: str
+    journal_url: str
+    seats: list[QuantSeat] = field(default_factory=list)
+    scorecards: list[InterviewScorecard] = field(default_factory=list)
+    summary: str = ""
+    status: str = "pending"
+    created_at: str = ""
+
+    def to_context(self) -> dict:
+        return {
+            "round_id": self.round_id,
+            "team_name": self.team_name,
+            "journal_anchor": self.journal_anchor,
+            "journal_url": self.journal_url,
+            "seats": [s.to_context() for s in self.seats],
+            "scorecards": [c.to_context() for c in self.scorecards],
+            "summary": self.summary,
+            "status": self.status,
+            "created_at": self.created_at,
+        }
