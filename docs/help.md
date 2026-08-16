@@ -54,11 +54,13 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT futures strategies (pairs arb, hedged maker, MA cross) as a sibling reference. Pure-Python idea ports: `aoa.research.hft_patterns`. Upstream fork of [keyianpai/hft](https://github.com/keyianpai/hft). |
 | **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full limit-order-book ML notebooks (rise ratio, weighted depth, sklearn model selection). Pure-Python idea ports: `aoa.research.sgx_orderbook_patterns`. Upstream fork of [rorysroes/SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/rorysroes/SGX-Full-OrderBook-Tick-Data-Trading-Strategy). |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker (1¢ level changes + size imbalance). Pure-Python idea ports: `aoa.research.hftish_patterns`. Upstream fork of [alpacahq/example-hftish](https://github.com/alpacahq/example-hftish). |
+| **[open-quant-live-book](https://github.com/afidurko/open-quant-live-book)** | Open reproducible quant finance book (risk parity, entropy, transfer entropy). Pure-Python idea ports: `aoa.research.open_quant_patterns`. Upstream fork of [souzatharsis/open-quant-live-book](https://github.com/souzatharsis/open-quant-live-book). |
 
 **In-system wiring** (gitignored siblings; research only — never an order path):
 - HFT: `./scripts/hft-setup.sh` · `vault/system/hft.md` · [hft-reference.md](how-to/hft-reference.md)
 - SGX: `./scripts/sgx-orderbook-setup.sh` · `vault/system/sgx-orderbook.md` · [sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md) · LOB bridge `snapshot_from_limit_order_book` · [hft-research-lane.md](how-to/hft-research-lane.md)
 - example-hftish: `./scripts/example-hftish-setup.sh` · `vault/system/example-hftish.md` · [example-hftish-reference.md](how-to/example-hftish-reference.md) · CLI `aoa hftish status|smoke`
+- open-quant-live-book: `./scripts/open-quant-live-book-setup.sh` · `vault/system/open-quant-live-book.md` · [open-quant-live-book-reference.md](how-to/open-quant-live-book-reference.md) · CLI `aoa openquant status|smoke`
 ## Local model runtime (optional)
 
 | Resource | Role |

@@ -27,7 +27,9 @@ This clones and wires:
 
 Optional siblings: `qm` (`./scripts/qm-setup.sh`), `py-moomoo-api`,
 SGX order-book notebooks (`./scripts/sgx-orderbook-setup.sh` — see
-[hft-research-lane.md](hft-research-lane.md)).
+[hft-research-lane.md](hft-research-lane.md)), open-quant-live-book
+(`./scripts/open-quant-live-book-setup.sh` — see
+[open-quant-live-book-reference.md](open-quant-live-book-reference.md)).
 
 ## Open in Cursor
 

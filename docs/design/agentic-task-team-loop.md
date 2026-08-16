@@ -119,6 +119,7 @@ Hard safety floor (not process bureaucracy):
 | `hft` | C++ HFT strategy ideas (pairs bands, hedged maker, MA cross) → `aoa.research.hft_patterns` |
 | `SGX-Full-OrderBook-…` | Depth-rise / weighted book features → `aoa.research.sgx_orderbook_patterns` |
 | `example-hftish` | Alpaca OB imbalance / level-change follow ideas → `aoa.research.hftish_patterns` |
+| `open-quant-live-book` | Risk parity / entropy / TE ideas → `aoa.research.open_quant_patterns` |
 | `avellaneda-stoikov` | Reservation-price MM math → `aoa.avellaneda_stoikov` / `aoa avellaneda` |
 | AOA `vault/` | Property sync + analyzers; brain mirrors into vault |
 

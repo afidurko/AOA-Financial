@@ -291,4 +291,6 @@ oxyplot/
 hftbacktest/
 # Avellaneda–Stoikov sibling clone (reference — not vendored)
 avellaneda-stoikov/
+# open-quant-live-book sibling clone (quant finance book — not vendored)
+open-quant-live-book/
 loop-state/
