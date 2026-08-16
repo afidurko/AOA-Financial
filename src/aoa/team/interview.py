@@ -328,7 +328,8 @@ def _deterministic_scorecard(
 ) -> InterviewScorecard:
     """Baseline scorecards when LLM is unavailable — still starts the process."""
     notes = [
-        f"Asked how {topic} informs live risk/trading." for topic in seat.must_cover
+        f"Covered must-cover topic — {topic} — mapped to live risk/trading."
+        for topic in seat.must_cover
     ]
     strengths = [
         f"Grounded background for {seat.domain}",
