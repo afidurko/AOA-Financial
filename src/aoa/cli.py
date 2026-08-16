@@ -1809,6 +1809,7 @@ def cmd_openquant_smoke(*, seed: int, as_json: bool) -> int:
         print(f"  te_xy:        {flow.get('te_xy')}")
         print(f"  mi:           {result.get('mutual_information')}")
         print(f"  erc_weights:  {result.get('erc_weights')}")
+        print(f"  erc_fracs:    {result.get('erc_risk_fractions')}")
         print(f"  never_live:   {result.get('never_live', True)}")
     return 0 if result.get("ok") else 1
 

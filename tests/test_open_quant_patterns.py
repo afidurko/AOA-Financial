@@ -7,6 +7,7 @@ import math
 import pytest
 
 from aoa.research.open_quant_patterns import (
+    coupled_ar_series,
     cov_from_returns,
     equal_risk_contribution,
     inverse_vol_weights,
@@ -30,22 +31,28 @@ def test_equal_risk_contribution_uncorrelated() -> None:
     cov = [[0.04, 0.0], [0.0, 0.01]]
     res = equal_risk_contribution(cov)
     assert abs(sum(res.weights) - 1.0) < 1e-8
-    # Uncorrelated ERC ≈ inverse-vol
     assert abs(res.weights[0] - 1.0 / 3.0) < 1e-4
     assert abs(res.weights[1] - 2.0 / 3.0) < 1e-4
+    assert abs(res.risk_fractions[0] - 0.5) < 1e-3
+    assert abs(res.risk_fractions[1] - 0.5) < 1e-3
+
+
+def test_equal_risk_contribution_correlated() -> None:
+    cov = [[0.04, 0.015], [0.015, 0.01]]
+    res = equal_risk_contribution(cov)
+    assert abs(sum(res.weights) - 1.0) < 1e-8
+    assert abs(res.risk_fractions[0] - 0.5) < 1e-3
+    assert abs(res.risk_fractions[1] - 0.5) < 1e-3
     rc = risk_contributions(cov, res.weights)
     total = sum(rc)
     assert abs(rc[0] / total - 0.5) < 1e-3
-    assert abs(rc[1] / total - 0.5) < 1e-3
 
 
 def test_equal_risk_contribution_custom_budget() -> None:
     cov = [[0.04, 0.0], [0.0, 0.01]]
     res = equal_risk_contribution(cov, budget=(0.25, 0.75))
-    rc = risk_contributions(cov, res.weights)
-    total = sum(rc)
-    assert abs(rc[0] / total - 0.25) < 1e-2
-    assert abs(rc[1] / total - 0.75) < 1e-2
+    assert abs(res.risk_fractions[0] - 0.25) < 1e-2
+    assert abs(res.risk_fractions[1] - 0.75) < 1e-2
 
 
 def test_shannon_entropy_constant_is_zero() -> None:
@@ -57,20 +64,20 @@ def test_mutual_information_identical_series() -> None:
     stats = mutual_information_stats(xs, xs, bins=7)
     assert stats.mutual_information > 0.5
     assert 0.0 <= stats.global_correlation <= 1.0
+    # I(X;X) ≈ H(X); joint ≈ H(X)
+    assert abs(stats.mutual_information - stats.entropy_x) < 0.05
+    assert abs(stats.joint_entropy - stats.entropy_x) < 0.05
+
+
+def test_mutual_information_rejects_bad_bins() -> None:
+    with pytest.raises(ValueError, match="bins"):
+        mutual_information_stats([1.0, 2.0], [1.0, 2.0], bins=1)
+    with pytest.raises(ValueError, match="bins"):
+        shannon_entropy([1.0, 2.0], bins=0)
 
 
 def test_linear_granger_detects_cause() -> None:
-    n = 300
-    x = [0.0] * n
-    y = [0.0] * n
-    state = 42
-    for i in range(1, n):
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        e1 = (state / 0x7FFFFFFF) * 2.0 - 1.0
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        e2 = (state / 0x7FFFFFFF) * 2.0 - 1.0
-        x[i] = 0.5 * x[i - 1] + e1
-        y[i] = 0.8 * x[i - 1] + 0.1 * y[i - 1] + e2
+    x, y = coupled_ar_series(300, seed=42, ar_x=0.5, coupling=0.8)
     xy = linear_granger_causality(x, y, lags=1)
     yx = linear_granger_causality(y, x, lags=1)
     assert xy.gc > yx.gc
@@ -78,17 +85,7 @@ def test_linear_granger_detects_cause() -> None:
 
 
 def test_net_information_flow_direction() -> None:
-    n = 250
-    x = [0.0] * n
-    y = [0.0] * n
-    state = 7
-    for i in range(1, n):
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        e1 = (state / 0x7FFFFFFF) * 2.0 - 1.0
-        state = (state * 1103515245 + 12345) & 0x7FFFFFFF
-        e2 = (state / 0x7FFFFFFF) * 2.0 - 1.0
-        x[i] = 0.4 * x[i - 1] + e1
-        y[i] = 0.7 * x[i - 1] + e2
+    x, y = coupled_ar_series(250, seed=7, ar_x=0.4, coupling=0.7)
     flow = net_information_flow(x, y, lags=1)
     assert flow.dominant == "x->y"
     assert flow.net_xy > 0
@@ -107,6 +104,7 @@ def test_synthetic_smoke_ok() -> None:
     assert result["ok"] is True
     assert result["never_live"] is True
     assert result["companion"] == "open-quant-live-book"
+    assert abs(result["erc_risk_fractions"][0] - 0.5) < 1e-3
 
 
 def test_rejects_bad_inputs() -> None:
@@ -121,7 +119,11 @@ def test_rejects_bad_inputs() -> None:
     with pytest.raises(ValueError):
         equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], budget=(1.0,))
     with pytest.raises(ValueError):
+        equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], damp=0.0)
+    with pytest.raises(ValueError):
         linear_granger_causality([1.0, 2.0], [1.0], lags=1)
+    with pytest.raises(ValueError):
+        coupled_ar_series(1)
 
 
 def test_erc_weights_sum_and_positive_vol() -> None:
@@ -131,3 +133,4 @@ def test_erc_weights_sum_and_positive_vol() -> None:
     assert all(w > 0 for w in res.weights)
     assert res.volatility > 0
     assert math.isclose(sum(res.budget), 1.0)
+    assert math.isclose(sum(res.risk_fractions), 1.0)

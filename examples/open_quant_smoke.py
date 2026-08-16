@@ -30,6 +30,7 @@ def main() -> None:
         {
             "smoke_ok": smoke["ok"],
             "erc_weights": list(erc.weights),
+            "erc_risk_fractions": list(erc.risk_fractions),
             "inverse_vol": list(inv),
             "mutual_information": mi.mutual_information,
             "global_correlation": mi.global_correlation,

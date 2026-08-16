@@ -14,9 +14,9 @@ R/bookdown; AOA does not build or vendor it.
 
 | Upstream chapter | Idea | AOA landing |
 |------------------|------|-------------|
-| `RiskParity/` | Equal risk contribution / risk-budget portfolios | `equal_risk_contribution`, `inverse_vol_weights`, `risk_contributions` |
+| `RiskParity/` | Equal risk contribution / risk-budget portfolios | `equal_risk_contribution`, `inverse_vol_weights`, `risk_contributions` (+ `risk_fractions`) |
 | `Entropy/` | Shannon entropy, mutual information, global correlation λ | `shannon_entropy`, `mutual_information_stats` |
-| `TransferEntropy/` | Linear Granger causality + Gaussian TE = GC/2; net flow | `linear_granger_causality`, `net_information_flow` |
+| `TransferEntropy/` | Linear Granger causality + Gaussian TE = GC/2; net flow | `linear_granger_causality`, `net_information_flow`, `coupled_ar_series` |
 | StylizedFacts / LimitOrder / ML parts | Mostly stubs or narrative | Stay in the sibling — **not** ported |
 
 AOA stays bar-based (Alpaca / Moomoo equities & cash options). There is no
