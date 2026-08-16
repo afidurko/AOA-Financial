@@ -38,13 +38,16 @@ Never:
 
 Routine process review and “activate before use” are **not** required under auto-12.
 
-## Fable 5 / coding path (inside ATTL)
+## Fable 5 / coding path (inside ATTL) — required
+
+**Coding, fixing, and simplifying MUST use this path** (`aoa team code` or
+`aoa attl run`). Do not land fix/simplify diffs outside maker/checker.
 
 ```
-aoa attl run → (automatable item) worktree → maker → tests → draft PR
+aoa team code / aoa attl run → (automatable item) worktree → maker → tests → draft PR
 ```
 
-- Maker (`minimal-fix` / Reed handoff) and checker (`loop-verifier`) stay separate **when Kai engages** or when verifying a coding fix before draft PR.
+- Maker (`minimal-fix` / Reed handoff / `coding-engineer`) and checker (`loop-verifier`) stay separate **when Kai engages** or when verifying a coding fix before draft PR.
 - Under auto-12, skip full team proofread unless critical.
 - Fixes in `.aoa-worktrees/` when using repair worktrees.
 

@@ -83,6 +83,73 @@ def test_repair_triage_writes_queue(tmp_path, monkeypatch):
     assert cfg.repair_path.joinpath("queue.json").exists()
 
 
+def test_cmd_repair_triage_exit_ignores_escalated_critical(tmp_path, monkeypatch, capsys):
+    """Queue-sync must not fail when the only criticals need a human."""
+    from aoa.cli import cmd_repair_triage
+    from aoa.repair.models import RepairItem, RepairRun
+    from aoa.repair.orchestrator import RepairResult
+
+    cfg = _config(tmp_path, repair_enabled=True, repair_sync_state=False)
+
+    class _Orch:
+        def triage(self, *, sync_state: bool = True):
+            return RepairResult(
+                run=RepairRun(
+                    run_id="t1",
+                    items=[
+                        RepairItem(
+                            item_id="e1",
+                            title="Workloop pipeline",
+                            source="state",
+                            severity="critical",
+                            fixable=True,
+                            detail="needs CEO approval",
+                            requires_escalation=True,
+                        )
+                    ],
+                ),
+                queue_path=tmp_path / "queue.json",
+                state_path=tmp_path / "STATE.md",
+            )
+
+    monkeypatch.setattr("aoa.cli.RepairOrchestrator", lambda cfg: _Orch())
+    assert cmd_repair_triage(cfg, no_sync=True) == 0
+
+
+def test_cmd_repair_triage_exit_signals_auto_fixable_critical(
+    tmp_path, monkeypatch, capsys
+):
+    from aoa.cli import cmd_repair_triage
+    from aoa.repair.models import RepairItem, RepairRun
+    from aoa.repair.orchestrator import RepairResult
+
+    cfg = _config(tmp_path, repair_enabled=True, repair_sync_state=False)
+
+    class _Orch:
+        def triage(self, *, sync_state: bool = True):
+            return RepairResult(
+                run=RepairRun(
+                    run_id="t2",
+                    items=[
+                        RepairItem(
+                            item_id="a1",
+                            title="Ruff unused import",
+                            source="verify",
+                            severity="critical",
+                            fixable=True,
+                            detail="F401",
+                            requires_escalation=False,
+                        )
+                    ],
+                ),
+                queue_path=tmp_path / "queue.json",
+                state_path=tmp_path / "STATE.md",
+            )
+
+    monkeypatch.setattr("aoa.cli.RepairOrchestrator", lambda cfg: _Orch())
+    assert cmd_repair_triage(cfg, no_sync=True) == 1
+
+
 def test_repair_orchestrator_sync_state(tmp_path):
     cfg = _config(tmp_path, repair_sync_state=True)
     state_path = tmp_path / "STATE.md"
