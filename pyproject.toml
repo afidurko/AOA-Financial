@@ -47,6 +47,12 @@ aoa = "aoa.cli:main"
 [tool.setuptools.package-dir]
 "" = "src"
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+aoa = ["web/static/mobile/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]

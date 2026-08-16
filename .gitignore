@@ -296,4 +296,7 @@ open-quant-live-book/
 
 # ant-design-mobile sibling clone (mobile UI kit — not vendored)
 ant-design-mobile/
+
+# Vite phone UI deps (built assets are committed under src/aoa/web/static/mobile)
+web-mobile/node_modules/
 loop-state/

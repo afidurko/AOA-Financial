@@ -8,7 +8,8 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from aoa.analytics.bridge import _analyst_reports_from_env
@@ -24,7 +25,7 @@ from aoa.team.orchestrator import TeamCycleResult
 from aoa.version import package_version
 from aoa.web.dashboard_html import DASHBOARD_HTML
 from aoa.web.loop_runner import CycleBusyError, LoopRunner
-from aoa.web.mobile_dashboard_html import MOBILE_DASHBOARD_HTML
+from aoa.web.mobile_dashboard_html import MOBILE_ASSETS_DIR, MOBILE_INDEX, mobile_ui_ready
 
 
 class ResolveBody(BaseModel):
@@ -379,9 +380,22 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     def dashboard() -> str:
         return DASHBOARD_HTML
 
-    @app.get("/m", response_class=HTMLResponse)
-    def mobile_dashboard() -> str:
-        return MOBILE_DASHBOARD_HTML
+    @app.get("/m")
+    @app.get("/m/")
+    def mobile_dashboard() -> FileResponse:
+        if not mobile_ui_ready():
+            raise HTTPException(
+                status_code=503,
+                detail="Mobile UI not built. Run: cd web-mobile && npm ci && npm run build",
+            )
+        return FileResponse(MOBILE_INDEX)
+
+    if MOBILE_ASSETS_DIR.is_dir():
+        app.mount(
+            "/m/assets",
+            StaticFiles(directory=str(MOBILE_ASSETS_DIR)),
+            name="mobile-assets",
+        )
 
     return app
 

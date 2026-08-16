@@ -28,7 +28,7 @@ API as the desktop dashboard. It does **not** place live orders.
 ```
 
 - **AOA** — brokerage, risk guardrails, trading swarm, REST API.
-- **`/m`** — mobile shell (NavBar / TabBar / Lists) for phone + Tailscale.
+- **`/m`** — Vite-built mobile shell (NavBar / TabBar / Lists) for phone + Tailscale.
 - **Sibling fork** — customize themes or components; not required to open `/m`.
 
 ## Install sibling (optional)
@@ -39,6 +39,17 @@ API as the desktop dashboard. It does **not** place live orders.
 ```
 
 The directory `ant-design-mobile/` is gitignored.
+
+## Rebuild the phone shell (developers)
+
+Source lives in `web-mobile/` (React + antd-mobile + Vite). Built assets are
+committed under `src/aoa/web/static/mobile/` so `aoa serve` works without Node:
+
+```bash
+cd web-mobile
+npm ci
+npm run build   # → src/aoa/web/static/mobile/
+```
 
 ## Run the mobile shell
 
@@ -63,7 +74,8 @@ aoa workspaces status --json
 ```
 
 `antd-mobile` shows **present** when the sibling clone exists and **linked** when
-`AOA_ANTD_MOBILE_URL` is set. The `/m` route is always available from `aoa serve`.
+`AOA_ANTD_MOBILE_URL` is set. The `/m` route is always available from `aoa serve`
+when the static build is present.
 
 ## Safety (Hard Floor)
 
@@ -77,5 +89,5 @@ aoa workspaces status --json
 
 - Docs: [https://mobile.ant.design](https://mobile.ant.design)
 - Install kit: `npm install antd-mobile` (or yarn / pnpm / bun)
-- AOA `/m` loads the published package via ESM CDN so Cloud/agent hosts need no
-  Node toolchain to serve the phone UI.
+- AOA `/m` serves a Vite-built bundle of published `antd-mobile` (no CDN at
+  runtime). Rebuild with `cd web-mobile && npm run build` after UI changes.

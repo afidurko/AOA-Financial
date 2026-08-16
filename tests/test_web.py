@@ -63,8 +63,13 @@ def test_mobile_dashboard_html(client):
     r = client.get("/m")
     assert r.status_code == 200
     assert "AOA Mobile" in r.text
-    assert "antd-mobile" in r.text
-    assert "/api/status" in r.text
+    assert "/m/assets/" in r.text
+    # Built JS bundle must be reachable.
+    asset = r.text.split('src="')[1].split('"')[0]
+    assert asset.startswith("/m/assets/")
+    js = client.get(asset)
+    assert js.status_code == 200
+    assert "AOA Mobile" in js.text or "antd-mobile" in js.text or "createElement" in js.text or "jsx" in js.text
 
 
 def test_api_status(client):
