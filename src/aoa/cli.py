@@ -773,6 +773,53 @@ def cmd_team_promote(cfg: Config) -> int:
     return 0
 
 
+def _print_interview_round(round_) -> None:
+    print("\n=== Riley — Quant Desk Interview Round ===")
+    print(f"Team: {round_.team_name}")
+    print(f"Journal bar: {round_.journal_anchor}")
+    print(f"URL: {round_.journal_url}")
+    print(f"Status: {round_.status}  |  id={round_.round_id}")
+    print(f"{round_.summary}\n")
+    for card in round_.scorecards:
+        flag = "HIRE" if card.hire else "PASS"
+        print(
+            f"[{flag}] {card.seat_title} — {card.candidate_name} "
+            f"(score={card.score:.2f}, {card.recommendation.value})"
+        )
+        print(f"  Background: {card.candidate_background}")
+        if card.strengths:
+            print(f"  Strengths: {'; '.join(card.strengths)}")
+        if card.gaps:
+            print(f"  Gaps: {'; '.join(card.gaps)}")
+        for note in card.transcript_notes[:4]:
+            print(f"  • {note}")
+        print()
+    hired = sum(1 for c in round_.scorecards if c.hire)
+    print(f"{hired}/{len(round_.scorecards)} provisional hires pending your approval.")
+
+
+def cmd_team_interview(cfg: Config, action: str) -> int:
+    team = build_team(cfg)
+    if team.analytics is None:
+        print("Analytics disabled — set AOA_ANALYTICS_ENABLED=1 to store interviews.")
+        return 1
+    if action == "start":
+        print("\n=== Opening 5-seat econophysics quant desk interviews (Riley) ===\n")
+        round_ = team.start_quant_hire_round()
+        _print_interview_round(round_)
+        print("Approve or reject via analytics approvals (kind=quant_hire).")
+        return 0
+    if action == "status":
+        round_ = team.latest_quant_hire_round()
+        if round_ is None:
+            print("No quant hire rounds yet. Run: aoa team interview start")
+            return 0
+        _print_interview_round(round_)
+        return 0
+    print(f"Unknown interview action: {action}")
+    return 1
+
+
 def cmd_analyze(cfg: Config, symbol: str, timeframe: str, limit: int) -> int:
     broker = build_broker(cfg)
     bars = broker.get_bars(symbol, timeframe, limit)
@@ -2281,6 +2328,19 @@ def main(argv: list[str] | None = None) -> int:
         "promote",
         help="Each lead proposes a sub-team for your approval.",
     )
+    interview = team_sub.add_parser(
+        "interview",
+        help="Riley — 5-seat econophysics quant desk hiring interviews.",
+    )
+    interview_sub = interview.add_subparsers(dest="interview_command", required=True)
+    interview_sub.add_parser(
+        "start",
+        help="Open a hiring round and interview one candidate per seat.",
+    )
+    interview_sub.add_parser(
+        "status",
+        help="Show the latest quant desk interview round.",
+    )
     sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
@@ -2814,6 +2874,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_assistant(cfg)
             if args.team_command == "promote":
                 return cmd_team_promote(cfg)
+            if args.team_command == "interview":
+                return cmd_team_interview(cfg, args.interview_command)
         if args.command == "serve":
             return cmd_serve(cfg)
         if args.command == "journal":
