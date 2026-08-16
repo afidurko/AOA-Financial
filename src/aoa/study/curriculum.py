@@ -601,6 +601,36 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         check_keywords=("depth", "imbalance", "rise", "order book", "research"),
     ),
     KnowledgeCard(
+        id="bridge-oqlb-risk-entropy",
+        field="bridge",
+        title="Risk parity ↔ information flow",
+        statement=(
+            "Equal risk contribution equalizes w_i(Σw)_i across assets (or matches a "
+            "risk budget b), while mutual information and transfer entropy quantify "
+            "dependence and dominant predictive direction between return series."
+        ),
+        proof_sketch=(
+            "1) For f(w)=√(wᵀΣw), ERC solves w_i(Σw)_i = b_i wᵀΣw with Σb=1.\n"
+            "2) MI I(X;Y) and λ=√(1−e^{−2I}) give a correlation-like dependence scale.\n"
+            "3) For jointly Gaussian processes, TE = GC/2 (linear VAR residual form).\n"
+            "4) Net flow TE_xy − TE_yx picks the dominant information direction."
+        ),
+        applications=(
+            "Offline portfolio risk-budget research",
+            "Julie econophysics / causality study context (open-quant-live-book)",
+        ),
+        aoa_mesh=(
+            "Julie may cite aoa.research.open_quant_patterns for ERC/MI/TE diagnostics; "
+            "sibling afidurko/open-quant-live-book is reference-only — never an AOA order path."
+        ),
+        bridges=("bridge-sdf-martingale", "bridge-free-energy"),
+        drill_prompt=(
+            "Given a 2×2 covariance, write ERC weights for equal budgets and state the "
+            "Gaussian link between Granger causality and transfer entropy."
+        ),
+        check_keywords=("risk", "parity", "entropy", "granger", "transfer", "budget"),
+    ),
+    KnowledgeCard(
         id="bridge-free-energy",
         field="bridge",
         title="Free energy ↔ certainty-equivalent utility",

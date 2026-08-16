@@ -155,6 +155,21 @@ def test_cli_hftish_skips_env_template(tmp_path, monkeypatch, capsys):
     assert "example-hftish" in capsys.readouterr().out
 
 
+def test_cli_openquant_skips_env_template(tmp_path, monkeypatch, capsys):
+    from aoa.cli import main
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env.example").write_text("AOA_ENV=paper\n", encoding="utf-8")
+    code = main(["openquant", "status", "--json"])
+    assert code == 0
+    assert not (tmp_path / ".env").exists()
+    assert "open-quant-live-book" in capsys.readouterr().out
+    code = main(["openquant", "smoke", "--json"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert '"ok": true' in out
+    assert '"never_live": true' in out
+
 def test_cmd_setup_moomoo_runs_helper(monkeypatch, capsys):
     cfg = Config(anthropic_api_key="sk-test", broker="moomoo")
     calls: list[list[str]] = []

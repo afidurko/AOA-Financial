@@ -236,3 +236,18 @@ aoa microstructure status
 ```
 
 See [avellaneda-stoikov.md](avellaneda-stoikov.md) · [microstructure-lanes.md](microstructure-lanes.md).
+
+## 17. open-quant-live-book (optional)
+
+Clone the open quant finance book sibling for risk-parity / entropy / transfer-entropy
+reading ([open-quant-live-book](https://github.com/afidurko/open-quant-live-book)).
+AOA does not build the bookdown PDF:
+
+```bash
+./scripts/open-quant-live-book-setup.sh
+aoa openquant status
+aoa openquant smoke
+```
+
+See [open-quant-live-book-reference.md](open-quant-live-book-reference.md). Python idea ports:
+`aoa.research.open_quant_patterns`.

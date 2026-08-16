@@ -24,6 +24,7 @@ Commands:
   aoa vault      Sync schema-driven vault property notes.
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
   aoa hftish     Order-book imbalance research lane (example-hftish patterns).
+  aoa openquant  Open quant live book research lane (risk parity / entropy / TE).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
@@ -1754,6 +1755,65 @@ def cmd_hftish_smoke(*, seed: int, as_json: bool) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_openquant_status(*, as_json: bool) -> int:
+    """Show open-quant-live-book companion wiring (research-only)."""
+    root = _repo_root()
+    sibling = root / "open-quant-live-book"
+    status = {
+        "available": True,
+        "module": "aoa.research.open_quant_patterns",
+        "companion": "open-quant-live-book",
+        "sibling_present": (sibling / ".git").is_dir()
+        or (sibling / "index.Rmd").is_file(),
+        "sibling_path": str(sibling),
+        "setup": "scripts/open-quant-live-book-setup.sh",
+        "docs": "docs/how-to/open-quant-live-book-reference.md",
+        "study_card": "bridge-oqlb-risk-entropy",
+        "mesh_algo": "algo.open_quant_patterns",
+        "patterns": [
+            "equal_risk_contribution",
+            "mutual_information_stats",
+            "linear_granger_causality",
+            "net_information_flow",
+        ],
+        "never_live": True,
+        "hint": "aoa openquant smoke — offline ERC / MI / TE check (no broker)",
+    }
+    if as_json:
+        print(json.dumps(status, indent=2))
+        return 0
+    print("=== open-quant-live-book research lane ===")
+    print(f"  module:    {status['module']}")
+    print(
+        f"  sibling:   {'present' if status['sibling_present'] else 'missing'} ({sibling})"
+    )
+    print(f"  mesh:      {status['mesh_algo']}")
+    print(f"  study:     {status['study_card']}")
+    print(f"  patterns:  {', '.join(status['patterns'])}")
+    print(f"  never_live:{status['never_live']}")
+    print(f"  next:      {status['hint']}")
+    return 0
+
+
+def cmd_openquant_smoke(*, seed: int, as_json: bool) -> int:
+    from aoa.research.open_quant_patterns import synthetic_smoke
+
+    result = synthetic_smoke(seed=seed)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== open-quant-live-book synthetic smoke ===")
+        print(f"  ok:           {result['ok']}")
+        flow = result.get("net_flow") or {}
+        print(f"  dominant:     {flow.get('dominant')}")
+        print(f"  te_xy:        {flow.get('te_xy')}")
+        print(f"  mi:           {result.get('mutual_information')}")
+        print(f"  erc_weights:  {result.get('erc_weights')}")
+        print(f"  erc_fracs:    {result.get('erc_risk_fractions')}")
+        print(f"  never_live:   {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
+
+
 def _attl_orchestrator(cfg: Config):
     from aoa.attl.orchestrator import AttlOrchestrator
     from aoa.config import data_dir_for
@@ -2608,6 +2668,20 @@ def main(argv: list[str] | None = None) -> int:
     hf_smoke.add_argument("--seed", type=int, default=7, help="Reserved for future RNG.")
     hf_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    oq = sub.add_parser(
+        "openquant",
+        help="open-quant-live-book research lane (risk parity / entropy / TE; no orders).",
+    )
+    oq_sub = oq.add_subparsers(dest="openquant_command", required=True)
+    oq_status = oq_sub.add_parser("status", help="Show companion wiring + patterns.")
+    oq_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_smoke = oq_sub.add_parser(
+        "smoke",
+        help="Offline synthetic ERC / MI / transfer-entropy check.",
+    )
+    oq_smoke.add_argument("--seed", type=int, default=7, help="Synthetic series seed.")
+    oq_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
@@ -2728,6 +2802,16 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_hftish_status(as_json=getattr(args, "json", False))
         if args.hftish_command == "smoke":
             return cmd_hftish_smoke(
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        return 2
+
+    if args.command == "openquant":
+        if args.openquant_command == "status":
+            return cmd_openquant_status(as_json=getattr(args, "json", False))
+        if args.openquant_command == "smoke":
+            return cmd_openquant_smoke(
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )

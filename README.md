@@ -602,7 +602,10 @@ aoa hft smoke                           # synthetic L2 depth smoke (no orders)
 aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # See docs/how-to/hftbacktest-integration.md
 # SGX LOB features: docs/how-to/sgx-orderbook-reference.md · examples/sgx_orderbook_smoke.py
+# open-quant book: docs/how-to/open-quant-live-book-reference.md · examples/open_quant_smoke.py
 # Companion map: docs/how-to/hft-research-lane.md
+aoa openquant status
+aoa openquant smoke
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -958,6 +961,7 @@ Companion tools that sit beside this repo (not vendored here):
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT strategy reference — [hft-reference.md](docs/how-to/hft-reference.md) + `aoa.research.hft_patterns` |
 | **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full-LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
+| **[open-quant-live-book](https://github.com/afidurko/open-quant-live-book)** | Open quant finance book (risk parity, entropy, TE) — [open-quant-live-book-reference.md](docs/how-to/open-quant-live-book-reference.md) + `aoa.research.open_quant_patterns` |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
 | **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | AS reservation-price MM sim — `aoa avellaneda` research lane |

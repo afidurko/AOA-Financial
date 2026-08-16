@@ -55,6 +55,11 @@ repos:
     role: SGX A50 full LOB ML notebooks; Python ideas in aoa.research.sgx_orderbook_patterns
     workspace: ./SGX-Full-OrderBook-Tick-Data-Trading-Strategy
     setup: ./scripts/sgx-orderbook-setup.sh
+  - name: open-quant-live-book
+    url: https://github.com/afidurko/open-quant-live-book
+    role: Open quant finance book (risk parity, entropy, TE); Python ideas in aoa.research.open_quant_patterns
+    workspace: ./open-quant-live-book
+    setup: ./scripts/open-quant-live-book-setup.sh
 
 # Vendored / local workspaces (not separate git clones)
 local:
