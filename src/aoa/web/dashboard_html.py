@@ -180,7 +180,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
       const obsLink=document.getElementById('obsidian-link');
       if(config.obsidian_vault_path){
-        const vaultName=config.obsidian_vault_path.replace(/\\/g,'/').split('/').filter(Boolean).pop()||'vault';
+        const vaultName=config.obsidian_vault_path.replaceAll('\\\\','/').split('/').filter(Boolean).pop()||'vault';
         obsLink.href='obsidian://open?vault='+encodeURIComponent(vaultName);
         obsLink.style.display='inline';
       } else {
