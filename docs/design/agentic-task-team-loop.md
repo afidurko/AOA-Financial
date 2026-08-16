@@ -135,6 +135,7 @@ aoa attl run [--dry-run]
 aoa attl propose       # Reed: create tasks from repair/backlog (auto-queued)
 aoa attl report        # force Kai/Aaron report path
 aoa attl brain sync    # Nova: refresh mesh + vault mirror
+aoa integrity roster|run|watch|approve|reject  # Integrity Ten (see docs/design/integrity-ten.md)
 ```
 
 ---

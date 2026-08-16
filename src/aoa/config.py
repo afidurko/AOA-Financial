@@ -250,6 +250,7 @@ class Config:
     notify_push_opportunities: bool = True
     notify_push_halts: bool = True
     notify_min_conviction: float = 0.65
+    integrity_notify_queue: bool = True
 
     # Idle opportunity sweep — market analysis when no alerts or opportunity pushes
     opportunity_sweep_enabled: bool = True
@@ -464,6 +465,7 @@ class Config:
             notify_push_opportunities=_bool("AOA_NOTIFY_PUSH_OPPORTUNITIES", True),
             notify_push_halts=_bool("AOA_NOTIFY_PUSH_HALTS", True),
             notify_min_conviction=_float("AOA_NOTIFY_MIN_CONVICTION", 0.65),
+            integrity_notify_queue=_bool("AOA_INTEGRITY_NOTIFY_QUEUE", True),
             opportunity_sweep_enabled=_bool("AOA_OPPORTUNITY_SWEEP_ENABLED", True),
             opportunity_sweep_seconds=max(60, _int("AOA_OPPORTUNITY_SWEEP_SECONDS", 900)),
             opportunity_sweep_poll_seconds=max(15, _int("AOA_OPPORTUNITY_SWEEP_POLL_SECONDS", 60)),
