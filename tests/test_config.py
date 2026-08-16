@@ -236,6 +236,14 @@ def test_from_env_parses_visualhft_url(monkeypatch):
     assert cfg.visualhft_url == "https://github.com/afidurko/VisualHFT"
 
 
+def test_from_env_parses_antd_mobile_url(monkeypatch):
+    monkeypatch.setenv(
+        "AOA_ANTD_MOBILE_URL", " https://github.com/afidurko/ant-design-mobile "
+    )
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.antd_mobile_url == "https://github.com/afidurko/ant-design-mobile"
+
+
 def test_from_env_risk_limits(monkeypatch):
     monkeypatch.setenv("AOA_MAX_POSITION_PCT", "0.25")
     monkeypatch.setenv("AOA_MAX_ORDERS_PER_CYCLE", "3")

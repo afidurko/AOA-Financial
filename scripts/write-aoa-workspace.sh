@@ -41,6 +41,7 @@ add_folder "oxyplot" "oxyplot" "$ROOT/oxyplot"
 add_folder "hftbacktest" "hftbacktest" "$ROOT/hftbacktest"
 add_folder "avellaneda-stoikov" "avellaneda-stoikov" "$ROOT/avellaneda-stoikov"
 add_folder "open-quant-live-book" "open-quant-live-book" "$ROOT/open-quant-live-book"
+add_folder "ant-design-mobile" "ant-design-mobile" "$ROOT/ant-design-mobile"
 
 # External roots (absolute paths) — e.g. repos connected via connect-workspace.sh.
 for extra in "${EXTRA_ROOTS[@]}"; do

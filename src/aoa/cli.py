@@ -476,6 +476,8 @@ def cmd_doctor(cfg: Config, *, offline: bool = False) -> int:
         print(f"  ✓ QM harness link: {cfg.qm_url}")
     if cfg.visualhft_url:
         print(f"  ✓ VisualHFT link: {cfg.visualhft_url}")
+    if cfg.antd_mobile_url:
+        print(f"  ✓ antd-mobile link: {cfg.antd_mobile_url}")
     if cfg.broker == "moomoo":
         print(
             f"  ✓ Moomoo OpenD target: {cfg.moomoo_opend_host}:{cfg.moomoo_opend_port} "
