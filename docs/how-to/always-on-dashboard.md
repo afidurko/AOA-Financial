@@ -116,8 +116,20 @@ Install Tailscale on the server, then `./scripts/setup-tailscale-access.sh --pri
 dashboard viewing works; live Moomoo trading from a VPS requires OpenD reachable
 from that host (unusual).
 
+## Phone UI
+
+Open the Ant Design Mobile shell on your phone (same host/port):
+
+```text
+http://100.x.x.x:8080/m
+```
+
+Desktop dashboard header → **Mobile**. Guide:
+[antd-mobile-integration.md](antd-mobile-integration.md).
+
 ## Related
 
 - [fresh-clone.md](fresh-clone.md) — first-time install
 - [obsidian-second-brain-integration.md](obsidian-second-brain-integration.md) — vault + MCP
+- [antd-mobile-integration.md](antd-mobile-integration.md) — phone shell + UI kit fork
 - [README.md](../../README.md#docker-deployment) — Docker daemon mode

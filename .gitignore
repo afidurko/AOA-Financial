@@ -293,4 +293,7 @@ hftbacktest/
 avellaneda-stoikov/
 # open-quant-live-book sibling clone (quant finance book — not vendored)
 open-quant-live-book/
+
+# ant-design-mobile sibling clone (mobile UI kit — not vendored)
+ant-design-mobile/
 loop-state/

@@ -56,6 +56,15 @@ def test_dashboard_html(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "AOA Financial" in r.text
+    assert 'href="/m"' in r.text
+
+
+def test_mobile_dashboard_html(client):
+    r = client.get("/m")
+    assert r.status_code == 200
+    assert "AOA Mobile" in r.text
+    assert "antd-mobile" in r.text
+    assert "/api/status" in r.text
 
 
 def test_api_status(client):
@@ -86,6 +95,8 @@ def test_api_config_team_mode(client):
     assert "spine_enabled" in data
     assert "qm_url" in data
     assert "visualhft_url" in data
+    assert "antd_mobile_url" in data
+    assert data["mobile_path"] == "/m"
 
 
 def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):

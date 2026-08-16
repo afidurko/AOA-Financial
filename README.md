@@ -704,7 +704,8 @@ pip install -e ".[web]"
 aoa serve
 ```
 
-Open **http://localhost:8080/** for the dashboard. REST endpoints:
+Open **http://localhost:8080/** for the dashboard. Phone shell:
+**http://localhost:8080/m** (Ant Design Mobile). REST endpoints:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -731,6 +732,8 @@ Optional header shortcuts (same pattern as OpenStock):
 | `AOA_OPENSTOCK_URL` | OpenStock ↗ |
 | `AOA_QM_URL` | QM ↗ |
 | `AOA_VISUALHFT_URL` | VisualHFT ↗ |
+| `AOA_ANTD_MOBILE_URL` | UI kit ↗ |
+| *(always)* | Mobile → `/m` |
 
 ```bash
 ./scripts/qm-setup.sh
@@ -957,6 +960,7 @@ Companion tools that sit beside this repo (not vendored here):
 |---------|----------------|
 | **[qm](https://github.com/afidurko/qm)** | Multiplayer agent harness — `AOA_QM_URL` + [qm-integration.md](docs/how-to/qm-integration.md) |
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Market UI / watchlists — see [docs/how-to/openstock-integration.md](docs/how-to/openstock-integration.md) |
+| **[ant-design-mobile](https://github.com/afidurko/ant-design-mobile)** | Mobile React UI kit — phone shell at `/m` ([antd-mobile-integration.md](docs/how-to/antd-mobile-integration.md)) |
 | **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live L2 microstructure desktop app — Python study ports via `aoa visualhft` ([docs](docs/how-to/visualhft-integration.md)); mesh via `aoa workspaces status` |
 | **[hft](https://github.com/afidurko/hft)** | C++ HFT strategy reference — [hft-reference.md](docs/how-to/hft-reference.md) + `aoa.research.hft_patterns` |
 | **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full-LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |

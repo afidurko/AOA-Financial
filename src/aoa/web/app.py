@@ -24,6 +24,7 @@ from aoa.team.orchestrator import TeamCycleResult
 from aoa.version import package_version
 from aoa.web.dashboard_html import DASHBOARD_HTML
 from aoa.web.loop_runner import CycleBusyError, LoopRunner
+from aoa.web.mobile_dashboard_html import MOBILE_DASHBOARD_HTML
 
 
 class ResolveBody(BaseModel):
@@ -97,6 +98,8 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             "spine_enabled": cfg.spine_enabled,
             "qm_url": cfg.qm_url,
             "visualhft_url": cfg.visualhft_url,
+            "antd_mobile_url": cfg.antd_mobile_url,
+            "mobile_path": "/m",
         }
 
     @app.get("/api/status")
@@ -375,6 +378,10 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
         return DASHBOARD_HTML
+
+    @app.get("/m", response_class=HTMLResponse)
+    def mobile_dashboard() -> str:
+        return MOBILE_DASHBOARD_HTML
 
     return app
 

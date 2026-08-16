@@ -26,11 +26,13 @@ aoa serve
 |----------|------|
 | **[OpenStock](https://github.com/Open-Dev-Society/OpenStock)** | Sibling market dashboard (charts, watchlists). Link from the AOA header via `AOA_OPENSTOCK_URL`. |
 | **[VisualHFT](https://github.com/afidurko/VisualHFT)** | Live Level-2 microstructure desktop app (Windows/.NET). AOA ports LOB imbalance, VPIN, and OTR offline via `aoa visualhft`. |
+| **[ant-design-mobile](https://github.com/afidurko/ant-design-mobile)** | Mobile React UI kit. AOA serves a phone shell at `/m`; optional `AOA_ANTD_MOBILE_URL` header link. |
 
 Setup: [how-to/openstock-integration.md](how-to/openstock-integration.md) ·
-[how-to/visualhft-integration.md](how-to/visualhft-integration.md).
+[how-to/visualhft-integration.md](how-to/visualhft-integration.md) ·
+[how-to/antd-mobile-integration.md](how-to/antd-mobile-integration.md).
 
-Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest):
+Mesh all companions (OpenStock, QM, VisualHFT, hftbacktest, ant-design-mobile):
 
 ```bash
 aoa workspaces status
