@@ -92,6 +92,16 @@ def test_probe_opend_raises_when_unreachable():
         probe_opend("127.0.0.1", 1, timeout=0.5)
 
 
+def test_moomoo_broker_constructs_without_opend():
+    """Lazy connect: construction must not TCP-probe OpenD."""
+    broker = MoomooBroker(host="127.0.0.1", port=1, connect_timeout=0.2)
+    assert broker.name == "moomoo-paper"
+    assert broker._quote_ctx is None
+    with pytest.raises(BrokerError, match="unreachable"):
+        broker.get_account()
+    broker.close()
+
+
 def test_snapshot_price_scalar_and_list():
     assert _snapshot_price({"bid_price": 10.5}, "bid_price") == 10.5
     assert _snapshot_price({"bid_price": [11.0, 10.9]}, "bid_price") == 11.0
