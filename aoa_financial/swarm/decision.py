@@ -40,6 +40,11 @@ class SwarmDecision:
     rationale: str
     signals: List[AgentSignal] = field(default_factory=list)
     evidence: Dict[str, Any] = field(default_factory=dict)
+    # ROI/cost-basis automation fields (deterministic, forecast-derived).
+    net_expected_return: float = 0.0
+    roi_edge: float = 0.0
+    roi_quality: float = 1.0
+    exposure_multiplier: float = 1.0
 
     def to_dict(self) -> dict:
         return {
@@ -49,12 +54,32 @@ class SwarmDecision:
             "target_weight": round(self.target_weight, 4),
             "rationale": self.rationale,
             "signals": [s.to_dict() for s in self.signals],
+            "net_expected_return": round(self.net_expected_return, 6),
+            "roi_edge": round(self.roi_edge, 6),
+            "roi_quality": round(self.roi_quality, 6),
+            "exposure_multiplier": round(self.exposure_multiplier, 6),
         }
+
+
+def _roi_edge_quality(roi_edge: float) -> float:
+    """Map roi_edge ∈ (-∞, +∞) to roi_quality ∈ [0,1] smoothly.
+
+    Uses roi_edge / (roi_edge + 1) so 0 -> 0 and +∞ -> 1.
+    Negative edges return 0 quality.
+    """
+    if roi_edge <= 0:
+        return 0.0
+    return float(roi_edge / (roi_edge + 1.0))
 
 
 def decide(ticker: str, signals: List[AgentSignal],
            config: Optional[Config] = None,
-           asof: Optional[str] = None) -> SwarmDecision:
+           asof: Optional[str] = None,
+           *,
+           roi_edge_long: float | None = None,
+           roi_edge_short: float | None = None,
+           forecast_confidence: float | None = None,
+           net_expected_return: float = 0.0) -> SwarmDecision:
     config = config or Config()
     weights = config.swarm_weights
     asof = asof or datetime.now(timezone.utc).date().isoformat()
@@ -82,15 +107,43 @@ def decide(ticker: str, signals: List[AgentSignal],
     else:
         action = "HOLD"
 
+    # ROI quality scaling influences “how much” we size, not “what direction”
+    # we take. This keeps action logic stable while still making sizing
+    # ROI/cost-aware.
+    selected_roi_edge = 0.0
+    if action == "BUY" and roi_edge_long is not None:
+        selected_roi_edge = float(roi_edge_long)
+    elif action == "SELL" and roi_edge_short is not None:
+        selected_roi_edge = float(roi_edge_short)
+
+    roi_quality = _roi_edge_quality(selected_roi_edge)
+    if forecast_confidence is not None:
+        roi_quality = float(max(0.0, min(1.0, roi_quality * float(forecast_confidence))))
+
+    exposure_multiplier = roi_quality
+
     # Position sizing: scale by |conviction| × confidence, shrink on
     # disagreement. Cap any single position at 15%.
     target_weight = 0.0
     if action == "BUY":
-        target_weight = min(0.15, max(0.0, abs(conviction) * confidence * 0.25))
+        base = abs(conviction) * confidence * 0.25
+        target_weight = min(0.15, max(0.0, base * roi_quality))
 
     rationale = _rationale(action, conviction, confidence, dispersion, signals)
-    return SwarmDecision(ticker, asof, action, conviction, confidence,
-                         target_weight, rationale, signals)
+    return SwarmDecision(
+        ticker=ticker,
+        asof=asof,
+        action=action,
+        conviction=conviction,
+        confidence=confidence,
+        target_weight=target_weight,
+        rationale=rationale,
+        signals=signals,
+        net_expected_return=net_expected_return,
+        roi_edge=selected_roi_edge,
+        roi_quality=roi_quality,
+        exposure_multiplier=exposure_multiplier,
+    )
 
 
 def _rationale(action, conviction, confidence, dispersion, signals) -> str:
@@ -137,6 +190,29 @@ def evaluate(ticker: str, bars, *,
     sentiment = SENT.blended(stored_sentiment, S.log_returns(closes)[-21:])
     rev = reverse_engineer(ticker, bars, stored_sentiment=stored_sentiment)
 
+    # --- ROI edge from forecast cone (+ optional cost basis) -----------
+    # Costs are treated as a constant return decrement applied to the
+    # forecast distribution. This keeps things deterministic and cheap
+    # while still making exposure cost-aware.
+    cost_pct = float(config.transaction_cost_pct) + float(config.slippage_pct)
+    expected_return = float(fc.get("expected_return") or 0.0)
+    p10 = float(fc.get("p10") or 0.0)
+    p90 = float(fc.get("p90") or 0.0)
+
+    net_expected_return = expected_return - cost_pct
+    net_p10 = p10 - cost_pct
+    net_p90 = p90 - cost_pct
+
+    eps = 1e-9
+    # Long: P&L return is +return, worst-case tail approximated from p10.
+    tail_loss_long = max(0.0, -net_p10)
+    roi_edge_long = net_expected_return / max(tail_loss_long, eps)
+
+    # Short: P&L return is -return. Worst-case P&L tail corresponds to
+    # return's right tail (p90), hence tail_loss_short uses net_p90.
+    tail_loss_short = max(0.0, net_p90)
+    roi_edge_short = (-net_expected_return) / max(tail_loss_short, eps)
+
     analyst_dict = None
     if use_llm:
         evidence = build_evidence(
@@ -147,12 +223,27 @@ def evaluate(ticker: str, bars, *,
 
     signals = run_agents(technical=tech, fundamental=fund, forecast=fc,
                          regime=regime, sentiment=sentiment, analyst=analyst_dict)
-    decision = decide(ticker, signals, config=config, asof=bars[-1].date)
+    decision = decide(
+        ticker,
+        signals,
+        config=config,
+        asof=bars[-1].date,
+        roi_edge_long=roi_edge_long,
+        roi_edge_short=roi_edge_short,
+        forecast_confidence=float(fc.get("confidence") or 0.0),
+        net_expected_return=net_expected_return,
+    )
     decision.evidence = {
         "technical": tech, "fundamental": fund, "forecast": fc,
         "regime": regime, "reverse_engineering": rev.to_dict(),
         "sentiment": round(sentiment, 4), "analyst": analyst_dict,
         "_regime_state": rstate,
+        "roi": {
+            "cost_pct": round(cost_pct, 8),
+            "net_expected_return": round(net_expected_return, 6),
+            "roi_edge_long": round(roi_edge_long, 6),
+            "roi_edge_short": round(roi_edge_short, 6),
+        },
     }
     return decision
 

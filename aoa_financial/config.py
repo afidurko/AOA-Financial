@@ -39,6 +39,9 @@ _DEFAULT_FORECAST_WEIGHTS: Dict[str, float] = {
     "ewma": 0.20,
 }
 
+_DEFAULT_COST_BASIS_PCT: float = float(_env("TX_COST_BASIS_PCT", "0.0"))
+_DEFAULT_SLIPPAGE_PCT: float = float(_env("SLIPPAGE_PCT", "0.0"))
+
 
 def _parse_weight_map(env_name: str, defaults: Dict[str, float]) -> Dict[str, float]:
     """Parse ``AOA_<env_name>`` as ``key:val,key:val`` (comma-separated)."""
@@ -113,6 +116,17 @@ class Config:
     )
     forecast_weights: Dict[str, float] = field(
         default_factory=lambda: _parse_weight_map("FORECAST_WEIGHTS", _DEFAULT_FORECAST_WEIGHTS)
+    )
+
+    # --- cost basis (transaction + slippage) ----------------------------
+    # Expressed as a fraction of notional per “trade decision” event.
+    # Kept default to 0.0 so behaviour matches prior versions unless
+    # explicitly enabled by the caller.
+    transaction_cost_pct: float = field(
+        default_factory=lambda: float(_env("TX_COST_BASIS_PCT", str(_DEFAULT_COST_BASIS_PCT)))
+    )
+    slippage_pct: float = field(
+        default_factory=lambda: float(_env("SLIPPAGE_PCT", str(_DEFAULT_SLIPPAGE_PCT)))
     )
 
     # A small but representative default universe spanning sectors. Any other
