@@ -251,3 +251,17 @@ aoa openquant smoke
 
 See [open-quant-live-book-reference.md](open-quant-live-book-reference.md). Python idea ports:
 `aoa.research.open_quant_patterns`.
+
+## 18. deepstock (optional)
+
+Clone the legacy deep-learning experiment sibling for archival Text CNN / ConvNet
+context ([deepstock](https://github.com/afidurko/deepstock)). AOA does not run
+TF1 training from loops:
+
+```bash
+./scripts/deepstock-setup.sh
+./scripts/write-aoa-workspace.sh
+```
+
+See [deepstock-reference.md](deepstock-reference.md). Current AOA sentiment:
+`aoa_financial/analysis/sentiment.py`.

@@ -64,3 +64,12 @@ documents risk parity, Shannon/mutual information, and transfer entropy
 Study bridge: `bridge-oqlb-risk-entropy`. Setup:
 `./scripts/open-quant-live-book-setup.sh` ·
 [docs/how-to/open-quant-live-book-reference.md](../../docs/how-to/open-quant-live-book-reference.md).
+
+## deepstock companion (reference only)
+
+Sibling [afidurko/deepstock](https://github.com/afidurko/deepstock) holds the
+original TensorFlow 1.x experiments: news headline Text CNN and price-window
+ConvNet prototypes. AOA sentiment today is lexicon-based in
+`aoa_financial/analysis/sentiment.py`. Setup:
+`./scripts/deepstock-setup.sh` ·
+[docs/how-to/deepstock-reference.md](../../docs/how-to/deepstock-reference.md).
