@@ -568,6 +568,97 @@ class AnalyticsStore:
             )
             return True
 
+    def upsert_quant_hire_round(self, round_: Any) -> str:
+        """Insert or replace a pending quant-hire interview round."""
+        now = datetime.now(timezone.utc).isoformat()
+        rid = getattr(round_, "round_id", None) or str(uuid.uuid4())
+        payload = round_.to_context() if hasattr(round_, "to_context") else dict(round_)
+        payload["round_id"] = rid
+        with self.transaction() as c:
+            c.execute(
+                """INSERT INTO quant_hire_rounds(
+                       id, team_name, summary, status, payload, created_at, updated_at
+                   ) VALUES(?,?,?,?,?,?,?)
+                   ON CONFLICT(id) DO UPDATE SET
+                       team_name=excluded.team_name,
+                       summary=excluded.summary,
+                       status=excluded.status,
+                       payload=excluded.payload,
+                       updated_at=excluded.updated_at
+                """,
+                (
+                    rid,
+                    payload.get("team_name", ""),
+                    payload.get("summary", ""),
+                    payload.get("status", "pending"),
+                    json.dumps(payload),
+                    payload.get("created_at") or now,
+                    now,
+                ),
+            )
+        return rid
+
+    def supersede_quant_hire_rounds(self) -> int:
+        """Mark prior pending hire rounds superseded when opening a new round."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self.transaction() as c:
+            cur = c.execute(
+                """UPDATE quant_hire_rounds SET status='superseded', updated_at=?, resolved_at=?
+                   WHERE status='pending'""",
+                (now, now),
+            )
+            c.execute(
+                """UPDATE approval_inbox SET status='rejected', resolved_at=?
+                   WHERE kind='quant_hire' AND status='pending'""",
+                (now,),
+            )
+            return cur.rowcount
+
+    def get_latest_quant_hire_round(self) -> dict[str, Any] | None:
+        with self.transaction() as c:
+            row = c.execute(
+                """SELECT * FROM quant_hire_rounds
+                   ORDER BY created_at DESC LIMIT 1"""
+            ).fetchone()
+        return _row_to_dict(row) if row else None
+
+    def list_quant_hire_rounds(
+        self, *, status: str | None = None, limit: int = 20
+    ) -> list[dict]:
+        with self.transaction() as c:
+            if status:
+                rows = c.execute(
+                    """SELECT * FROM quant_hire_rounds WHERE status=?
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (status, limit),
+                ).fetchall()
+            else:
+                rows = c.execute(
+                    """SELECT * FROM quant_hire_rounds
+                       ORDER BY created_at DESC LIMIT ?""",
+                    (limit,),
+                ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+
+    def resolve_quant_hire_round(self, round_id: str, status: str) -> bool:
+        if status not in {"approved", "rejected"}:
+            return False
+        now = datetime.now(timezone.utc).isoformat()
+        with self.transaction() as c:
+            cur = c.execute(
+                """UPDATE quant_hire_rounds SET status=?, resolved_at=?, updated_at=?
+                   WHERE id=? AND status='pending'""",
+                (status, now, now, round_id),
+            )
+            if cur.rowcount == 0:
+                return False
+            c.execute(
+                """UPDATE approval_inbox SET status=?, resolved_at=?
+                   WHERE id=? AND status='pending'""",
+                (status, now, f"hire-{round_id}"),
+            )
+            return True
+
 
 def _team_expansion_payload(proposal: Any) -> dict[str, Any]:
     members = [
