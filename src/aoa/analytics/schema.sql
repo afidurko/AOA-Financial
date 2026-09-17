@@ -103,3 +103,17 @@ CREATE TABLE IF NOT EXISTS team_expansion_proposals (
 
 CREATE INDEX IF NOT EXISTS idx_team_expansion_lead ON team_expansion_proposals(lead_name);
 CREATE INDEX IF NOT EXISTS idx_team_expansion_status ON team_expansion_proposals(status);
+
+CREATE TABLE IF NOT EXISTS quant_hire_rounds (
+    id              TEXT PRIMARY KEY,
+    team_name       TEXT NOT NULL,
+    summary         TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    payload         TEXT NOT NULL,
+    created_at      TEXT NOT NULL,
+    updated_at      TEXT NOT NULL,
+    resolved_at     TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_quant_hire_status ON quant_hire_rounds(status);
+CREATE INDEX IF NOT EXISTS idx_quant_hire_created ON quant_hire_rounds(created_at);

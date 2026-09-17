@@ -120,6 +120,7 @@ Hard safety floor (not process bureaucracy):
 | `SGX-Full-OrderBook-…` | Depth-rise / weighted book features → `aoa.research.sgx_orderbook_patterns` |
 | `example-hftish` | Alpaca OB imbalance / level-change follow ideas → `aoa.research.hftish_patterns` |
 | `open-quant-live-book` | Risk parity / entropy / TE ideas → `aoa.research.open_quant_patterns` |
+| `deepstock` | Legacy TF1 news CNN + price ConvNet experiments → archival reference for `aoa_financial` sentiment/forecast |
 | `avellaneda-stoikov` | Reservation-price MM math → `aoa.avellaneda_stoikov` / `aoa avellaneda` |
 | AOA `vault/` | Property sync + analyzers; brain mirrors into vault |
 
