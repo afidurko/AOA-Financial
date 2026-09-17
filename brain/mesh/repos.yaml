@@ -60,6 +60,11 @@ repos:
     role: Open quant finance book (risk parity, entropy, TE); Python ideas in aoa.research.open_quant_patterns
     workspace: ./open-quant-live-book
     setup: ./scripts/open-quant-live-book-setup.sh
+  - name: ant-design-mobile
+    url: https://github.com/afidurko/ant-design-mobile
+    role: Mobile React UI kit; AOA serves phone shell at /m
+    workspace: ./ant-design-mobile
+    setup: ./scripts/antd-mobile-setup.sh
 
 # Vendored / local workspaces (not separate git clones)
 local:

@@ -20,6 +20,7 @@ run "QM" "./scripts/qm-setup.sh"
 run "VisualHFT (+ oxyplot)" "./scripts/visualhft-setup.sh"
 run "example-hftish" "./scripts/example-hftish-setup.sh"
 run "open-quant-live-book" "./scripts/open-quant-live-book-setup.sh"
+run "ant-design-mobile" "./scripts/antd-mobile-setup.sh"
 
 echo ""
 echo "==> Refresh multi-root workspace file"
@@ -32,3 +33,4 @@ python3 -m aoa.cli workspaces status || true
 echo ""
 echo "Done. Open AOA.code-workspace in Cursor. Desktop VisualHFT still needs Windows/.NET 10."
 echo "Positions/Orders empty tab: see docs/how-to/visualhft-positions-orders.md"
+echo "Phone UI: aoa serve → http://localhost:8080/m (docs/how-to/antd-mobile-integration.md)"
