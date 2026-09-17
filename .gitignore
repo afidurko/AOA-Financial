@@ -293,4 +293,6 @@ hftbacktest/
 avellaneda-stoikov/
 # open-quant-live-book sibling clone (quant finance book — not vendored)
 open-quant-live-book/
+# deepstock sibling clone (legacy TF1 DL experiments — not vendored)
+deepstock/
 loop-state/
