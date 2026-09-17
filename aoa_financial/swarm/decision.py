@@ -72,7 +72,6 @@ def _roi_edge_quality(roi_edge: float) -> float:
     return float(roi_edge / (roi_edge + 1.0))
 
 
-<<<<<<< HEAD
 def forecast_roi_edges(
     forecast: Dict[str, Any],
     *,
@@ -121,8 +120,6 @@ def forecast_roi_edges(
     }
 
 
-=======
->>>>>>> origin/main
 def decide(ticker: str, signals: List[AgentSignal],
            config: Optional[Config] = None,
            asof: Optional[str] = None,
@@ -158,7 +155,6 @@ def decide(ticker: str, signals: List[AgentSignal],
     else:
         action = "HOLD"
 
-<<<<<<< HEAD
     # ROI quality scales *size* only. When no ROI edges are supplied (legacy
     # callers of decide()), keep quality at 1.0 so sizing matches the old
     # conviction × confidence rule.
@@ -179,20 +175,6 @@ def decide(ticker: str, signals: List[AgentSignal],
             )
     else:
         roi_quality = 1.0
-=======
-    # ROI quality scaling influences “how much” we size, not “what direction”
-    # we take. This keeps action logic stable while still making sizing
-    # ROI/cost-aware.
-    selected_roi_edge = 0.0
-    if action == "BUY" and roi_edge_long is not None:
-        selected_roi_edge = float(roi_edge_long)
-    elif action == "SELL" and roi_edge_short is not None:
-        selected_roi_edge = float(roi_edge_short)
-
-    roi_quality = _roi_edge_quality(selected_roi_edge)
-    if forecast_confidence is not None:
-        roi_quality = float(max(0.0, min(1.0, roi_quality * float(forecast_confidence))))
->>>>>>> origin/main
 
     exposure_multiplier = roi_quality
 
@@ -264,33 +246,8 @@ def evaluate(ticker: str, bars, *,
     sentiment = SENT.blended(stored_sentiment, S.log_returns(closes)[-21:])
     rev = reverse_engineer(ticker, bars, stored_sentiment=stored_sentiment)
 
-<<<<<<< HEAD
     cost_pct = float(config.transaction_cost_pct) + float(config.slippage_pct)
     roi = forecast_roi_edges(fc, cost_pct=cost_pct)
-=======
-    # --- ROI edge from forecast cone (+ optional cost basis) -----------
-    # Costs are treated as a constant return decrement applied to the
-    # forecast distribution. This keeps things deterministic and cheap
-    # while still making exposure cost-aware.
-    cost_pct = float(config.transaction_cost_pct) + float(config.slippage_pct)
-    expected_return = float(fc.get("expected_return") or 0.0)
-    p10 = float(fc.get("p10") or 0.0)
-    p90 = float(fc.get("p90") or 0.0)
-
-    net_expected_return = expected_return - cost_pct
-    net_p10 = p10 - cost_pct
-    net_p90 = p90 - cost_pct
-
-    eps = 1e-9
-    # Long: P&L return is +return, worst-case tail approximated from p10.
-    tail_loss_long = max(0.0, -net_p10)
-    roi_edge_long = net_expected_return / max(tail_loss_long, eps)
-
-    # Short: P&L return is -return. Worst-case P&L tail corresponds to
-    # return's right tail (p90), hence tail_loss_short uses net_p90.
-    tail_loss_short = max(0.0, net_p90)
-    roi_edge_short = (-net_expected_return) / max(tail_loss_short, eps)
->>>>>>> origin/main
 
     analyst_dict = None
     if use_llm:
@@ -307,17 +264,10 @@ def evaluate(ticker: str, bars, *,
         signals,
         config=config,
         asof=bars[-1].date,
-<<<<<<< HEAD
         roi_edge_long=roi["roi_edge_long"],
         roi_edge_short=roi["roi_edge_short"],
         forecast_confidence=float(fc.get("confidence") or 0.0),
         net_expected_return=roi["net_expected_return"],
-=======
-        roi_edge_long=roi_edge_long,
-        roi_edge_short=roi_edge_short,
-        forecast_confidence=float(fc.get("confidence") or 0.0),
-        net_expected_return=net_expected_return,
->>>>>>> origin/main
     )
     decision.evidence = {
         "technical": tech, "fundamental": fund, "forecast": fc,
@@ -325,19 +275,12 @@ def evaluate(ticker: str, bars, *,
         "sentiment": round(sentiment, 4), "analyst": analyst_dict,
         "_regime_state": rstate,
         "roi": {
-<<<<<<< HEAD
             "cost_pct": round(roi["cost_pct"], 8),
             "p10_return": round(roi["p10_return"], 6),
             "p90_return": round(roi["p90_return"], 6),
             "net_expected_return": round(roi["net_expected_return"], 6),
             "roi_edge_long": round(roi["roi_edge_long"], 6),
             "roi_edge_short": round(roi["roi_edge_short"], 6),
-=======
-            "cost_pct": round(cost_pct, 8),
-            "net_expected_return": round(net_expected_return, 6),
-            "roi_edge_long": round(roi_edge_long, 6),
-            "roi_edge_short": round(roi_edge_short, 6),
->>>>>>> origin/main
         },
     }
     return decision
