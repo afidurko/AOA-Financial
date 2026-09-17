@@ -113,9 +113,17 @@ def test_rejects_bad_inputs() -> None:
     with pytest.raises(ValueError):
         inverse_vol_weights((0.1, 0.0))
     with pytest.raises(ValueError):
+        inverse_vol_weights((float("nan"), 1.0))
+    with pytest.raises(ValueError):
+        inverse_vol_weights((float("inf"), 1.0))
+    with pytest.raises(ValueError):
+        inverse_vol_weights((1e-320, 1.0))
+    with pytest.raises(ValueError):
         equal_risk_contribution([])
     with pytest.raises(ValueError):
         equal_risk_contribution([[0.1, 0.0], [0.0]])
+    with pytest.raises(ValueError):
+        equal_risk_contribution([[0.04, float("nan")], [0.0, 0.01]])
     with pytest.raises(ValueError):
         equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], budget=(1.0,))
     with pytest.raises(ValueError):
@@ -124,6 +132,16 @@ def test_rejects_bad_inputs() -> None:
         linear_granger_causality([1.0, 2.0], [1.0], lags=1)
     with pytest.raises(ValueError):
         coupled_ar_series(1)
+
+
+def test_billion_stress_small_ok() -> None:
+    from aoa.research.open_quant_patterns import billion_stress
+
+    result = billion_stress(iterations=250_000, seed=3)
+    assert result["ok"] is True
+    assert result["inverse_vol_checks"] == 250_000
+    assert result["erc_checks"] >= 3
+    assert result["never_live"] is True
 
 
 def test_erc_weights_sum_and_positive_vol() -> None:

@@ -24,7 +24,7 @@ Commands:
   aoa vault      Sync schema-driven vault property notes.
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
   aoa hftish     Order-book imbalance research lane (example-hftish patterns).
-  aoa openquant  Open quant live book research lane (risk parity / entropy / TE).
+  aoa openquant  Open quant research lane (risk parity / entropy / TE / billion stress).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
@@ -1814,6 +1814,32 @@ def cmd_openquant_smoke(*, seed: int, as_json: bool) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_openquant_billion(
+    *,
+    iterations: int,
+    seed: int,
+    as_json: bool,
+) -> int:
+    """One-billion-scale property stress for open_quant_patterns (offline)."""
+    from aoa.research.open_quant_patterns import billion_stress
+
+    result = billion_stress(iterations=iterations, seed=seed)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== open-quant one-billion stress ===")
+        print(f"  ok:              {result.get('ok')}")
+        print(f"  iterations:      {result.get('iterations')}")
+        print(f"  inverse_vol:     {result.get('inverse_vol_checks')}")
+        print(f"  erc_checks:      {result.get('erc_checks')}")
+        print(f"  mi_checks:       {result.get('mi_checks')}")
+        if not result.get("ok"):
+            print(f"  failed_at:       {result.get('failed_at')}")
+            print(f"  reason:          {result.get('reason')}")
+        print(f"  never_live:      {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
+
+
 def _attl_orchestrator(cfg: Config):
     from aoa.attl.orchestrator import AttlOrchestrator
     from aoa.config import data_dir_for
@@ -2681,6 +2707,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     oq_smoke.add_argument("--seed", type=int, default=7, help="Synthetic series seed.")
     oq_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_billion = oq_sub.add_parser(
+        "billion",
+        help="One-billion inverse-vol / ERC / MI property stress (offline).",
+    )
+    oq_billion.add_argument(
+        "--iterations",
+        type=int,
+        default=1_000_000_000,
+        help="Number of inverse-vol checks (default: 1000000000).",
+    )
+    oq_billion.add_argument("--seed", type=int, default=7, help="LCG seed.")
+    oq_billion.add_argument("--json", action="store_true", help="Emit JSON.")
 
     tk = sub.add_parser(
         "tasks",
@@ -2812,6 +2850,12 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_openquant_status(as_json=getattr(args, "json", False))
         if args.openquant_command == "smoke":
             return cmd_openquant_smoke(
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        if args.openquant_command == "billion":
+            return cmd_openquant_billion(
+                iterations=getattr(args, "iterations", 1_000_000_000),
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )

@@ -55,7 +55,14 @@ mi = mutual_information_stats([0.1, -0.2, 0.05, 0.0], [0.08, -0.1, 0.02, 0.01])
 flow = net_information_flow(list(range(50)), [0.5 * i for i in range(50)], lags=1)
 ```
 
-CLI: `aoa openquant status|smoke`. Smoke: `python3 examples/open_quant_smoke.py`.
+CLI: `aoa openquant status|smoke|billion`. Smoke: `python3 examples/open_quant_smoke.py`.
+
+One-billion property stress (inverse-vol invariants + periodic ERC/MI):
+
+```bash
+aoa openquant billion                 # default 1_000_000_000 iterations
+aoa openquant billion --iterations 1000000  # shorter local check
+```
 
 ## Map to Julie / study cortex
 
