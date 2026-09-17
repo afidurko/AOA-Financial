@@ -72,6 +72,54 @@ def _roi_edge_quality(roi_edge: float) -> float:
     return float(roi_edge / (roi_edge + 1.0))
 
 
+def forecast_roi_edges(
+    forecast: Dict[str, Any],
+    *,
+    cost_pct: float = 0.0,
+) -> Dict[str, float]:
+    """Derive long/short ROI edges from a forecast cone dict.
+
+    Forecast ``p10`` / ``p90`` are *prices* (see ``analysis.forecast``).
+    Convert them to returns vs ``last_price``, subtract friction costs, then
+    form edge = net_expected_return / worst-tail-loss.
+    """
+    last = float(forecast.get("last_price") or 0.0)
+    expected_return = float(forecast.get("expected_return") or 0.0)
+    p10_price = float(forecast.get("p10") or 0.0)
+    p90_price = float(forecast.get("p90") or 0.0)
+    cost = float(cost_pct)
+
+    if last > 0 and p10_price > 0:
+        p10_ret = p10_price / last - 1.0
+    else:
+        p10_ret = 0.0
+    if last > 0 and p90_price > 0:
+        p90_ret = p90_price / last - 1.0
+    else:
+        p90_ret = 0.0
+
+    net_expected_return = expected_return - cost
+    net_p10 = p10_ret - cost
+    net_p90 = p90_ret - cost
+
+    eps = 1e-9
+    # Long P&L ≈ +return; left-tail loss ≈ max(0, -p10_return).
+    tail_loss_long = max(0.0, -net_p10)
+    roi_edge_long = net_expected_return / max(tail_loss_long, eps)
+    # Short P&L ≈ -return; worst loss when return is high (p90).
+    tail_loss_short = max(0.0, net_p90)
+    roi_edge_short = (-net_expected_return) / max(tail_loss_short, eps)
+
+    return {
+        "cost_pct": cost,
+        "p10_return": p10_ret,
+        "p90_return": p90_ret,
+        "net_expected_return": net_expected_return,
+        "roi_edge_long": roi_edge_long,
+        "roi_edge_short": roi_edge_short,
+    }
+
+
 def decide(ticker: str, signals: List[AgentSignal],
            config: Optional[Config] = None,
            asof: Optional[str] = None,
@@ -107,18 +155,26 @@ def decide(ticker: str, signals: List[AgentSignal],
     else:
         action = "HOLD"
 
-    # ROI quality scaling influences “how much” we size, not “what direction”
-    # we take. This keeps action logic stable while still making sizing
-    # ROI/cost-aware.
+    # ROI quality scales *size* only. When no ROI edges are supplied (legacy
+    # callers of decide()), keep quality at 1.0 so sizing matches the old
+    # conviction × confidence rule.
     selected_roi_edge = 0.0
+    roi_provided = False
     if action == "BUY" and roi_edge_long is not None:
         selected_roi_edge = float(roi_edge_long)
+        roi_provided = True
     elif action == "SELL" and roi_edge_short is not None:
         selected_roi_edge = float(roi_edge_short)
+        roi_provided = True
 
-    roi_quality = _roi_edge_quality(selected_roi_edge)
-    if forecast_confidence is not None:
-        roi_quality = float(max(0.0, min(1.0, roi_quality * float(forecast_confidence))))
+    if roi_provided:
+        roi_quality = _roi_edge_quality(selected_roi_edge)
+        if forecast_confidence is not None:
+            roi_quality = float(
+                max(0.0, min(1.0, roi_quality * float(forecast_confidence)))
+            )
+    else:
+        roi_quality = 1.0
 
     exposure_multiplier = roi_quality
 
@@ -190,28 +246,8 @@ def evaluate(ticker: str, bars, *,
     sentiment = SENT.blended(stored_sentiment, S.log_returns(closes)[-21:])
     rev = reverse_engineer(ticker, bars, stored_sentiment=stored_sentiment)
 
-    # --- ROI edge from forecast cone (+ optional cost basis) -----------
-    # Costs are treated as a constant return decrement applied to the
-    # forecast distribution. This keeps things deterministic and cheap
-    # while still making exposure cost-aware.
     cost_pct = float(config.transaction_cost_pct) + float(config.slippage_pct)
-    expected_return = float(fc.get("expected_return") or 0.0)
-    p10 = float(fc.get("p10") or 0.0)
-    p90 = float(fc.get("p90") or 0.0)
-
-    net_expected_return = expected_return - cost_pct
-    net_p10 = p10 - cost_pct
-    net_p90 = p90 - cost_pct
-
-    eps = 1e-9
-    # Long: P&L return is +return, worst-case tail approximated from p10.
-    tail_loss_long = max(0.0, -net_p10)
-    roi_edge_long = net_expected_return / max(tail_loss_long, eps)
-
-    # Short: P&L return is -return. Worst-case P&L tail corresponds to
-    # return's right tail (p90), hence tail_loss_short uses net_p90.
-    tail_loss_short = max(0.0, net_p90)
-    roi_edge_short = (-net_expected_return) / max(tail_loss_short, eps)
+    roi = forecast_roi_edges(fc, cost_pct=cost_pct)
 
     analyst_dict = None
     if use_llm:
@@ -228,10 +264,10 @@ def evaluate(ticker: str, bars, *,
         signals,
         config=config,
         asof=bars[-1].date,
-        roi_edge_long=roi_edge_long,
-        roi_edge_short=roi_edge_short,
+        roi_edge_long=roi["roi_edge_long"],
+        roi_edge_short=roi["roi_edge_short"],
         forecast_confidence=float(fc.get("confidence") or 0.0),
-        net_expected_return=net_expected_return,
+        net_expected_return=roi["net_expected_return"],
     )
     decision.evidence = {
         "technical": tech, "fundamental": fund, "forecast": fc,
@@ -239,10 +275,12 @@ def evaluate(ticker: str, bars, *,
         "sentiment": round(sentiment, 4), "analyst": analyst_dict,
         "_regime_state": rstate,
         "roi": {
-            "cost_pct": round(cost_pct, 8),
-            "net_expected_return": round(net_expected_return, 6),
-            "roi_edge_long": round(roi_edge_long, 6),
-            "roi_edge_short": round(roi_edge_short, 6),
+            "cost_pct": round(roi["cost_pct"], 8),
+            "p10_return": round(roi["p10_return"], 6),
+            "p90_return": round(roi["p90_return"], 6),
+            "net_expected_return": round(roi["net_expected_return"], 6),
+            "roi_edge_long": round(roi["roi_edge_long"], 6),
+            "roi_edge_short": round(roi["roi_edge_short"], 6),
         },
     }
     return decision

@@ -25,7 +25,12 @@ dev = [
     "alpaca-py>=0.40.0",
     "aoa-financial[anthropic]",
 ]
-web = ["fastapi>=0.115.0", "uvicorn[standard]>=0.32.0", "httpx2>=2.0.0"]
+web = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "httpx2>=2.0.0",
+]
 alpaca = ["alpaca-py>=0.40.0"]
 tradingagents = [
     "tradingagents @ git+https://github.com/TauricResearch/TradingAgents.git@v0.3.0",
