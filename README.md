@@ -962,6 +962,7 @@ Companion tools that sit beside this repo (not vendored here):
 | **[SGX-Full-OrderBook-Tick-Data-Trading-Strategy](https://github.com/afidurko/SGX-Full-OrderBook-Tick-Data-Trading-Strategy)** | SGX A50 full-LOB ML notebooks — [sgx-orderbook-reference.md](docs/how-to/sgx-orderbook-reference.md) + `aoa.research.sgx_orderbook_patterns` |
 | **[example-hftish](https://github.com/afidurko/example-hftish)** | Alpaca order-book imbalance tick-taker reference — [example-hftish-reference.md](docs/how-to/example-hftish-reference.md) + `aoa.research.hftish_patterns` |
 | **[open-quant-live-book](https://github.com/afidurko/open-quant-live-book)** | Open quant finance book (risk parity, entropy, TE) — [open-quant-live-book-reference.md](docs/how-to/open-quant-live-book-reference.md) + `aoa.research.open_quant_patterns` |
+| **[deepstock](https://github.com/afidurko/deepstock)** | Legacy TF1 DL stock experiments — [deepstock-reference.md](docs/how-to/deepstock-reference.md) |
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
 | **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | AS reservation-price MM sim — `aoa avellaneda` research lane |

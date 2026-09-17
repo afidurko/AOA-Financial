@@ -29,7 +29,9 @@ Optional siblings: `qm` (`./scripts/qm-setup.sh`), `py-moomoo-api`,
 SGX order-book notebooks (`./scripts/sgx-orderbook-setup.sh` — see
 [hft-research-lane.md](hft-research-lane.md)), open-quant-live-book
 (`./scripts/open-quant-live-book-setup.sh` — see
-[open-quant-live-book-reference.md](open-quant-live-book-reference.md)).
+[open-quant-live-book-reference.md](open-quant-live-book-reference.md)),
+deepstock (`./scripts/deepstock-setup.sh` — see
+[deepstock-reference.md](deepstock-reference.md)).
 
 ## Open in Cursor
 
@@ -100,3 +102,4 @@ Refresh: `aoa attl brain sync`.
 - [qm-integration.md](qm-integration.md)
 - [hft-research-lane.md](hft-research-lane.md)
 - [sgx-orderbook-reference.md](sgx-orderbook-reference.md)
+- [deepstock-reference.md](deepstock-reference.md)
