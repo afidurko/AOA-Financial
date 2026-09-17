@@ -118,12 +118,17 @@ def backtest_ticker(store: MarketStore, ticker: str, *,
                     config: Optional[Config] = None,
                     use_llm: bool = False,
                     use_fundamentals: bool = False,
-                    max_position: float = 1.0) -> BacktestResult:
+                    max_position: float = 1.0,
+                    cost_pct: float | None = None) -> BacktestResult:
     """Walk-forward backtest of one ticker.
 
-    ``position`` taken each period is the decision's ``conviction`` clamped to
-    ``[-max_position, max_position]`` (longs and shorts), so the strategy
-    return reflects both direction and conviction sizing.
+    ``position`` taken each period is the decision's ``conviction`` clamped
+    to ``[-max_position, max_position]`` and scaled by the decision's
+    deterministic ROI/cost-basis exposure multiplier.
+
+    Transaction/slippage costs are applied as a constant return drag on the
+    strategy P&L (proportional to ``abs(position)``). Set ``cost_pct=0`` (or
+    rely on config defaults) to disable.
     """
     config = config or Config()
     ticker = ticker.upper()
@@ -133,6 +138,11 @@ def backtest_ticker(store: MarketStore, ticker: str, *,
     sector = sec.sector if sec else "Unknown"
     # Point-in-time fundamentals are not generally available; opt-in only.
     fundamentals = store.latest_fundamentals(ticker) if use_fundamentals else None
+    effective_cost_pct = (
+        float(cost_pct)
+        if cost_pct is not None
+        else float(config.transaction_cost_pct) + float(config.slippage_pct)
+    )
 
     trades: List[BacktestTrade] = []
     period_returns: List[float] = []
@@ -145,8 +155,9 @@ def backtest_ticker(store: MarketStore, ticker: str, *,
         entry = bars[i].close
         exit_ = bars[i + horizon].close
         fwd = exit_ / entry - 1.0 if entry > 0 else 0.0
-        position = max(-max_position, min(max_position, decision.conviction))
-        pnl = position * fwd
+        exposure = decision.conviction * decision.exposure_multiplier
+        position = max(-max_position, min(max_position, exposure))
+        pnl = position * fwd - effective_cost_pct * abs(position)
         trades.append(BacktestTrade(
             date=bars[i].date, action=decision.action,
             conviction=decision.conviction, confidence=decision.confidence,
