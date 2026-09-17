@@ -11,7 +11,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${1:-$ROOT/AOA.code-workspace}"
 shift || true
-EXTRA_ROOTS=("$@")
 
 folders=()
 # add_folder NAME JSON_PATH CHECK_PATH
@@ -44,7 +43,8 @@ add_folder "open-quant-live-book" "open-quant-live-book" "$ROOT/open-quant-live-
 add_folder "deepstock" "deepstock" "$ROOT/deepstock"
 
 # External roots (absolute paths) — e.g. repos connected via connect-workspace.sh.
-for extra in "${EXTRA_ROOTS[@]}"; do
+# Iterate "$@" directly (safe under `set -u` even when empty, unlike a copied array).
+for extra in "$@"; do
   [[ -n "$extra" ]] || continue
   abs="$(cd "$extra" 2>/dev/null && pwd)" || { echo "Skipping missing root: $extra" >&2; continue; }
   add_folder "$(basename "$abs")" "$abs" "$abs"
