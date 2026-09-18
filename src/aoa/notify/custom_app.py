@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import httpx2 as httpx
-
+from aoa.httpcompat import httpx
 from aoa.notify.types import StructuredNotification
 
 
