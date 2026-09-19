@@ -253,16 +253,25 @@ def create_app(cfg: Config | None = None) -> FastAPI:
 
     @app.get("/api/loop/brief")
     def loop_brief(request: Request) -> dict[str, Any]:
+        from pathlib import Path
+
+        from aoa.config import data_dir_for
+        from aoa.integrity.actions import default_queue_path
+        from aoa.integrity.notify import pending_queue_items
+
         cfg: Config = request.app.state.cfg
         team = request.app.state.team
         runner = request.app.state.runner
         store: AnalyticsStore | None = request.app.state.analytics_store
         assistant = team.run_assistant_brief(last_cycle=runner.state.last_result)
         pending = store.list_pending_responses() if store is not None else []
+        integ_path = default_queue_path(Path.cwd(), data_dir_for(cfg.env) / "integrity")
+        integ_pending = pending_queue_items(integ_path)
         brief = build_loop_user_brief(
             assistant_brief=assistant,
             repair_summary=repair_queue_summary(cfg.repair_path),
             pending_responses=pending,
+            integrity_summary={"pending": len(integ_pending)},
         )
         return {"brief": brief.to_context()}
 
@@ -273,19 +282,93 @@ def create_app(cfg: Config | None = None) -> FastAPI:
             return {"items": []}
         return {"items": store.list_pending_responses()}
 
+    @app.get("/api/needs-attention")
+    def needs_attention(request: Request) -> dict[str, Any]:
+        """Unified Needs Attention feed for dashboard + Cursor bridge."""
+        from pathlib import Path
+
+        from aoa.config import data_dir_for
+        from aoa.integrity.actions import default_queue_path
+        from aoa.integrity.attention import needs_attention_feed
+
+        cfg: Config = request.app.state.cfg
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        queue = default_queue_path(Path.cwd(), data_dir_for(cfg.env) / "integrity")
+        pending_alerts = store.list_pending_responses() if store else []
+        pending_approvals = store.list_approvals(status="pending") if store else []
+        return needs_attention_feed(
+            integrity_queue_path=queue,
+            pending_alerts=pending_alerts,
+            pending_approvals=pending_approvals,
+        )
+
+    @app.get("/api/integrity/queue")
+    def integrity_queue(request: Request) -> dict[str, Any]:
+        from pathlib import Path
+
+        from aoa.config import data_dir_for
+        from aoa.integrity.actions import default_queue_path
+        from aoa.integrity.attention import cursor_mcp_payload, integrity_attention_items
+
+        cfg: Config = request.app.state.cfg
+        queue = default_queue_path(Path.cwd(), data_dir_for(cfg.env) / "integrity")
+        items = integrity_attention_items(queue)
+        return {
+            "pending": len(items),
+            "items": [i.to_dict() for i in items],
+            "cursor": cursor_mcp_payload(queue),
+            "queue_path": str(queue),
+        }
+
+    @app.post("/api/integrity/{proposal_id}/resolve")
+    def integrity_resolve(
+        request: Request, proposal_id: str, body: ResolveBody
+    ) -> dict[str, Any]:
+        """Approve (implant) or reject an Integrity Ten corrective proposal."""
+        from pathlib import Path
+
+        from aoa.config import data_dir_for
+        from aoa.integrity.squad import IntegritySquad
+
+        if body.status not in {"approved", "rejected"}:
+            raise HTTPException(
+                status_code=400, detail="status must be approved or rejected"
+            )
+        cfg: Config = request.app.state.cfg
+        squad = IntegritySquad(
+            repo_root=Path.cwd(),
+            data_dir=data_dir_for(cfg.env) / "integrity",
+        )
+        try:
+            if body.status == "approved":
+                result = squad.approve(proposal_id, note="dashboard")
+            else:
+                result = squad.reject(proposal_id, note="dashboard")
+        except (KeyError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return {"id": proposal_id, "status": body.status, "result": result}
+
     @app.post("/api/alerts/{alert_id}/respond")
     def alert_respond(
         request: Request, alert_id: int, body: RespondBody
     ) -> dict[str, Any]:
+        from pathlib import Path
+
+        from aoa.config import data_dir_for
+        from aoa.integrity.actions import default_queue_path
+
         store: AnalyticsStore | None = request.app.state.analytics_store
         if store is None:
             raise HTTPException(status_code=404, detail="Analytics disabled")
+        cfg: Config = request.app.state.cfg
+        queue = default_queue_path(Path.cwd(), data_dir_for(cfg.env) / "integrity")
         try:
             result = route_response(
                 store,
                 notification_id=alert_id,
                 action=body.action,
                 note=body.note,
+                integrity_queue_path=queue,
             )
         except ResponseError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
