@@ -1,11 +1,26 @@
 ---
 name: coding-engineer
-description: Maintain and simplify the AOA Financial codebase. Use when refactoring, fixing lint errors, deduplicating logic, or preventing regressions in the trading swarm.
+description: >
+  Maintain and simplify the AOA Financial codebase via the required ATTL loop.
+  Use when refactoring, fixing lint errors, deduplicating logic, or preventing
+  regressions — always through aoa team code / aoa attl run (not ad-hoc).
 ---
 
-# Coding Engineer — twelve-member mesh
+# Coding Engineer — twelve-member mesh (loop-required)
 
-Code health is a **team responsibility**. The meshed roster:
+Code health is a **team responsibility**. **Coding, fixing, and simplifying MUST
+go through the ATTL loop** — do not apply ad-hoc edits outside maker/checker.
+
+## Required entry
+
+```bash
+python3 -m aoa.cli team code            # health → triage → ATTL (dry-run)
+python3 -m aoa.cli team code --apply    # ATTL live; still draft PR only
+# equivalent mesh shortcut:
+python3 -m aoa.cli attl run
+```
+
+Then maker (`minimal-fix` / this skill) → tests → `loop-verifier` → draft PR.
 
 | Member | Coding-engineer job |
 |--------|---------------------|
@@ -27,6 +42,7 @@ Bob and Julie share `run_code_quality_audit()`:
 - Shared helpers live in one module (`execution/pricing`, `brokerage/constants`)
 - Web app uses `app.state`, not module singletons
 - Pipeline uses `CycleContext.portfolio_output` and exposes `run_from()`
+- Loop scaffold includes required coding-via-ATTL wiring (`aoa team code`)
 - Optional `ruff check src tests` when ruff is installed
 - Import sweep for core modules
 
@@ -46,9 +62,9 @@ Bob and Julie share `run_code_quality_audit()`:
 
 ```bash
 python3 -m aoa.cli team health
+python3 -m aoa.cli team code
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
-python3 -m aoa.cli run
 ```
 
 ## Verification
@@ -58,4 +74,4 @@ python3 -m ruff check src tests
 python3 -m pytest -q
 ```
 
-Both must pass before opening a PR.
+Both must pass before opening a PR. Never self-verify — hand off to `loop-verifier`.
