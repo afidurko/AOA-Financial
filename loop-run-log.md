@@ -34,3 +34,4 @@
 | 2026-08-15 22:05 | ship-loop | L2 | proofread | Simplified Moomoo helpers; merge-base catch-up; 466+ tests pass; Moomoo kept as paper default. tokens_estimate=15000 |
 | 2026-09-20 04:20 | exhaustive-retest | L2 | fixed | Open-quant cov symmetry + heavy-scale guard; 564 pass; million+10M stress ok. PR #101 draft. tokens_estimate=25000 |
 | 2026-09-20 16:33 | openquant-trillion | L2 | pass | First 3e9 (`trillion`, 4 workers): ok, 3e9 inv-vol, 30k ERC/MI/corr/3-asset, 442s. |
+| 2026-09-20 16:42 | openquant-trillion | L2 | pass | Second 3e9 rerun: ok, 3e9 inv-vol, 30k probes, 430s. Squash-merge #101. |
