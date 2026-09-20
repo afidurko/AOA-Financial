@@ -700,9 +700,8 @@ def _billion_stress_shard(
             progress_in -= 1
             if progress_in == 0:
                 elapsed = time.perf_counter() - started
-                label = f"shard{shard_id} " if shard_id else ""
                 print(
-                    f"openquant-stress {label}{i + 1}/{iterations} ({elapsed:.1f}s)",
+                    f"openquant-stress shard{shard_id} {i + 1}/{iterations} ({elapsed:.1f}s)",
                     file=sys.stderr,
                     flush=True,
                 )

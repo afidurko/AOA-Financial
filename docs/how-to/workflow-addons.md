@@ -34,10 +34,12 @@ trading paper/dry-run; they compound agent + human throughput.
    knowledge-stack + qm + visualhft setup scripts.
 7. **Paper profile split in cloud** — keep local `paper-dry` on Moomoo; cloud
    agents export `AOA_BROKER=alpaca` so doctor/team health are not OpenD-bound.
-8. **Trillion-class overnight job** — `aoa openquant stress --scale trillion --workers 4`
-   (3×10⁹ checks). Full 10¹² only with `--iterations 1000000000000`.
+8. **Scheduled trillion (3×10⁹)** — `aoa openquant stress --scale trillion --workers 4`
+   (~7 min on 4 cores). Full 10¹² only with `--iterations 1000000000000`.
 9. **NumPy / PyPy inverse-vol kernel** — shards + inlined pair math make 3×10⁹
    practical; a vectorized kernel is still needed for a literal 10¹² overnight.
+15. **Persist stress JSON** — write `aoa openquant stress --json` under
+    `data/{env}/research/` so trillion runs are auditable without `/tmp`.
 10. **PSD covariance gate** — `_validate_cov` now requires symmetry; next is a
     cheap Cholesky / eigenvalue check so ERC cannot run on indefinite Σ.
 11. **httpx fallback CI job** — install without `[web]` so `aoa.httpcompat`
