@@ -120,13 +120,29 @@ race against the +32% target. Everything persists (`*_ensemble.json`), and the
 backtester drives either the single trainer or the swarm through the same
 `decide`/`learn` strategy protocol.
 
-First honest walk-forward swarm results (fresh state, 25 bps fees): BTC
-+176,624% (vs +47,854% single-trainer), ETH +159% (vs +2%), SOL +58%
-(vs +2,499%), XRP −82% (vs +15%) — the ensemble helps where per-trader skill
-differs (BTC/ETH) and hurts where no member has an edge (XRP). Hedge weights
-after full training: connectome dominates BTC (56%), pairs traders dominate
-ETH/SOL/XRP (30–38%), and the gated reservoir earns the best hit rates
-(57.7% BTC, 55.5% XRP).
+First honest walk-forward swarm results (fresh state, 25 bps fees,
+gap-realistic fills): BTC +176,624% (vs +47,891% single-trainer), ETH +159%
+(vs +2%), SOL +58% (vs +2,499%), XRP −82% (vs +15%) — the ensemble helps where
+per-trader skill differs (BTC/ETH) and hurts where no member has an edge
+(XRP). Hedge weights after full training: connectome dominates BTC (56%),
+pairs traders dominate ETH/SOL/XRP (30–38%), and the gated reservoir earns the
+best hit rates (57.7% BTC, 55.5% XRP).
+
+## Stress hardening (third pass)
+
+`scripts/crypto_stress.py` fuzzes every promised invariant — bracket
+geometry, feature bounds, backtest accounting identity, deep-net finiteness
+and round-trips, connectome plasticity caps, survival bookkeeping, ensemble
+resume stability, history-merge ordering. A ~240M-check campaign (multiple
+seeds, hostile tapes with crash/moon days and calendar gaps) surfaced two
+issues, both fixed with regression tests:
+
+1. **Gap-through fills were optimistic** — a bar opening beyond the trigger
+   now fills at the open (worse than the stop on gap-downs, better than the
+   target on gap-ups), so stop losses no longer pretend to guarantee −26%.
+2. **Resume was not bit-exact** — loading renormalized already-normalized
+   Hedge weights, perturbing convictions by ~1 ULP; load now renormalizes
+   only when weights are meaningfully off 1.0.
 
 ## Verification
 
