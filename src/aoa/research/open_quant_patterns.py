@@ -652,11 +652,41 @@ def billion_stress(
     }
 
 
+# Named stress scales for CLI / loop tasks.
+# ``trillion`` is a 3×billion property sample (full 1e12 is opt-in via --iterations).
+STRESS_SCALES: dict[str, int] = {
+    "smoke": 250_000,
+    "million": 1_000_000,
+    "billion": 1_000_000_000,
+    "trillion": 3_000_000_000,
+}
+
+
+def scale_stress(
+    scale: str,
+    *,
+    seed: int = 7,
+    iterations: int | None = None,
+) -> dict[str, object]:
+    """Run :func:`billion_stress` for a named scale (or explicit iterations)."""
+    key = (scale or "smoke").strip().lower()
+    if iterations is None:
+        if key not in STRESS_SCALES:
+            raise ValueError(
+                f"Unknown scale {scale!r}; choose one of {sorted(STRESS_SCALES)}"
+            )
+        iterations = STRESS_SCALES[key]
+    result = billion_stress(iterations=iterations, seed=seed)
+    result["scale"] = key if key in STRESS_SCALES else "custom"
+    return result
+
+
 __all__ = [
     "EntropyStats",
     "GrangerResult",
     "NetFlow",
     "RiskParityResult",
+    "STRESS_SCALES",
     "billion_stress",
     "coupled_ar_series",
     "cov_from_returns",
@@ -666,6 +696,7 @@ __all__ = [
     "mutual_information_stats",
     "net_information_flow",
     "risk_contributions",
+    "scale_stress",
     "shannon_entropy",
     "synthetic_smoke",
 ]
