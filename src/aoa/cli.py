@@ -1819,12 +1819,18 @@ def cmd_openquant_status(*, as_json: bool) -> int:
         "mesh_algo": "algo.open_quant_patterns",
         "patterns": [
             "equal_risk_contribution",
+            "tangency_weights",
+            "hierarchical_risk_parity",
+            "stylized_facts",
+            "correlation_network",
             "mutual_information_stats",
             "linear_granger_causality",
             "net_information_flow",
+            "compare_allocators",
         ],
+        "consumers": ["julie.refine", "andrea.plan"],
         "never_live": True,
-        "hint": "aoa openquant smoke — offline ERC / MI / TE check (no broker)",
+        "hint": "aoa openquant smoke|compare — offline research (no broker)",
     }
     if as_json:
         print(json.dumps(status, indent=2))
@@ -1837,6 +1843,7 @@ def cmd_openquant_status(*, as_json: bool) -> int:
     print(f"  mesh:      {status['mesh_algo']}")
     print(f"  study:     {status['study_card']}")
     print(f"  patterns:  {', '.join(status['patterns'])}")
+    print(f"  consumers: {', '.join(status['consumers'])}")
     print(f"  never_live:{status['never_live']}")
     print(f"  next:      {status['hint']}")
     return 0
@@ -1885,6 +1892,29 @@ def cmd_openquant_billion(
             print(f"  reason:          {result.get('reason')}")
         print(f"  never_live:      {result.get('never_live', True)}")
     return 0 if result.get("ok") else 1
+
+
+def cmd_openquant_compare(*, seed: int, as_json: bool) -> int:
+    """Compare inverse-vol / ERC / tangency / HRP on a synthetic return panel."""
+    from aoa.research.open_quant_patterns import compare_allocators, coupled_ar_series
+
+    x, _ = coupled_ar_series(120, seed=seed, ar_x=0.4, coupling=0.0)
+    y, _ = coupled_ar_series(120, seed=seed + 17, ar_x=0.3, coupling=0.0)
+    z, _ = coupled_ar_series(120, seed=seed + 99, ar_x=0.25, coupling=0.0)
+    result = compare_allocators([x, y, z])
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== open-quant allocator compare (synthetic) ===")
+        print(f"  n_assets:   {result.get('n_assets')}")
+        print(f"  inverse_vol:{result.get('inverse_vol')}")
+        print(f"  erc:        {result.get('erc')}")
+        print(f"  tangency:   {result.get('tangency')}")
+        print(f"  hrp:        {result.get('hrp')}")
+        print(f"  sharpe:     {result.get('tangency_sharpe')}")
+        print(f"  net_edges:  {result.get('network_edges')}")
+        print(f"  never_live: {result.get('never_live', True)}")
+    return 0
 
 
 def _attl_orchestrator(cfg: Config):
@@ -2779,6 +2809,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     oq_billion.add_argument("--seed", type=int, default=7, help="LCG seed.")
     oq_billion.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_compare = oq_sub.add_parser(
+        "compare",
+        help="Compare inverse-vol / ERC / tangency / HRP on synthetic returns.",
+    )
+    oq_compare.add_argument("--seed", type=int, default=7, help="Synthetic series seed.")
+    oq_compare.add_argument("--json", action="store_true", help="Emit JSON.")
 
     tk = sub.add_parser(
         "tasks",
@@ -2916,6 +2952,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.openquant_command == "billion":
             return cmd_openquant_billion(
                 iterations=getattr(args, "iterations", 1_000_000_000),
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        if args.openquant_command == "compare":
+            return cmd_openquant_compare(
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )

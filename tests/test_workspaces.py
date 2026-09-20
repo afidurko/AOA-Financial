@@ -15,10 +15,13 @@ def test_workspaces_report_shape(monkeypatch):
     monkeypatch.delenv("AOA_VISUALHFT_URL", raising=False)
     cfg = Config.from_env(load_dotenv=False)
     report = workspaces_report(cfg)
-    assert report["count"] == 4
+    assert report["count"] == 5
     assert report["never_live"] is True
     ids = {w["id"] for w in report["workspaces"]}
-    assert ids == {"openstock", "qm", "visualhft", "hftbacktest"}
+    assert ids == {"openstock", "qm", "visualhft", "hftbacktest", "open-quant-live-book"}
+    oqlb = next(w for w in report["workspaces"] if w["id"] == "open-quant-live-book")
+    assert oqlb["docs"].endswith("open-quant-live-book-reference.md")
+    assert oqlb["detail"]["module"] == "aoa.research.open_quant_patterns"
     vh = next(w for w in report["workspaces"] if w["id"] == "visualhft")
     assert vh["docs"].endswith("visualhft-integration.md")
     assert vh["detail"]["python_lane"]["offline_only"] is True
@@ -76,7 +79,7 @@ def test_cli_workspaces_skips_env_template(tmp_path, monkeypatch, capsys):
     code = main(["workspaces", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert code == 0
-    assert out["count"] == 4
+    assert out["count"] == 5
     assert not (tmp_path / ".env").exists()
 
 

@@ -61,7 +61,8 @@ Sibling [afidurko/open-quant-live-book](https://github.com/afidurko/open-quant-l
 documents risk parity, Shannon/mutual information, and transfer entropy
 (Granger / Gaussian TE). Distilled Python helpers live in
 `aoa.research.open_quant_patterns` (no broker calls). CLI `aoa openquant`.
-Study bridge: `bridge-oqlb-risk-entropy`. Setup:
+Study bridges: `bridge-oqlb-risk-entropy`, `bridge-oqlb-tangency-hrp`,
+`bridge-oqlb-stylized-network`. Setup:
 `./scripts/open-quant-live-book-setup.sh` ·
 [docs/how-to/open-quant-live-book-reference.md](../../docs/how-to/open-quant-live-book-reference.md).
 

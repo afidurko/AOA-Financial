@@ -169,6 +169,11 @@ def test_cli_openquant_skips_env_template(tmp_path, monkeypatch, capsys):
     assert code == 0
     assert '"ok": true' in out
     assert '"never_live": true' in out
+    code = main(["openquant", "compare", "--json"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "tangency" in out
+    assert '"never_live": true' in out
 
 def test_cmd_setup_moomoo_runs_helper(monkeypatch, capsys):
     cfg = Config(anthropic_api_key="sk-test", broker="moomoo")
