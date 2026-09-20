@@ -19,6 +19,10 @@ def test_conflict_marker_scan_includes_pyproject():
     assert "pyproject.toml" in CONFLICT_MARKER_PATHS
     assert "src" in CONFLICT_MARKER_PATHS
     assert "tests" in CONFLICT_MARKER_PATHS
+    assert "scripts" in CONFLICT_MARKER_PATHS
+    assert "docs" in CONFLICT_MARKER_PATHS
+    assert "requirements.txt" in CONFLICT_MARKER_PATHS
+    assert "loop-prompts.yaml" in CONFLICT_MARKER_PATHS
 
 
 def test_ship_state_roundtrip(tmp_path: Path):

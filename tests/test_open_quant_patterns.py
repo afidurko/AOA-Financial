@@ -124,6 +124,8 @@ def test_rejects_bad_inputs() -> None:
         equal_risk_contribution([[0.1, 0.0], [0.0]])
     with pytest.raises(ValueError):
         equal_risk_contribution([[0.04, float("nan")], [0.0, 0.01]])
+    with pytest.raises(ValueError, match="symmetric"):
+        equal_risk_contribution([[0.04, 0.02], [0.0, 0.01]])
     with pytest.raises(ValueError):
         equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], budget=(1.0,))
     with pytest.raises(ValueError):
@@ -141,7 +143,20 @@ def test_billion_stress_small_ok() -> None:
     assert result["ok"] is True
     assert result["inverse_vol_checks"] == 250_000
     assert result["erc_checks"] >= 3
+    assert result["erc_corr_checks"] >= 3
+    assert result["inverse_vol_3_checks"] >= 3
+    assert result["elapsed_s"] >= 0.0
     assert result["never_live"] is True
+
+
+def test_billion_stress_workers_sum_checks() -> None:
+    from aoa.research.open_quant_patterns import billion_stress
+
+    result = billion_stress(iterations=20_000, seed=3, workers=2)
+    assert result["ok"] is True
+    assert result["inverse_vol_checks"] == 20_000
+    assert result["workers"] == 2
+    assert result["erc_checks"] >= 2
 
 
 def test_scale_stress_smoke_and_unknown() -> None:

@@ -1838,7 +1838,7 @@ def cmd_openquant_status(*, as_json: bool) -> int:
             "net_information_flow",
         ],
         "never_live": True,
-        "hint": "aoa openquant smoke — offline ERC / MI / TE check (no broker)",
+        "hint": "aoa openquant smoke | stress --scale smoke|million|billion|trillion",
     }
     if as_json:
         print(json.dumps(status, indent=2))
@@ -1880,6 +1880,7 @@ def cmd_openquant_billion(
     iterations: int,
     seed: int,
     as_json: bool,
+    workers: int = 1,
 ) -> int:
     """One-billion-scale property stress for open_quant_patterns (offline)."""
     return cmd_openquant_stress(
@@ -1887,6 +1888,7 @@ def cmd_openquant_billion(
         iterations=iterations,
         seed=seed,
         as_json=as_json,
+        workers=workers,
     )
 
 
@@ -1896,11 +1898,12 @@ def cmd_openquant_stress(
     iterations: int | None,
     seed: int,
     as_json: bool,
+    workers: int = 1,
 ) -> int:
     """Named-scale property stress (smoke / million / billion / trillion)."""
     from aoa.research.open_quant_patterns import scale_stress
 
-    result = scale_stress(scale, seed=seed, iterations=iterations)
+    result = scale_stress(scale, seed=seed, iterations=iterations, workers=workers)
     if as_json:
         print(json.dumps(result, indent=2))
     else:
@@ -1910,6 +1913,12 @@ def cmd_openquant_stress(
         print(f"  inverse_vol:     {result.get('inverse_vol_checks')}")
         print(f"  erc_checks:      {result.get('erc_checks')}")
         print(f"  mi_checks:       {result.get('mi_checks')}")
+        print(f"  erc_corr:        {result.get('erc_corr_checks')}")
+        print(f"  inv_vol_3:       {result.get('inverse_vol_3_checks')}")
+        if result.get("workers"):
+            print(f"  workers:         {result.get('workers')}")
+        if result.get("elapsed_s") is not None:
+            print(f"  elapsed_s:       {result.get('elapsed_s')}")
         if not result.get("ok"):
             print(f"  failed_at:       {result.get('failed_at')}")
             print(f"  reason:          {result.get('reason')}")
@@ -3052,6 +3061,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Number of inverse-vol checks (default: 1000000000).",
     )
     oq_billion.add_argument("--seed", type=int, default=7, help="LCG seed.")
+    oq_billion.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Process shards for large runs (default: 1).",
+    )
     oq_billion.add_argument("--json", action="store_true", help="Emit JSON.")
     oq_stress = oq_sub.add_parser(
         "stress",
@@ -3070,6 +3085,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Override preset iteration count (e.g. full 1e12).",
     )
     oq_stress.add_argument("--seed", type=int, default=7, help="LCG seed.")
+    oq_stress.add_argument(
+        "--workers",
+        type=int,
+        default=1,
+        help="Process shards for million+ / trillion runs (default: 1).",
+    )
     oq_stress.add_argument("--json", action="store_true", help="Emit JSON.")
 
     tk = sub.add_parser(
@@ -3294,6 +3315,7 @@ def main(argv: list[str] | None = None) -> int:
                 iterations=getattr(args, "iterations", 1_000_000_000),
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
+                workers=getattr(args, "workers", 1),
             )
         if args.openquant_command == "stress":
             return cmd_openquant_stress(
@@ -3301,6 +3323,7 @@ def main(argv: list[str] | None = None) -> int:
                 iterations=getattr(args, "iterations", None),
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
+                workers=getattr(args, "workers", 1),
             )
         return 2
 
