@@ -51,6 +51,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <a id="obsidian-link" href="#" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">Second Brain ↗</a>
       <a id="qm-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">QM ↗</a>
       <a id="visualhft-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">VisualHFT ↗</a>
+      <a id="antd-mobile-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">UI kit ↗</a>
+      <a href="/m" style="color:var(--accent);font-size:.85rem;text-decoration:none">Mobile</a>
       <div id="market-status" class="stat-sm">Market: —</div>
     </div>
   </header>
@@ -178,7 +180,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
       const obsLink=document.getElementById('obsidian-link');
       if(config.obsidian_vault_path){
-        const vaultName=config.obsidian_vault_path.replace(/\\/g,'/').split('/').filter(Boolean).pop()||'vault';
+        const vaultName=config.obsidian_vault_path.replaceAll('\\\\','/').split('/').filter(Boolean).pop()||'vault';
         obsLink.href='obsidian://open?vault='+encodeURIComponent(vaultName);
         obsLink.style.display='inline';
       } else {
@@ -197,6 +199,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         vhLink.style.display='inline';
       } else {
         vhLink.style.display='none';
+      }
+      const admLink=document.getElementById('antd-mobile-link');
+      if(config.antd_mobile_url){
+        admLink.href=config.antd_mobile_url;
+        admLink.style.display='inline';
+      } else {
+        admLink.style.display='none';
       }
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;
