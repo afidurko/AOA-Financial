@@ -59,6 +59,15 @@ Recommended next:
 5. **Environment CVE hygiene** — upgrade `pyjwt`, `urllib3`, `setuptools`,
    `pip`, `wheel` in the cloud image (pip-audit flags known CVEs; none are
    project-pinned deps).
+6. **hftbacktest lane in cloud** — `pip install -e ".[dev,web]"` skips the
+   L2 replay lane (`aoa hft smoke` prints "not installed" and exits 0).
+   Either add `hftbacktest` to `.cursor/environment.json` install or accept
+   the silent skip; installing took ~20 s and the smoke passes.
+7. **Flake watch** — nightly automation running the pytest suite 3×
+   back-to-back; this run's 3× sweep was clean (568×3, zero flakes).
+8. **Web API smoke task** — a `aoa tasks run web-smoke` step (TestClient →
+   `/health`, `/api/config`) so tier1 exercises the dashboard wiring without
+   booting uvicorn.
 
 ## Human gates (unchanged)
 

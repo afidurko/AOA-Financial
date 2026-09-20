@@ -34,3 +34,5 @@
 | 2026-08-15 22:05 | ship-loop | L2 | proofread | Simplified Moomoo helpers; merge-base catch-up; 466+ tests pass; Moomoo kept as paper default. tokens_estimate=15000 |
 | 2026-09-20 03:44 | attl | L2 | dry-run | attl mesh selected=upg-001 kai=skip |
 | 2026-09-20 03:53 | attl | L2 | dry-run | attl mesh selected=upg-001 kai=skip |
+| 2026-09-20 04:09 | daily-triage | L1 | report-only | aoa tasks run tier1: repair triage + verify ok. tokens_estimate=2000 |
+| 2026-09-20 04:09 | fable-repair | L2 | report-only | gate blocked: no auto-fixable items in repair queue (2 item(s) need CEO approval / user notification — left for a human). tokens_estimate=500 |

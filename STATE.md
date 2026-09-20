@@ -1,13 +1,13 @@
 # Loop State — AOA-Financial
 
-Last run: 2026-09-20 03:44 UTC (Fable 5 repair triage, run 2e76bf57ed21)
+Last run: 2026-09-20 04:08 UTC (Fable 5 repair triage, run 782f9c636d50)
 
 ## High Priority (loop is acting or waiting on human)
 
 - **Start Moomoo OpenD** — runtime path is Moomoo. OpenD required on `127.0.0.1:11111`. Use `/install-moomoo-opend` or `aoa setup moomoo`, then `aoa doctor && aoa run`. (~S)  
-  Source: `state` | Skill: `fable-repair` | id: `9f7a659d`
+  Source: `state` | Skill: `fable-repair` | id: `e5dbdda6`
 - **Set real ANTHROPIC_API_KEY** — rotate any exposed keys; template key blocks LLM reasoning (~S)  
-  Source: `state` | Skill: `fable-repair` | id: `b0565dc6`
+  Source: `state` | Skill: `fable-repair` | id: `4ea07a26`
 
 ## Watch List
 
