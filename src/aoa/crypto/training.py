@@ -414,6 +414,22 @@ class DayByDayTrainer:
             return "sell", conviction
         return "hold", 0.0
 
+    # ---------------------------------------------------- strategy protocol
+    def decide(self, feats: DayFeatures) -> tuple[str, float]:
+        """Strategy-protocol alias for :meth:`combined_signal`."""
+        return self.combined_signal(feats)
+
+    def learn(self, feats: DayFeatures, next_ret: float, candle=None) -> None:
+        """One online learning step (strategy protocol; ``candle`` unused)."""
+        decision = self.worm.decide(feats.stimulus(regime_heat=self.memory.regime_heat(feats)))
+        if decision.action != "hold":
+            signed = next_ret if decision.action == "buy" else -next_ret
+            self.worm.reinforce(max(-1.0, min(1.0, signed / _RETURN_SCALE)))
+        self.memory.observe(feats, next_ret)
+        target = max(-1.0, min(1.0, next_ret / _RETURN_SCALE))
+        out = self.adapter.delta(feats.vector())[0]
+        self.adapter.sgd_step(feats.vector(), [out - target], lr=self.lr, weight_decay=1e-4)
+
     # ------------------------------------------------------------------ train
     def train(
         self,

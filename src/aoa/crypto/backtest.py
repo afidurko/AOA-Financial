@@ -21,10 +21,20 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
+from typing import Protocol, runtime_checkable
 
 from aoa.crypto.assets import TRAINING_EPOCH, CryptoAsset
 from aoa.crypto.history import DailyCandle
-from aoa.crypto.training import DayByDayTrainer, extract_features
+from aoa.crypto.training import DayByDayTrainer, DayFeatures, extract_features
+
+
+@runtime_checkable
+class DailyStrategy(Protocol):
+    """Anything that can vote on a day and learn from its outcome."""
+
+    def decide(self, feats: DayFeatures) -> tuple[str, float]: ...
+
+    def learn(self, feats: DayFeatures, next_ret: float, candle: DailyCandle) -> None: ...
 
 TAKE_PROFIT_PCT = 0.32
 STOP_LOSS_PCT = 0.26
@@ -147,11 +157,14 @@ class BacktestResult:
 
 
 class CryptoBacktester:
-    """Day-by-day walk-forward backtest driven by a :class:`DayByDayTrainer`.
+    """Day-by-day walk-forward backtest driven by any daily *strategy*.
 
-    The trainer is trained *incrementally inside the walk*: on day ``t`` the
-    strategy only uses state learned through day ``t-1`` (entries execute at
-    the open of ``t+1``), so results are honest walk-forward, not in-sample.
+    A strategy implements ``decide(feats) -> (action, conviction)`` and
+    ``learn(feats, next_ret, candle)`` — both :class:`DayByDayTrainer` and
+    :class:`~aoa.crypto.traders.HedgeEnsemble` qualify. The strategy is
+    trained *incrementally inside the walk*: on day ``t`` it only uses state
+    learned through day ``t-1`` (entries execute at the open of ``t+1``), so
+    results are honest walk-forward, not in-sample.
     """
 
     def __init__(
@@ -172,10 +185,11 @@ class CryptoBacktester:
     def run(
         self,
         candles: Sequence[DailyCandle],
-        trainer: DayByDayTrainer,
+        trainer: DayByDayTrainer | DailyStrategy,
         *,
         start: date = TRAINING_EPOCH,
         end: date | None = None,
+        partner_closes: dict[date, float] | None = None,
     ) -> BacktestResult:
         window = [c for c in candles if c.day >= start and (end is None or c.day <= end)]
         if len(window) < self.warmup_days + 2:
@@ -223,19 +237,26 @@ class CryptoBacktester:
                     tp_exits += 1
                     position = None
 
+            # --- pairs context (relative-value traders) ---------------------------
+            if partner_closes is not None:
+                partner = partner_closes.get(candle.day)
+                update_pairs = getattr(trainer, "update_pairs", None)
+                if partner and update_pairs is not None:
+                    update_pairs(candle.close, partner)
+
             # --- learn today, decide for tomorrow --------------------------------
-            if i >= self.warmup_days and i + 1 < len(window):
-                feats = extract_features(window, i)
-                if feats is not None:
-                    action, conviction = trainer.combined_signal(feats)
-                    if action == "buy" and position is None and conviction > 0.1:
-                        pending_action = "buy"
-                    elif action == "sell" and position is not None:
-                        pending_action = "sell"
-            # Incremental learning: teach the trainer this day's outcome so the
+            feats = extract_features(window, i) if i + 1 < len(window) else None
+            if feats is not None and i >= self.warmup_days:
+                action, conviction = trainer.decide(feats)
+                if action == "buy" and position is None and conviction > 0.1:
+                    pending_action = "buy"
+                elif action == "sell" and position is not None:
+                    pending_action = "sell"
+            # Incremental learning: teach the strategy this day's outcome so the
             # next decision uses everything up to (and including) today.
-            if i + 1 < len(window):
-                self._learn_one(trainer, window, i)
+            if feats is not None and candle.close > 0:
+                next_ret = window[i + 1].close / candle.close - 1.0
+                trainer.learn(feats, next_ret, candle)
 
             equity = cash + (position.qty * candle.close if position else 0.0)
             peak_equity = max(peak_equity, equity)
@@ -308,20 +329,3 @@ class CryptoBacktester:
         )
         return gross - fee, fee
 
-    @staticmethod
-    def _learn_one(trainer: DayByDayTrainer, window: Sequence[DailyCandle], i: int) -> None:
-        """One online learning step for day ``i`` (outcome = day ``i+1``)."""
-        feats = extract_features(window, i)
-        if feats is None or window[i].close <= 0:
-            return
-        next_ret = window[i + 1].close / window[i].close - 1.0
-        decision = trainer.worm.decide(
-            feats.stimulus(regime_heat=trainer.memory.regime_heat(feats))
-        )
-        if decision.action != "hold":
-            signed = next_ret if decision.action == "buy" else -next_ret
-            trainer.worm.reinforce(max(-1.0, min(1.0, signed / 0.05)))
-        trainer.memory.observe(feats, next_ret)
-        target = max(-1.0, min(1.0, next_ret / 0.05))
-        out = trainer.adapter.delta(feats.vector())[0]
-        trainer.adapter.sgd_step(feats.vector(), [out - target], lr=trainer.lr, weight_decay=1e-4)

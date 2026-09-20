@@ -9,7 +9,10 @@ no-market days) rather than a reverse-engineered summary.
 
 from aoa.crypto.assets import ASSETS, TRAINING_EPOCH, CryptoAsset, get_asset
 from aoa.crypto.backtest import BracketPolicy, CryptoBacktester
+from aoa.crypto.deep import DeepMLP, GatedReservoir
 from aoa.crypto.history import DailyCandle, HistoryStore
+from aoa.crypto.survival import BracketSurvival
+from aoa.crypto.traders import HedgeEnsemble, default_roster
 from aoa.crypto.training import DayByDayTrainer, PatternMemory
 
 __all__ = [
@@ -23,4 +26,9 @@ __all__ = [
     "PatternMemory",
     "BracketPolicy",
     "CryptoBacktester",
+    "DeepMLP",
+    "GatedReservoir",
+    "BracketSurvival",
+    "HedgeEnsemble",
+    "default_roster",
 ]
