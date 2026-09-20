@@ -75,7 +75,7 @@ TIMEFRAMES: dict[str, Timeframe] = {
         ),
         Timeframe("30", "30", 1800, "30 minutes", yahoo="30m", yahoo_range="60d", kraken=30),
         Timeframe("60", "60", 3600, "1 hour", yahoo="60m", yahoo_range="730d", kraken=60, coinbase=3600),
-        Timeframe("240", "240", 14400, "4 hours", kraken=240, coinbase=21600),
+        Timeframe("240", "240", 14400, "4 hours", kraken=240),  # coinbase: resampled from 1h
         Timeframe("1D", "D", 86400, "1 day", yahoo="1d", yahoo_range="10y", kraken=1440, coinbase=86400),
         Timeframe("1W", "W", 7 * 86400, "1 week", yahoo="1wk", yahoo_range="20y", kraken=10080),
     )

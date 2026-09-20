@@ -121,6 +121,40 @@ def test_cache_roundtrip_and_dedupe(tmp_path) -> None:
     assert read_cache(p) == []
 
 
+def test_resample_bars_aggregates_ohlcv() -> None:
+    from aoa.tradingview.data import resample_bars
+
+    tf = get_timeframe("60")
+    fine = synthetic_bars("X", tf, n=24, seed=1)
+    coarse = resample_bars(fine, 4 * 3600)
+    assert len(coarse) == 6
+    first = fine[:4]
+    assert coarse[0].open == first[0].open and coarse[0].close == first[-1].close
+    assert coarse[0].high == max(b.high for b in first) and coarse[0].low == min(b.low for b in first)
+    assert coarse[0].volume == pytest.approx(sum(b.volume for b in first))
+    assert coarse[0].timestamp == fine[0].timestamp and coarse[1].timestamp == fine[4].timestamp
+    assert resample_bars([], 60) == []
+
+
+def test_fetch_coinbase_resamples_when_granularity_missing(monkeypatch) -> None:
+    calls: list[tuple[int, int]] = []
+
+    def fake_get_json(url, **kw):
+        gran = int(url.split("granularity=")[1].split("&")[0])
+        calls.append((gran, 1))
+        t0 = 1_700_000_000
+        return [[t0 + i * gran, 9, 11, 10, 10.5, 1] for i in range(300)]
+
+    monkeypatch.setattr(tvdata, "_get_json", fake_get_json)
+    monkeypatch.setattr(tvdata.time, "sleep", lambda s: None)
+    bars = tvdata.fetch_coinbase("BTC-USD", get_timeframe("240"), limit=100)
+    assert calls and all(g == 3600 for g, _ in calls)  # pulled hourly, not 6h
+    assert len(bars) >= 75
+    assert (bars[2].timestamp - bars[1].timestamp).total_seconds() == 4 * 3600
+    assert bars[1].volume == pytest.approx(4.0)  # interior bucket = 4 hourly candles
+    assert int(bars[1].timestamp.timestamp()) % (4 * 3600) == 0  # epoch-aligned
+
+
 def test_symbol_mapping_helpers() -> None:
     assert guess_market("BTC-USD") == "crypto" and guess_market("ETHUSDT") == "crypto"
     assert guess_market("AAPL") == "equity" and guess_market("BTC") == "crypto"

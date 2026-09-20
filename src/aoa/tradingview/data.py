@@ -160,10 +160,42 @@ def fetch_kraken(pair: str, tf: Timeframe, *, since: int | None = None) -> list[
     return parse_kraken_ohlc(_get_json(url))
 
 
+_COINBASE_GRANULARITIES = (86400, 21600, 3600, 900, 300, 60)
+
+
+def resample_bars(bars: list[Bar], seconds: int) -> list[Bar]:
+    """Aggregate finer bars into ``seconds``-wide bars aligned to the epoch (UTC)."""
+    buckets: dict[int, list[Bar]] = {}
+    for b in bars:
+        ts = b.timestamp if b.timestamp.tzinfo else b.timestamp.replace(tzinfo=timezone.utc)
+        key = int(ts.timestamp()) // seconds * seconds
+        buckets.setdefault(key, []).append(b)
+    out: list[Bar] = []
+    for key in sorted(buckets):
+        chunk = sorted(buckets[key], key=lambda b: b.timestamp)
+        out.append(
+            Bar(
+                _ts(key),
+                chunk[0].open,
+                max(b.high for b in chunk),
+                min(b.low for b in chunk),
+                chunk[-1].close,
+                sum(b.volume for b in chunk),
+            )
+        )
+    return out
+
+
 def fetch_coinbase(product: str, tf: Timeframe, *, limit: int = 3000) -> list[Bar]:
-    if not tf.coinbase:
-        raise DataError(f"coinbase has no {tf.label} granularity")
     gran = tf.coinbase
+    if not gran:
+        # No native granularity (e.g. 4h): pull the largest one that divides it and resample.
+        base = next((g for g in _COINBASE_GRANULARITIES if g < tf.seconds and tf.seconds % g == 0), None)
+        if base is None:
+            raise DataError(f"coinbase has no {tf.label} granularity")
+        factor = tf.seconds // base
+        fine = fetch_coinbase(product, Timeframe(f"_{base}", "", base, "", coinbase=base), limit=limit * factor)
+        return resample_bars(fine, tf.seconds)
     end = datetime.now(tz=timezone.utc).replace(microsecond=0)
     out: list[Bar] = []
     remaining = limit
