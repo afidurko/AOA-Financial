@@ -327,6 +327,25 @@ def run_task(
                 )
             continue
 
+        if step == "openquant-stress":
+            from aoa.research.open_quant_patterns import scale_stress
+
+            scale = (os.environ.get("AOA_OPENQUANT_STRESS_SCALE") or "smoke").strip()
+            result = scale_stress(scale, seed=7)
+            steps_run.append(f"openquant-stress={result.get('scale')}")
+            if not result.get("ok"):
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    message=(
+                        f"Open-quant stress failed at {result.get('failed_at')} "
+                        f"({result.get('reason')})"
+                    ),
+                    exit_code=1,
+                )
+            continue
+
         if step == "chain-bootstrap":
             from aoa.config import Config
             from aoa.loop.task_chain import bootstrap_chain_from_state
