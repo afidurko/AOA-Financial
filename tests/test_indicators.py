@@ -68,3 +68,27 @@ def test_technical_snapshot_keys():
         assert key in snap
     assert snap["n_bars"] == 59
     assert snap["volume"]["latest_volume"] == 1000
+
+
+def _noisy_closes(n: int) -> list[float]:
+    # Deterministic, non-monotonic series so every indicator has real structure.
+    return [100 + 10 * ((i * 7919) % 13) / 13 - 5 * ((i * 104729) % 7) / 7 for i in range(n)]
+
+
+def test_technical_snapshot_matches_standalone_indicators():
+    """The shared-series fast path must equal the individual public functions."""
+    for n in (5, 14, 20, 26, 34, 35, 60, 250):
+        closes = _noisy_closes(n)
+        bars = _bars(closes)
+        snap = indicators.technical_snapshot(bars)
+        assert snap["sma_20"] == indicators.sma(closes, 20)
+        assert snap["sma_50"] == indicators.sma(closes, 50)
+        assert snap["ema_12"] == indicators.ema(closes, 12)
+        assert snap["ema_26"] == indicators.ema(closes, 26)
+        assert snap["rsi_14"] == indicators.rsi(closes, 14)
+        assert snap["macd"] == indicators.macd(closes)
+        assert snap["bollinger"] == indicators.bollinger_bands(closes, 20)
+        assert snap["atr_14"] == indicators.atr(bars, 14)
+        assert snap["realized_vol_20d"] == indicators.realized_volatility(closes)
+        assert snap["volume"] == indicators.volume_metrics(bars)
+        assert snap["n_bars"] == n

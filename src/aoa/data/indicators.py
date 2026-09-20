@@ -4,6 +4,11 @@ No numpy/pandas dependency — these operate on plain ``list[float]`` and on lis
 of :class:`~aoa.brokerage.models.Bar`. Every function returns ``None`` (or a
 dict of ``None`` values) when there is insufficient data, so callers never crash
 on a thin price history.
+
+:func:`technical_snapshot` is the hot path (every symbol × every timeframe, every
+cycle). It computes each intermediate series once and shares it between
+indicators instead of letting ``ema``, ``macd``, ``sma`` and ``bollinger`` each
+re-walk the closes.
 """
 
 from __future__ import annotations
@@ -24,10 +29,14 @@ def ema_series(values: Sequence[float], period: int) -> list[float]:
     if period <= 0 or len(values) < period:
         return []
     k = 2 / (period + 1)
+    one_minus_k = 1 - k
     # Seed with the SMA of the first `period` values.
-    out = [sum(values[:period]) / period]
+    prev = sum(values[:period]) / period
+    out = [prev]
+    append = out.append
     for v in values[period:]:
-        out.append(v * k + out[-1] * (1 - k))
+        prev = v * k + prev * one_minus_k
+        append(prev)
     return out
 
 
@@ -49,16 +58,44 @@ def rsi(values: Sequence[float], period: int = 14) -> float | None:
             losses -= delta
     avg_gain = gains / period
     avg_loss = losses / period
+    decay = period - 1
     for i in range(period + 1, len(values)):
         delta = values[i] - values[i - 1]
-        gain = max(delta, 0.0)
-        loss = max(-delta, 0.0)
-        avg_gain = (avg_gain * (period - 1) + gain) / period
-        avg_loss = (avg_loss * (period - 1) + loss) / period
+        if delta >= 0:
+            avg_gain = (avg_gain * decay + delta) / period
+            avg_loss = (avg_loss * decay) / period
+        else:
+            avg_gain = (avg_gain * decay) / period
+            avg_loss = (avg_loss * decay - delta) / period
     if avg_loss == 0:
         return 100.0
     rs = avg_gain / avg_loss
     return round(100 - (100 / (1 + rs)), 2)
+
+
+def _macd_from_series(
+    fast_series: list[float],
+    slow_series: list[float],
+    signal: int,
+) -> dict[str, float | None]:
+    """MACD from precomputed fast/slow EMA series (shared with the snapshot)."""
+    if not fast_series or not slow_series:
+        return {"macd": None, "signal": None, "histogram": None}
+    # Align the two EMA series to the same (shorter) tail length.
+    n = min(len(fast_series), len(slow_series))
+    fast_tail = fast_series[-n:]
+    slow_tail = slow_series[-n:]
+    macd_line = [f - s for f, s in zip(fast_tail, slow_tail, strict=True)]
+    signal_series = ema_series(macd_line, signal)
+    macd_val = macd_line[-1]
+    if not signal_series:
+        return {"macd": round(macd_val, 4), "signal": None, "histogram": None}
+    signal_val = signal_series[-1]
+    return {
+        "macd": round(macd_val, 4),
+        "signal": round(signal_val, 4),
+        "histogram": round(macd_val - signal_val, 4),
+    }
 
 
 def macd(
@@ -70,21 +107,7 @@ def macd(
     """Return MACD line, signal line, and histogram."""
     if len(values) < slow + signal:
         return {"macd": None, "signal": None, "histogram": None}
-    fast_series = ema_series(values, fast)
-    slow_series = ema_series(values, slow)
-    # Align the two EMA series to the same (shorter) tail length.
-    n = min(len(fast_series), len(slow_series))
-    macd_line = [fast_series[-n + i] - slow_series[-n + i] for i in range(n)]
-    signal_series = ema_series(macd_line, signal)
-    if not signal_series:
-        return {"macd": round(macd_line[-1], 4), "signal": None, "histogram": None}
-    macd_val = macd_line[-1]
-    signal_val = signal_series[-1]
-    return {
-        "macd": round(macd_val, 4),
-        "signal": round(signal_val, 4),
-        "histogram": round(macd_val - signal_val, 4),
-    }
+    return _macd_from_series(ema_series(values, fast), ema_series(values, slow), signal)
 
 
 def bollinger_bands(
@@ -107,16 +130,16 @@ def atr(bars: Sequence[Bar], period: int = 14) -> float | None:
     """Average True Range — a volatility measure for position sizing/stops."""
     if len(bars) < period + 1:
         return None
+    prev_close = bars[0].close
     trs: list[float] = []
-    for i in range(1, len(bars)):
-        high, low = bars[i].high, bars[i].low
-        prev_close = bars[i - 1].close
+    for bar in bars[1:]:
+        high, low = bar.high, bar.low
         trs.append(max(high - low, abs(high - prev_close), abs(low - prev_close)))
-    if len(trs) < period:
-        return None
+        prev_close = bar.close
     atr_val = sum(trs[:period]) / period
+    decay = period - 1
     for tr in trs[period:]:
-        atr_val = (atr_val * (period - 1) + tr) / period
+        atr_val = (atr_val * decay + tr) / period
     return round(atr_val, 4)
 
 
@@ -146,10 +169,9 @@ def volume_metrics(bars: Sequence[Bar], window: int = 20) -> dict[str, float | N
     """Latest bar volume vs a trailing average (unusual-activity signal)."""
     if not bars:
         return {"latest_volume": None, "avg_volume_20d": None, "volume_ratio": None}
-    volumes = [b.volume for b in bars]
-    latest = volumes[-1]
-    tail = volumes[-window:] if len(volumes) >= window else volumes
-    avg = sum(tail) / len(tail)
+    tail = bars[-window:]
+    latest = bars[-1].volume
+    avg = sum(b.volume for b in tail) / len(tail)
     ratio = round(latest / avg, 2) if avg > 0 else None
     return {
         "latest_volume": round(latest, 0),
@@ -161,25 +183,36 @@ def volume_metrics(bars: Sequence[Bar], window: int = 20) -> dict[str, float | N
 def technical_snapshot(bars: Sequence[Bar]) -> dict:
     """Compute a compact dict of indicators from a bar history.
 
-    This is the structured "technical context" handed to the LLM agents.
+    This is the structured "technical context" handed to the LLM agents. The
+    12/26 EMA series feed both the ``ema_*`` fields and MACD; the 20-bar window
+    feeds both ``sma_20`` and the Bollinger middle band.
     """
     closes = [b.close for b in bars]
+    n = len(closes)
     last = closes[-1] if closes else None
-    bb = bollinger_bands(closes)
+
+    fast_series = ema_series(closes, 12)
+    slow_series = ema_series(closes, 26)
+    if n >= 26 + 9:
+        macd_val = _macd_from_series(fast_series, slow_series, 9)
+    else:
+        macd_val = {"macd": None, "signal": None, "histogram": None}
+
+    bb = bollinger_bands(closes, 20)
     return {
         "last_close": last,
-        "sma_20": sma(closes, 20),
+        "sma_20": bb["middle"],
         "sma_50": sma(closes, 50),
         "sma_200": sma(closes, 200),
-        "ema_12": ema(closes, 12),
-        "ema_26": ema(closes, 26),
+        "ema_12": round(fast_series[-1], 4) if fast_series else None,
+        "ema_26": round(slow_series[-1], 4) if slow_series else None,
         "rsi_14": rsi(closes, 14),
-        "macd": macd(closes),
+        "macd": macd_val,
         "bollinger": bb,
         "atr_14": atr(bars, 14),
         "realized_vol_20d": realized_volatility(closes),
         "return_5d_pct": pct_change(closes, 5),
         "return_20d_pct": pct_change(closes, 20),
         "volume": volume_metrics(bars),
-        "n_bars": len(bars),
+        "n_bars": n,
     }
