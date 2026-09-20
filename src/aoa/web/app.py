@@ -22,6 +22,7 @@ from aoa.loop.user_brief import build_loop_user_brief, repair_queue_summary
 from aoa.notify.response_router import ResponseError, route_response
 from aoa.research.loop import ResearchLoop
 from aoa.team.orchestrator import TeamCycleResult
+from aoa.tradingview.webhook import WebhookError, handle_alert, load_alerts, respond_alert
 from aoa.version import package_version
 from aoa.web.dashboard_html import DASHBOARD_HTML
 from aoa.web.loop_runner import CycleBusyError, LoopRunner
@@ -416,6 +417,29 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         except ResponseError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return result.to_context()
+
+    @app.post("/api/tradingview/webhook")
+    async def tradingview_webhook(request: Request) -> dict[str, Any]:
+        """Receive a TradingView strategy alert. Records a human-gated proposal; never trades."""
+        body = await request.body()
+        token = request.headers.get("x-aoa-token")
+        runner = request.app.state.runner
+        try:
+            record = handle_alert(body, header_token=token, journal=runner.journal)
+        except WebhookError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return {"accepted": True, "requires_human": True, "alert": record.to_dict()}
+
+    @app.get("/api/tradingview/alerts")
+    def tradingview_alerts(status: str | None = None, limit: int = 100) -> dict[str, Any]:
+        return {"items": load_alerts(status=status, limit=limit)}
+
+    @app.post("/api/tradingview/alerts/{alert_id}/respond")
+    def tradingview_alert_respond(alert_id: str, body: RespondBody) -> dict[str, Any]:
+        try:
+            return respond_alert(alert_id, body.action, note=body.note)
+        except WebhookError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/team/expansions")
     def list_team_expansions(request: Request, status: str | None = None) -> dict[str, Any]:

@@ -25,6 +25,7 @@ Commands:
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
   aoa hftish     Order-book imbalance research lane (example-hftish patterns).
   aoa openquant  Open quant research lane (risk parity / entropy / TE / billion stress).
+  aoa tradingview  TradingView desk: Pine v6 presets, offline backtests, memory, connectome.
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa integrity  Integrity Ten — continuous code/workspace/neural/mesh checks.
@@ -62,6 +63,7 @@ from aoa.simulation.trends import analyze_trends
 from aoa.state import StateStore
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.orchestrator import TeamCycleResult, TeamOrchestrator
+from aoa.tradingview.cli import add_tradingview_parser, dispatch_tradingview
 from aoa.vault.sync import sync_vault_engineering, vault_status
 from aoa.version import package_version
 from aoa.workloop.models import STAGE_ORDER
@@ -3093,6 +3095,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     oq_stress.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    add_tradingview_parser(sub)
+
     tk = sub.add_parser(
         "tasks",
         help="Loop prompt shortkeys (L1, L2, …) and deterministic task runners.",
@@ -3268,6 +3272,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     # Offline research lanes — no .env template and no Config/broker side effects.
+    if args.command in ("tradingview", "tv"):
+        return dispatch_tradingview(args)
+
     if args.command == "visualhft":
         if args.visualhft_command == "status":
             return cmd_visualhft_status(as_json=getattr(args, "json", False))
