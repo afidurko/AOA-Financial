@@ -193,6 +193,12 @@ class RiskLimits:
     max_daily_loss_pct: float = 0.03
     min_cash_buffer_pct: float = 0.05
     max_orders_per_cycle: int = 5
+    # Live ROI sizing + average-entry cost-basis gates (MaterializeStage).
+    transaction_cost_pct: float = 0.0
+    slippage_pct: float = 0.0
+    cost_basis_loss_buffer: float = 0.03
+    cost_basis_profit_buffer: float = 0.08
+    cost_basis_trim_pct: float = 0.25
 
 
 @dataclass(frozen=True)
@@ -548,6 +554,11 @@ class Config:
                 max_daily_loss_pct=_float("AOA_MAX_DAILY_LOSS_PCT", 0.03),
                 min_cash_buffer_pct=_float("AOA_MIN_CASH_BUFFER_PCT", 0.05),
                 max_orders_per_cycle=_int("AOA_MAX_ORDERS_PER_CYCLE", 5),
+                transaction_cost_pct=_float("AOA_TRANSACTION_COST_PCT", 0.0),
+                slippage_pct=_float("AOA_SLIPPAGE_PCT", 0.0),
+                cost_basis_loss_buffer=_float("AOA_COST_BASIS_LOSS_BUFFER", 0.03),
+                cost_basis_profit_buffer=_float("AOA_COST_BASIS_PROFIT_BUFFER", 0.08),
+                cost_basis_trim_pct=_float("AOA_COST_BASIS_TRIM_PCT", 0.25),
             ),
         )
 
@@ -614,6 +625,16 @@ class Config:
             problems.append("AOA_MAX_DAILY_LOSS_PCT must be in (0, 1].")
         if r.max_orders_per_cycle < 1:
             problems.append("AOA_MAX_ORDERS_PER_CYCLE must be >= 1.")
+        if r.transaction_cost_pct < 0:
+            problems.append("AOA_TRANSACTION_COST_PCT must be >= 0.")
+        if r.slippage_pct < 0:
+            problems.append("AOA_SLIPPAGE_PCT must be >= 0.")
+        if r.cost_basis_loss_buffer < 0:
+            problems.append("AOA_COST_BASIS_LOSS_BUFFER must be >= 0.")
+        if r.cost_basis_profit_buffer < 0:
+            problems.append("AOA_COST_BASIS_PROFIT_BUFFER must be >= 0.")
+        if not 0 <= r.cost_basis_trim_pct <= 1:
+            problems.append("AOA_COST_BASIS_TRIM_PCT must be in [0, 1].")
         if self.bar_feed not in {"iex", "sip", "otc", "boats"}:
             problems.append("AOA_BAR_FEED must be one of: iex, sip, otc, boats.")
         valid_effort = {"low", "medium", "high", "xhigh", "max"}
