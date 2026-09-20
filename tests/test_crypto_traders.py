@@ -233,7 +233,8 @@ class TestHedgeEnsemble:
         first.train(tape)
         resumed = HedgeEnsemble(asset, model_dir=tmp_path)
         assert resumed.days_learned == first.days_learned
-        assert resumed.weights == pytest.approx(first.weights)
+        # Bit-exact resume: load must not perturb already-normalized weights.
+        assert resumed.weights == first.weights
         feats = extract_features(tape, 250)
         assert resumed.decide(feats) == first.decide(feats)
 

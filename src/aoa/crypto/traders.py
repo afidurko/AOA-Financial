@@ -507,7 +507,9 @@ class HedgeEnsemble:
             if name in stored:
                 self.weights[name] = float(stored[name])
         total = sum(self.weights.values())
-        if total > 0:
+        # Renormalize only when meaningfully off 1.0 (hand-edited / partial
+        # files); skipping ULP-level corrections keeps resume bit-exact.
+        if total > 0 and abs(total - 1.0) > 1e-9:
             self.weights = {n: w / total for n, w in self.weights.items()}
         if "survival" in data:
             self.survival = BracketSurvival.from_dict(data["survival"])
