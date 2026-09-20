@@ -55,7 +55,19 @@ mi = mutual_information_stats([0.1, -0.2, 0.05, 0.0], [0.08, -0.1, 0.02, 0.01])
 flow = net_information_flow(list(range(50)), [0.5 * i for i in range(50)], lags=1)
 ```
 
-CLI: `aoa openquant status|smoke`. Smoke: `python3 examples/open_quant_smoke.py`.
+CLI: `aoa openquant status|smoke|billion|stress`. Smoke: `python3 examples/open_quant_smoke.py`.
+
+Property stress (inverse-vol invariants + periodic ERC/MI):
+
+```bash
+aoa openquant stress --scale smoke      # 250k (CI / loop task default)
+aoa openquant stress --scale million
+aoa openquant billion                   # default 1_000_000_000 iterations
+aoa openquant stress --scale trillion   # 3×billion sample (~hours)
+aoa openquant stress --scale trillion --iterations 1000000000000  # full 1e12
+```
+
+Loop: `aoa tasks run openquant-stress` (override scale with `AOA_OPENQUANT_STRESS_SCALE`).
 
 ## Map to Julie / study cortex
 

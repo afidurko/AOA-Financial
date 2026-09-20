@@ -35,6 +35,11 @@ class IssueKind(str, Enum):
     CUSTOM = "custom"
 
 
+# Include packaging manifests — #86 left markers in pyproject.toml which src/tests scans missed.
+CONFLICT_MARKER_PATHS: tuple[str, ...] = ("src", "tests", "pyproject.toml")
+_CONFLICT_MARKER_RG = ["rg", "-n", "^<<<<<<< |^=======|^>>>>>>> ", *CONFLICT_MARKER_PATHS]
+
+
 @dataclass
 class ShipIssue:
     id: str
@@ -200,11 +205,8 @@ class ShipLoopAgent:
                 )
             )
 
-        # Unmerged conflict markers in tracked sources
-        markers = _run(
-            ["rg", "-n", "^<<<<<<< |^=======|^>>>>>>> ", "src", "tests"],
-            cwd=self.repo_root,
-        )
+        # Unmerged conflict markers in tracked sources + packaging manifests
+        markers = _run(_CONFLICT_MARKER_RG, cwd=self.repo_root)
         if markers.returncode == 0 and markers.stdout.strip():
             found.append(
                 ShipIssue(
@@ -362,11 +364,8 @@ class ShipLoopAgent:
         if not pytest_ok:
             notes.append("pytest failed")
 
-        # Conflict markers
-        markers = _run(
-            ["rg", "-n", "^<<<<<<< |^=======|^>>>>>>> ", "src", "tests"],
-            cwd=self.repo_root,
-        )
+        # Conflict markers (src/tests + pyproject.toml)
+        markers = _run(_CONFLICT_MARKER_RG, cwd=self.repo_root)
         if markers.returncode == 0 and markers.stdout.strip():
             notes.append("conflict markers present")
             ruff_ok = False  # fail proofread

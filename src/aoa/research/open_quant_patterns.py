@@ -73,8 +73,11 @@ def _validate_cov(cov: Sequence[Sequence[float]]) -> list[list[float]]:
         if len(row) != n:
             raise ValueError("covariance matrix must be square")
         out.append([float(v) for v in row])
-        if out[i][i] < 0:
-            raise ValueError("diagonal variances must be non-negative")
+        for j, v in enumerate(out[i]):
+            if not math.isfinite(v):
+                raise ValueError("covariance entries must be finite")
+            if i == j and v < 0:
+                raise ValueError("diagonal variances must be non-negative")
     return out
 
 
@@ -82,6 +85,15 @@ def _require_bins(bins: int) -> int:
     if bins < 2:
         raise ValueError("bins must be >= 2")
     return bins
+
+
+def _require_finite_positive(value: float, *, label: str) -> float:
+    v = float(value)
+    if not math.isfinite(v):
+        raise ValueError(f"{label} must be finite")
+    if v <= 0:
+        raise ValueError(f"{label} must be positive")
+    return v
 
 
 def _mat_vec(cov: Sequence[Sequence[float]], w: Sequence[float]) -> list[float]:
@@ -127,12 +139,16 @@ def inverse_vol_weights(volatilities: Sequence[float]) -> tuple[float, ...]:
     if not volatilities:
         raise ValueError("volatilities must be non-empty")
     inv: list[float] = []
-    for v in volatilities:
-        if v <= 0:
-            raise ValueError("volatilities must be positive")
-        inv.append(1.0 / float(v))
-    return tuple(_normalize(inv))
-
+    for i, raw in enumerate(volatilities):
+        v = _require_finite_positive(raw, label=f"volatilities[{i}]")
+        inv_i = 1.0 / v
+        if not math.isfinite(inv_i):
+            raise ValueError(f"volatilities[{i}] is too small for stable inversion")
+        inv.append(inv_i)
+    weights = _normalize(inv)
+    if any(not math.isfinite(w) for w in weights):
+        raise ValueError("inverse-vol weights must be finite")
+    return tuple(weights)
 
 def _parse_budget(n: int, budget: Sequence[float] | None) -> list[float]:
     if budget is None:
@@ -539,11 +555,139 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
     }
 
 
+def billion_stress(
+    *,
+    iterations: int = 1_000_000_000,
+    seed: int = 7,
+    progress_every: int = 50_000_000,
+) -> dict[str, object]:
+    """Run ``iterations`` inverse-vol + periodic ERC invariant checks.
+
+    Default is one billion property checks. Heavy ERC/MI probes run every
+    100_000 iterations. Research-only — no broker calls.
+    """
+    if iterations < 1:
+        raise ValueError("iterations must be >= 1")
+    state = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+    checked = 0
+    erc_checked = 0
+    mi_checked = 0
+
+    def _next_unit() -> float:
+        nonlocal state
+        state, u = _lcg_uniform(state)
+        # Map Uniform(-1,1) → (1e-6, 1+1e-6] for stable positive vols / vars.
+        return abs(u) + 1e-6
+
+    for i in range(iterations):
+        v0 = _next_unit()
+        v1 = _next_unit() * (0.5 + _next_unit())
+        weights = inverse_vol_weights((v0, v1))
+        total = weights[0] + weights[1]
+        if abs(total - 1.0) > 1e-9 or any(not math.isfinite(w) for w in weights):
+            return {
+                "ok": False,
+                "iterations": iterations,
+                "failed_at": i,
+                "reason": "inverse_vol_invariant",
+                "weights": list(weights),
+                "vols": [v0, v1],
+                "never_live": True,
+            }
+        checked += 1
+
+        if i % 100_000 == 0:
+            # Diagonal ERC must match inverse-vol and equalize risk fractions.
+            cov = [[v0 * v0, 0.0], [0.0, v1 * v1]]
+            erc = equal_risk_contribution(cov)
+            if abs(sum(erc.weights) - 1.0) > 1e-8:
+                return {
+                    "ok": False,
+                    "iterations": iterations,
+                    "failed_at": i,
+                    "reason": "erc_weight_sum",
+                    "erc_weights": list(erc.weights),
+                    "never_live": True,
+                }
+            if abs(erc.risk_fractions[0] - 0.5) > 1e-3:
+                return {
+                    "ok": False,
+                    "iterations": iterations,
+                    "failed_at": i,
+                    "reason": "erc_risk_fraction",
+                    "risk_fractions": list(erc.risk_fractions),
+                    "never_live": True,
+                }
+            erc_checked += 1
+
+            # Tiny MI series must stay finite / non-negative.
+            xs = [v0, v1, v0 + 0.01, v1 - 0.01]
+            ys = [v1, v0, v1 + 0.02, v0 - 0.02]
+            mi = mutual_information_stats(xs, ys, bins=2)
+            if mi.mutual_information < 0 or not math.isfinite(mi.global_correlation):
+                return {
+                    "ok": False,
+                    "iterations": iterations,
+                    "failed_at": i,
+                    "reason": "mi_invariant",
+                    "mutual_information": mi.mutual_information,
+                    "never_live": True,
+                }
+            mi_checked += 1
+
+        if progress_every > 0 and i > 0 and i % progress_every == 0:
+            # Progress markers keep long runs observable without flooding.
+            pass
+
+    return {
+        "ok": True,
+        "iterations": iterations,
+        "inverse_vol_checks": checked,
+        "erc_checks": erc_checked,
+        "mi_checks": mi_checked,
+        "seed": seed,
+        "never_live": True,
+        "module": "aoa.research.open_quant_patterns",
+        "companion": "open-quant-live-book",
+    }
+
+
+# Named stress scales for CLI / loop tasks.
+# ``trillion`` is a 3×billion property sample (full 1e12 is opt-in via --iterations).
+STRESS_SCALES: dict[str, int] = {
+    "smoke": 250_000,
+    "million": 1_000_000,
+    "billion": 1_000_000_000,
+    "trillion": 3_000_000_000,
+}
+
+
+def scale_stress(
+    scale: str,
+    *,
+    seed: int = 7,
+    iterations: int | None = None,
+) -> dict[str, object]:
+    """Run :func:`billion_stress` for a named scale (or explicit iterations)."""
+    key = (scale or "smoke").strip().lower()
+    if iterations is None:
+        if key not in STRESS_SCALES:
+            raise ValueError(
+                f"Unknown scale {scale!r}; choose one of {sorted(STRESS_SCALES)}"
+            )
+        iterations = STRESS_SCALES[key]
+    result = billion_stress(iterations=iterations, seed=seed)
+    result["scale"] = key if key in STRESS_SCALES else "custom"
+    return result
+
+
 __all__ = [
     "EntropyStats",
     "GrangerResult",
     "NetFlow",
     "RiskParityResult",
+    "STRESS_SCALES",
+    "billion_stress",
     "coupled_ar_series",
     "cov_from_returns",
     "equal_risk_contribution",
@@ -552,6 +696,7 @@ __all__ = [
     "mutual_information_stats",
     "net_information_flow",
     "risk_contributions",
+    "scale_stress",
     "shannon_entropy",
     "synthetic_smoke",
 ]

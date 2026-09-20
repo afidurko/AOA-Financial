@@ -24,7 +24,7 @@ Commands:
   aoa vault      Sync schema-driven vault property notes.
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
   aoa hftish     Order-book imbalance research lane (example-hftish patterns).
-  aoa openquant  Open quant live book research lane (risk parity / entropy / TE).
+  aoa openquant  Open quant research lane (risk parity / entropy / TE / billion stress).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
@@ -774,6 +774,53 @@ def cmd_team_promote(cfg: Config) -> int:
     print(f"{len(proposals)} proposals sent for your review.")
     print("Edit or approve in the dashboard → Promotions tab, or via the API.")
     return 0
+
+
+def _print_interview_round(round_) -> None:
+    print("\n=== Riley — Quant Desk Interview Round ===")
+    print(f"Team: {round_.team_name}")
+    print(f"Journal bar: {round_.journal_anchor}")
+    print(f"URL: {round_.journal_url}")
+    print(f"Status: {round_.status}  |  id={round_.round_id}")
+    print(f"{round_.summary}\n")
+    for card in round_.scorecards:
+        flag = "HIRE" if card.hire else "PASS"
+        print(
+            f"[{flag}] {card.seat_title} — {card.candidate_name} "
+            f"(score={card.score:.2f}, {card.recommendation.value})"
+        )
+        print(f"  Background: {card.candidate_background}")
+        if card.strengths:
+            print(f"  Strengths: {'; '.join(card.strengths)}")
+        if card.gaps:
+            print(f"  Gaps: {'; '.join(card.gaps)}")
+        for note in card.transcript_notes[:4]:
+            print(f"  • {note}")
+        print()
+    hired = sum(1 for c in round_.scorecards if c.hire)
+    print(f"{hired}/{len(round_.scorecards)} provisional hires pending your approval.")
+
+
+def cmd_team_interview(cfg: Config, action: str) -> int:
+    team = build_team(cfg)
+    if team.analytics is None:
+        print("Analytics disabled — set AOA_ANALYTICS_ENABLED=1 to store interviews.")
+        return 1
+    if action == "start":
+        print("\n=== Opening 5-seat econophysics quant desk interviews (Riley) ===\n")
+        round_ = team.start_quant_hire_round()
+        _print_interview_round(round_)
+        print("Approve or reject via analytics approvals (kind=quant_hire).")
+        return 0
+    if action == "status":
+        round_ = team.latest_quant_hire_round()
+        if round_ is None:
+            print("No quant hire rounds yet. Run: aoa team interview start")
+            return 0
+        _print_interview_round(round_)
+        return 0
+    print(f"Unknown interview action: {action}")
+    return 1
 
 
 def cmd_analyze(cfg: Config, symbol: str, timeframe: str, limit: int) -> int:
@@ -1816,6 +1863,48 @@ def cmd_openquant_smoke(*, seed: int, as_json: bool) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_openquant_billion(
+    *,
+    iterations: int,
+    seed: int,
+    as_json: bool,
+) -> int:
+    """One-billion-scale property stress for open_quant_patterns (offline)."""
+    return cmd_openquant_stress(
+        scale="billion",
+        iterations=iterations,
+        seed=seed,
+        as_json=as_json,
+    )
+
+
+def cmd_openquant_stress(
+    *,
+    scale: str,
+    iterations: int | None,
+    seed: int,
+    as_json: bool,
+) -> int:
+    """Named-scale property stress (smoke / million / billion / trillion)."""
+    from aoa.research.open_quant_patterns import scale_stress
+
+    result = scale_stress(scale, seed=seed, iterations=iterations)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"=== open-quant stress ({result.get('scale')}) ===")
+        print(f"  ok:              {result.get('ok')}")
+        print(f"  iterations:      {result.get('iterations')}")
+        print(f"  inverse_vol:     {result.get('inverse_vol_checks')}")
+        print(f"  erc_checks:      {result.get('erc_checks')}")
+        print(f"  mi_checks:       {result.get('mi_checks')}")
+        if not result.get("ok"):
+            print(f"  failed_at:       {result.get('failed_at')}")
+            print(f"  reason:          {result.get('reason')}")
+        print(f"  never_live:      {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
+
+
 def _attl_orchestrator(cfg: Config):
     from aoa.attl.orchestrator import AttlOrchestrator
     from aoa.config import data_dir_for
@@ -2343,6 +2432,19 @@ def main(argv: list[str] | None = None) -> int:
         "promote",
         help="Each lead proposes a sub-team for your approval.",
     )
+    interview = team_sub.add_parser(
+        "interview",
+        help="Riley — 5-seat econophysics quant desk hiring interviews.",
+    )
+    interview_sub = interview.add_subparsers(dest="interview_command", required=True)
+    interview_sub.add_parser(
+        "start",
+        help="Open a hiring round and interview one candidate per seat.",
+    )
+    interview_sub.add_parser(
+        "status",
+        help="Show the latest quant desk interview round.",
+    )
     sub.add_parser("serve", help="Start the web dashboard and REST API.")
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
@@ -2683,6 +2785,36 @@ def main(argv: list[str] | None = None) -> int:
     )
     oq_smoke.add_argument("--seed", type=int, default=7, help="Synthetic series seed.")
     oq_smoke.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_billion = oq_sub.add_parser(
+        "billion",
+        help="One-billion inverse-vol / ERC / MI property stress (offline).",
+    )
+    oq_billion.add_argument(
+        "--iterations",
+        type=int,
+        default=1_000_000_000,
+        help="Number of inverse-vol checks (default: 1000000000).",
+    )
+    oq_billion.add_argument("--seed", type=int, default=7, help="LCG seed.")
+    oq_billion.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_stress = oq_sub.add_parser(
+        "stress",
+        help="Named-scale property stress: smoke|million|billion|trillion.",
+    )
+    oq_stress.add_argument(
+        "--scale",
+        choices=["smoke", "million", "billion", "trillion"],
+        default="smoke",
+        help="Preset iteration count (trillion = 3×billion sample).",
+    )
+    oq_stress.add_argument(
+        "--iterations",
+        type=int,
+        default=None,
+        help="Override preset iteration count (e.g. full 1e12).",
+    )
+    oq_stress.add_argument("--seed", type=int, default=7, help="LCG seed.")
+    oq_stress.add_argument("--json", action="store_true", help="Emit JSON.")
 
     tk = sub.add_parser(
         "tasks",
@@ -2817,6 +2949,19 @@ def main(argv: list[str] | None = None) -> int:
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )
+        if args.openquant_command == "billion":
+            return cmd_openquant_billion(
+                iterations=getattr(args, "iterations", 1_000_000_000),
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        if args.openquant_command == "stress":
+            return cmd_openquant_stress(
+                scale=getattr(args, "scale", "smoke"),
+                iterations=getattr(args, "iterations", None),
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
         return 2
 
     if args.command == "hft":
@@ -2900,6 +3045,8 @@ def main(argv: list[str] | None = None) -> int:
                 return cmd_assistant(cfg)
             if args.team_command == "promote":
                 return cmd_team_promote(cfg)
+            if args.team_command == "interview":
+                return cmd_team_interview(cfg, args.interview_command)
         if args.command == "serve":
             return cmd_serve(cfg)
         if args.command == "journal":

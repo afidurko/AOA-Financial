@@ -20,6 +20,7 @@ run "QM" "./scripts/qm-setup.sh"
 run "VisualHFT (+ oxyplot)" "./scripts/visualhft-setup.sh"
 run "example-hftish" "./scripts/example-hftish-setup.sh"
 run "open-quant-live-book" "./scripts/open-quant-live-book-setup.sh"
+run "deepstock" "./scripts/deepstock-setup.sh"
 run "ant-design-mobile" "./scripts/antd-mobile-setup.sh"
 
 echo ""

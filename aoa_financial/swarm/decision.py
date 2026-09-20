@@ -40,6 +40,11 @@ class SwarmDecision:
     rationale: str
     signals: List[AgentSignal] = field(default_factory=list)
     evidence: Dict[str, Any] = field(default_factory=dict)
+    # ROI/cost-basis automation fields (deterministic, forecast-derived).
+    net_expected_return: float = 0.0
+    roi_edge: float = 0.0
+    roi_quality: float = 1.0
+    exposure_multiplier: float = 1.0
 
     def to_dict(self) -> dict:
         return {
@@ -49,12 +54,80 @@ class SwarmDecision:
             "target_weight": round(self.target_weight, 4),
             "rationale": self.rationale,
             "signals": [s.to_dict() for s in self.signals],
+            "net_expected_return": round(self.net_expected_return, 6),
+            "roi_edge": round(self.roi_edge, 6),
+            "roi_quality": round(self.roi_quality, 6),
+            "exposure_multiplier": round(self.exposure_multiplier, 6),
         }
+
+
+def _roi_edge_quality(roi_edge: float) -> float:
+    """Map roi_edge ∈ (-∞, +∞) to roi_quality ∈ [0,1] smoothly.
+
+    Uses roi_edge / (roi_edge + 1) so 0 -> 0 and +∞ -> 1.
+    Negative edges return 0 quality.
+    """
+    if roi_edge <= 0:
+        return 0.0
+    return float(roi_edge / (roi_edge + 1.0))
+
+
+def forecast_roi_edges(
+    forecast: Dict[str, Any],
+    *,
+    cost_pct: float = 0.0,
+) -> Dict[str, float]:
+    """Derive long/short ROI edges from a forecast cone dict.
+
+    Forecast ``p10`` / ``p90`` are *prices* (see ``analysis.forecast``).
+    Convert them to returns vs ``last_price``, subtract friction costs, then
+    form edge = net_expected_return / worst-tail-loss.
+    """
+    last = float(forecast.get("last_price") or 0.0)
+    expected_return = float(forecast.get("expected_return") or 0.0)
+    p10_price = float(forecast.get("p10") or 0.0)
+    p90_price = float(forecast.get("p90") or 0.0)
+    cost = float(cost_pct)
+
+    if last > 0 and p10_price > 0:
+        p10_ret = p10_price / last - 1.0
+    else:
+        p10_ret = 0.0
+    if last > 0 and p90_price > 0:
+        p90_ret = p90_price / last - 1.0
+    else:
+        p90_ret = 0.0
+
+    net_expected_return = expected_return - cost
+    net_p10 = p10_ret - cost
+    net_p90 = p90_ret - cost
+
+    eps = 1e-9
+    # Long P&L ≈ +return; left-tail loss ≈ max(0, -p10_return).
+    tail_loss_long = max(0.0, -net_p10)
+    roi_edge_long = net_expected_return / max(tail_loss_long, eps)
+    # Short P&L ≈ -return; worst loss when return is high (p90).
+    tail_loss_short = max(0.0, net_p90)
+    roi_edge_short = (-net_expected_return) / max(tail_loss_short, eps)
+
+    return {
+        "cost_pct": cost,
+        "p10_return": p10_ret,
+        "p90_return": p90_ret,
+        "net_expected_return": net_expected_return,
+        "roi_edge_long": roi_edge_long,
+        "roi_edge_short": roi_edge_short,
+    }
 
 
 def decide(ticker: str, signals: List[AgentSignal],
            config: Optional[Config] = None,
-           asof: Optional[str] = None) -> SwarmDecision:
+           asof: Optional[str] = None,
+           *,
+           roi_edge_long: float | None = None,
+           roi_edge_short: float | None = None,
+           forecast_confidence: float | None = None,
+           net_expected_return: float = 0.0) -> SwarmDecision:
     config = config or Config()
     weights = config.swarm_weights
     asof = asof or datetime.now(timezone.utc).date().isoformat()
@@ -82,15 +155,51 @@ def decide(ticker: str, signals: List[AgentSignal],
     else:
         action = "HOLD"
 
+    # ROI quality scales *size* only. When no ROI edges are supplied (legacy
+    # callers of decide()), keep quality at 1.0 so sizing matches the old
+    # conviction × confidence rule.
+    selected_roi_edge = 0.0
+    roi_provided = False
+    if action == "BUY" and roi_edge_long is not None:
+        selected_roi_edge = float(roi_edge_long)
+        roi_provided = True
+    elif action == "SELL" and roi_edge_short is not None:
+        selected_roi_edge = float(roi_edge_short)
+        roi_provided = True
+
+    if roi_provided:
+        roi_quality = _roi_edge_quality(selected_roi_edge)
+        if forecast_confidence is not None:
+            roi_quality = float(
+                max(0.0, min(1.0, roi_quality * float(forecast_confidence)))
+            )
+    else:
+        roi_quality = 1.0
+
+    exposure_multiplier = roi_quality
+
     # Position sizing: scale by |conviction| × confidence, shrink on
     # disagreement. Cap any single position at 15%.
     target_weight = 0.0
     if action == "BUY":
-        target_weight = min(0.15, max(0.0, abs(conviction) * confidence * 0.25))
+        base = abs(conviction) * confidence * 0.25
+        target_weight = min(0.15, max(0.0, base * roi_quality))
 
     rationale = _rationale(action, conviction, confidence, dispersion, signals)
-    return SwarmDecision(ticker, asof, action, conviction, confidence,
-                         target_weight, rationale, signals)
+    return SwarmDecision(
+        ticker=ticker,
+        asof=asof,
+        action=action,
+        conviction=conviction,
+        confidence=confidence,
+        target_weight=target_weight,
+        rationale=rationale,
+        signals=signals,
+        net_expected_return=net_expected_return,
+        roi_edge=selected_roi_edge,
+        roi_quality=roi_quality,
+        exposure_multiplier=exposure_multiplier,
+    )
 
 
 def _rationale(action, conviction, confidence, dispersion, signals) -> str:
@@ -137,6 +246,9 @@ def evaluate(ticker: str, bars, *,
     sentiment = SENT.blended(stored_sentiment, S.log_returns(closes)[-21:])
     rev = reverse_engineer(ticker, bars, stored_sentiment=stored_sentiment)
 
+    cost_pct = float(config.transaction_cost_pct) + float(config.slippage_pct)
+    roi = forecast_roi_edges(fc, cost_pct=cost_pct)
+
     analyst_dict = None
     if use_llm:
         evidence = build_evidence(
@@ -147,12 +259,29 @@ def evaluate(ticker: str, bars, *,
 
     signals = run_agents(technical=tech, fundamental=fund, forecast=fc,
                          regime=regime, sentiment=sentiment, analyst=analyst_dict)
-    decision = decide(ticker, signals, config=config, asof=bars[-1].date)
+    decision = decide(
+        ticker,
+        signals,
+        config=config,
+        asof=bars[-1].date,
+        roi_edge_long=roi["roi_edge_long"],
+        roi_edge_short=roi["roi_edge_short"],
+        forecast_confidence=float(fc.get("confidence") or 0.0),
+        net_expected_return=roi["net_expected_return"],
+    )
     decision.evidence = {
         "technical": tech, "fundamental": fund, "forecast": fc,
         "regime": regime, "reverse_engineering": rev.to_dict(),
         "sentiment": round(sentiment, 4), "analyst": analyst_dict,
         "_regime_state": rstate,
+        "roi": {
+            "cost_pct": round(roi["cost_pct"], 8),
+            "p10_return": round(roi["p10_return"], 6),
+            "p90_return": round(roi["p90_return"], 6),
+            "net_expected_return": round(roi["net_expected_return"], 6),
+            "roi_edge_long": round(roi["roi_edge_long"], 6),
+            "roi_edge_short": round(roi["roi_edge_short"], 6),
+        },
     }
     return decision
 
