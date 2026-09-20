@@ -1374,11 +1374,29 @@ def _print_repair_result(result) -> None:
     if not run.items:
         print("No repair candidates — system looks healthy.")
         return
+    from aoa.repair.schedule_gate import item_requires_escalation
+
     for item in run.items:
-        flag = "FIX" if item.fixable else "WATCH"
+        if item.fixable and item_requires_escalation(item.to_context()):
+            flag = "HOLD"
+        elif item.fixable:
+            flag = "FIX"
+        else:
+            flag = "WATCH"
         print(f"  [{flag}] {item.title} ({item.source}, {item.severity})")
         if item.detail:
             print(f"        {item.detail[:120]}")
+
+
+def _triage_needs_l2(items) -> bool:
+    from aoa.repair.schedule_gate import item_requires_escalation
+
+    return any(
+        i.severity == "critical"
+        and i.fixable
+        and not item_requires_escalation(i.to_context())
+        for i in items
+    )
 
 
 def cmd_repair_triage(cfg: Config, *, no_sync: bool) -> int:
@@ -1392,20 +1410,18 @@ def cmd_repair_triage(cfg: Config, *, no_sync: bool) -> int:
         print(f"STATE.md updated at {result.state_path}")
     # Exit 1 only when L2 can act (auto-fixable critical). Escalated / human-only
     # criticals must not fail queue-sync or other discovery automations.
-    from aoa.repair.schedule_gate import item_requires_escalation
-
-    needs_l2 = any(
-        i.severity == "critical"
-        and i.fixable
-        and not item_requires_escalation(i.to_context())
-        for i in result.run.items
-    )
-    return 1 if needs_l2 else 0
+    return 1 if _triage_needs_l2(result.run.items) else 0
 
 
 def cmd_team_code(cfg: Config, *, dry_run: bool = True) -> int:
-    """Required entry for coding / fix / simplify — health → triage → ATTL mesh."""
+    """Required entry for coding / fix / simplify — audit → triage → ATTL mesh.
+
+    Does **not** construct a live broker. Coding must work without OpenD/Alpaca
+    (``aoa team health`` still checks trading connectivity separately).
+    """
+    from aoa.attl.orchestrator import AttlOrchestrator
     from aoa.constraints import load_constraints
+    from aoa.team.code_engineering import run_code_quality_audit
 
     cs = load_constraints()
     print(
@@ -1416,15 +1432,19 @@ def cmd_team_code(cfg: Config, *, dry_run: bool = True) -> int:
         print("loop-pause-all active — coding path halted.")
         return 1
 
-    health_rc = cmd_team_health(cfg)
     print(
         "\nCoding / fix / simplify MUST use the ATTL loop "
         "(not ad-hoc edits outside maker/checker)."
     )
-    triage_rc = cmd_repair_triage(cfg, no_sync=False)
-    print("\nRunning ATTL mesh" + (" (dry-run)" if dry_run else "") + "…")
-    from aoa.attl.orchestrator import AttlOrchestrator
+    audit = run_code_quality_audit()
+    print(f"Code audit: {audit.summary} ({audit.worst_status.value})")
+    if not audit.can_proceed:
+        print("Critical code-quality issues — halt until fixed.")
+        return 1
 
+    # Dry-run must not rewrite STATE.md; --apply may sync.
+    triage_rc = cmd_repair_triage(cfg, no_sync=dry_run)
+    print("\nRunning ATTL mesh" + (" (dry-run)" if dry_run else "") + "…")
     orch = AttlOrchestrator()
     result = orch.run(dry_run=dry_run)
     print(f"ATTL outcome: {result.outcome}")
@@ -1434,8 +1454,6 @@ def cmd_team_code(cfg: Config, *, dry_run: bool = True) -> int:
         title = result.selected_task.get("title") or result.selected_task.get("id")
         print(f"Selected task: {title}")
         print("Maker: minimal-fix / coding-engineer → loop-verifier → draft PR")
-    if health_rc:
-        return health_rc
     if result.outcome in {"paused", "critical-report"}:
         return 1
     return triage_rc

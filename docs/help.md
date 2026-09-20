@@ -65,6 +65,9 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 - example-hftish: `./scripts/example-hftish-setup.sh` · `vault/system/example-hftish.md` · [example-hftish-reference.md](how-to/example-hftish-reference.md) · CLI `aoa hftish status|smoke`
 - open-quant-live-book: `./scripts/open-quant-live-book-setup.sh` · `vault/system/open-quant-live-book.md` · [open-quant-live-book-reference.md](how-to/open-quant-live-book-reference.md) · CLI `aoa openquant status|smoke`
 - deepstock: `./scripts/deepstock-setup.sh` · `vault/system/deepstock.md` · [deepstock-reference.md](how-to/deepstock-reference.md)
+
+Sweep leftovers and next upgrades: [suggestions.md](suggestions.md).
+
 ## Local model runtime (optional)
 
 | Resource | Role |
