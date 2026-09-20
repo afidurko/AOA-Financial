@@ -165,6 +165,42 @@ def fetch_kraken(pair: str, tf: Timeframe, *, since: int | None = None) -> list[
 _COINBASE_GRANULARITIES = (86400, 21600, 3600, 900, 300, 60)
 
 
+def quality_issues(bars: list[Bar], *, max_gap: float = 3.0) -> list[str]:
+    """Return reasons a series must not be backtested or learned from.
+
+    Free feeds ship unadjusted reverse splits and bad prints as single-bar jumps
+    of several hundred percent; a strategy that happens to be long across one of
+    them books a fake +4000 % trade and the memory would trust the symbol for it.
+    ``max_gap`` is the largest move (fraction) accepted as real, both between
+    consecutive closes and within one bar (``high / low``). The default 300 %
+    keeps genuine +100 % biotech news days while catching ≥ 1:4 reverse splits.
+    """
+    issues: list[str] = []
+    bad_price = sum(1 for b in bars if b.close <= 0 or b.low <= 0 or b.high < b.low)
+    if bad_price:
+        issues.append(f"{bad_price} bar(s) with non-positive or inverted prices")
+    gaps = 0
+    worst = 0.0
+    for prev, cur in zip(bars, bars[1:], strict=False):
+        if prev.close <= 0:
+            continue
+        move = abs(cur.close / prev.close - 1.0)
+        if move > max_gap:
+            gaps += 1
+            worst = max(worst, move)
+    if gaps:
+        issues.append(f"{gaps} split-like gap(s) > {max_gap:.0%} between closes (worst {worst:.0%})")
+    wide = 0
+    worst_range = 0.0
+    for b in bars:
+        if b.low > 0 and b.high / b.low - 1.0 > max_gap:
+            wide += 1
+            worst_range = max(worst_range, b.high / b.low - 1.0)
+    if wide:
+        issues.append(f"{wide} bar(s) with intrabar range > {max_gap:.0%} (worst {worst_range:.0%})")
+    return issues
+
+
 def resample_bars(bars: list[Bar], seconds: int, *, market: str = "crypto") -> list[Bar]:
     """Aggregate finer bars into ``seconds``-wide bars.
 

@@ -199,6 +199,29 @@ def test_desk_never_proposes_from_synthetic_standin_bars(desk_env: Path, monkeyp
     assert runner2.run(["BTC-USD"], presets=["position-crypto-1d-trend"], capture=False).proposals
 
 
+def test_desk_skips_split_polluted_real_series_and_does_not_learn(desk_env: Path, monkeypatch) -> None:
+    from aoa.brokerage.models import Bar
+    from aoa.tradingview import data as tvdata
+
+    def fake_fetch_bars(symbol, tf, **kw):
+        bars = tvdata.synthetic_bars(symbol, tvdata.get_timeframe(tf), n=700, seed=5)
+        # unadjusted reverse split half-way through a "real" Yahoo series
+        out = []
+        for i, b in enumerate(bars):
+            k = 40.0 if i >= 350 else 1.0
+            out.append(Bar(timestamp=b.timestamp, open=b.open * k, high=b.high * k, low=b.low * k, close=b.close * k, volume=b.volume))
+        return out, "yahoo"
+
+    monkeypatch.setattr("aoa.tradingview.desk.fetch_bars", fake_fetch_bars)
+    runner = DeskRunner(source="yahoo", report_dir=desk_env / "reports", folds=0, monte_carlo=False, use_fundamentals=False)
+    report = runner.run(["QH"], presets=["swing-equity-1d-trend"], capture=False)
+    row = report.rows[0]
+    assert row.error.startswith("data quality:") and "split-like gap" in row.error
+    assert row.metrics == {} and row.reward == 0.0
+    assert runner.memory.recall("swing-equity-1d-trend", "QH", "1D") == 0.0  # nothing learned
+    assert report.proposals == []
+
+
 def test_desk_explains_cost_gated_hft_rows(desk_env: Path) -> None:
     # 1-second synthetic BTC bars: the ATR target is a few bp, round-trip fees ~10 bp,
     # so the min_edge_cost_mult gate must refuse every entry and the report must say why.

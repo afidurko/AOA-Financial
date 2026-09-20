@@ -40,7 +40,7 @@ from aoa.tradingview.backtest import (
     walk_forward,
 )
 from aoa.tradingview.connectome import FlyConnectome, sense_from_features
-from aoa.tradingview.data import fetch_bars, guess_market
+from aoa.tradingview.data import fetch_bars, guess_market, quality_issues
 from aoa.tradingview.fundamentals import FundamentalSnapshot, YahooFundamentals, gate_passes
 from aoa.tradingview.memory import DeskMemory, reward_from_metrics
 from aoa.tradingview.pine import generate_pine, lint_pine, pine_filename
@@ -317,14 +317,23 @@ class DeskRunner:
                     bars, src = bars_cache[key]
                     snap, f_ok, reasons = self.fundamentals_for(symbol, preset)
                     strat_warm = build_strategy(preset.with_timeframe(tf.key)).warmup
+                    skip = ""
                     if len(bars) < strat_warm + 30:
+                        skip = f"insufficient bars ({len(bars)} < {strat_warm + 30})"
+                    elif not src.startswith("synthetic"):
+                        # Synthetic series are clean by construction; only real feeds carry
+                        # unadjusted splits / bad prints that would poison the memory.
+                        issues = quality_issues(bars)
+                        if issues:
+                            skip = "data quality: " + "; ".join(issues)
+                    if skip:
                         report.rows.append(
                             DeskRow(
                                 preset=preset.name, symbol=symbol, timeframe=tf.key, market=market, source=src,
                                 n_bars=len(bars), metrics={}, walk_forward=None, monte_carlo=None, reward=0.0,
                                 weight=self.memory.recall(preset.name, symbol, tf.key),
                                 fundamentals=snap.to_dict() if snap else None, fundamentals_ok=f_ok,
-                                error=f"insufficient bars ({len(bars)} < {strat_warm + 30})",
+                                error=skip,
                             )
                         )
                         continue

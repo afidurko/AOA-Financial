@@ -131,6 +131,11 @@ aoa tv fundamentals NVDA --preset position-equity-1d-fundamental
   Coinbase (pages back ~3000 candles) → Kraken (latest 720) → Yahoo. Missing
   intervals (4h) are resampled from the finest native one; intraday equity
   bars anchor to the 09:30 ET open like TradingView.
+- Data quality gate (`quality_issues`): real series with a close-to-close or
+  intrabar move above 300 % (unadjusted reverse splits, bad prints — ~9 % of
+  the Nasdaq/NYSE small-cap tail on Yahoo) are reported as
+  `data quality: …` and neither backtested nor learned from. A +4000 %
+  "trade" across a 1:40 reverse split is not an edge.
 - Fundamentals are a *current snapshot*, not point-in-time. The desk applies
   them as a universe filter and marks the row `fundamentals gate: …`; grade
   position presets on the walk-forward OOS numbers.

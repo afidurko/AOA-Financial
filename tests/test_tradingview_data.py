@@ -121,6 +121,43 @@ def test_cache_roundtrip_and_dedupe(tmp_path) -> None:
     assert read_cache(p) == []
 
 
+def test_quality_issues_flags_split_gaps_and_bad_prices() -> None:
+    from aoa.tradingview.data import quality_issues
+
+    clean = synthetic_bars("X", get_timeframe("1D"), n=300, seed=3)
+    assert quality_issues(clean) == []
+    # an unadjusted 1:40 reverse split shows up as a single +3900 % close-to-close jump
+    split = list(clean)
+    b = split[150]
+    split[150] = Bar(timestamp=b.timestamp, open=b.open * 40, high=b.high * 40, low=b.low * 40, close=b.close * 40, volume=b.volume)
+    for j in range(151, len(split)):
+        c = split[j]
+        split[j] = Bar(timestamp=c.timestamp, open=c.open * 40, high=c.high * 40, low=c.low * 40, close=c.close * 40, volume=c.volume)
+    issues = quality_issues(split)
+    assert len(issues) == 1 and issues[0].startswith("1 split-like gap")
+    worst = int(issues[0].rsplit("worst ", 1)[1].rstrip("%)"))
+    assert 3500 <= worst <= 4300  # ≈ 40× jump measured close-to-close on a drifting series
+    # a genuine +120 % news day is *not* a data problem at the default threshold …
+    news = list(clean)
+    for j in range(200, len(news)):
+        c = news[j]
+        news[j] = Bar(timestamp=c.timestamp, open=c.open * 2.2, high=c.high * 2.2, low=c.low * 2.2, close=c.close * 2.2, volume=c.volume)
+    assert quality_issues(news) == []
+    # … but callers can tighten it
+    assert quality_issues(news, max_gap=0.75) and "gap" in quality_issues(news, max_gap=0.75)[0]
+    # an unadjusted split inside one bar (open 7.92 → low 1.15, like QH 2025-10-29)
+    intrabar = list(clean)
+    b = intrabar[100]
+    intrabar[100] = Bar(timestamp=b.timestamp, open=b.close * 7.0, high=b.close * 7.0, low=b.close * 0.98, close=b.close, volume=b.volume)
+    assert any("intrabar range" in i for i in quality_issues(intrabar))
+    # a zero close / inverted high-low is a bad print
+    bad = list(clean)
+    z = bad[10]
+    bad[10] = Bar(timestamp=z.timestamp, open=z.open, high=z.low, low=z.high, close=0.0, volume=z.volume)
+    assert any("non-positive or inverted" in i for i in quality_issues(bad))
+    assert quality_issues([]) == []
+
+
 def test_resample_bars_aggregates_ohlcv() -> None:
     from aoa.tradingview.data import resample_bars
 
