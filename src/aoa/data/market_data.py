@@ -7,13 +7,13 @@ timeframes (1m → yearly) and condensed into per-timeframe technical snapshots.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from aoa.brokerage.base import Broker, BrokerError
 from aoa.brokerage.models import Bar, Quote
 from aoa.data.indicators import technical_snapshot
 from aoa.data.timeframes import DEFAULT_TIMEFRAMES, TimeframeSpec
+from aoa.parallel import fan_out
 
 PRIMARY_TIMEFRAME = "1Day"
 
@@ -130,21 +130,11 @@ class MarketDataService:
     def _fetch_bars_parallel(
         self, symbols: list[str]
     ) -> dict[str, dict[str, list[Bar]]]:
-        bars_by_tf_symbol: dict[str, dict[str, list[Bar]]] = {}
-        if not self.timeframes:
-            return bars_by_tf_symbol
+        def fetch(tf: TimeframeSpec) -> dict[str, list[Bar]]:
+            return self.broker.get_bars_batch(symbols, tf.alpaca, tf.limit)
 
-        def fetch(tf: TimeframeSpec) -> tuple[str, dict[str, list[Bar]]]:
-            batch = self.broker.get_bars_batch(symbols, tf.alpaca, tf.limit)
-            return tf.key, batch
-
-        max_workers = min(len(self.timeframes), 8)
-        with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futures = [pool.submit(fetch, tf) for tf in self.timeframes]
-            for fut in as_completed(futures):
-                key, batch = fut.result()
-                bars_by_tf_symbol[key] = batch
-        return bars_by_tf_symbol
+        batches = fan_out(fetch, self.timeframes, workers=8)
+        return {tf.key: batch for tf, batch in zip(self.timeframes, batches, strict=True)}
 
     def _assemble(
         self,

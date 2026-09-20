@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import json
 import uuid
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from aoa.agents.base import Agent
+from aoa.parallel import fan_out
 from aoa.team.models import (
     HireRecommendation,
     InterviewRound,
@@ -223,7 +223,6 @@ class QuantHireService:
             self.store.supersede_quant_hire_rounds()
 
         riley = RileyAgent(self.llm)
-        scorecards: list[InterviewScorecard] = []
 
         def _one(seat: QuantSeat) -> InterviewScorecard:
             seed = SEED_CANDIDATES[seat.seat_id]
@@ -233,13 +232,7 @@ class QuantHireService:
                 candidate_background=seed["background"],
             )
 
-        with ThreadPoolExecutor(max_workers=min(5, len(QUANT_SEATS))) as pool:
-            futures = {pool.submit(_one, s): s for s in QUANT_SEATS}
-            by_id: dict[str, InterviewScorecard] = {}
-            for fut in as_completed(futures):
-                card = fut.result()
-                by_id[card.seat_id] = card
-            scorecards = [by_id[s.seat_id] for s in QUANT_SEATS]
+        scorecards = fan_out(_one, QUANT_SEATS, workers=5)
 
         hired = sum(1 for c in scorecards if c.hire)
         summary = (

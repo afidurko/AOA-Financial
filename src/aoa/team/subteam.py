@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import json
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from aoa.agents.base import clamp_conviction
 from aoa.data.market_data import SymbolSnapshot
+from aoa.parallel import fan_out
 from aoa.team.models import (
     AlgorithmReport,
     ApprovedSubTeam,
@@ -208,17 +208,9 @@ class SubTeamRunner:
                 self.journal.record(f"team.{lead_slug}.sub", row)
             return row
 
-        if not self.parallel or len(team.members) <= 1 or self.max_workers <= 1:
-            return [_one(m) for m in team.members]
-
-        outputs: list[dict[str, Any]] = []
-        workers = min(self.max_workers, len(team.members))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_one, m): m for m in team.members}
-            for fut in as_completed(futures):
-                outputs.append(fut.result())
-        outputs.sort(key=lambda row: row.get("name", ""))
-        return outputs
+        return fan_out(
+            _one, team.members, workers=self.max_workers, parallel=self.parallel
+        )
 
     def synthesize(
         self,

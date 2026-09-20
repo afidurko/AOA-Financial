@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from aoa.adapt.signal_adapter import SignalAdapter
@@ -15,6 +14,7 @@ from aoa.llm.client import LLMClient
 from aoa.notify.iphone import IPhoneNotifier
 from aoa.notify.policy import NotificationPolicy
 from aoa.notify.types import StructuredNotification
+from aoa.parallel import fan_out
 from aoa.swarm.orchestrator import CycleResult, Orchestrator
 from aoa.team.aaron import AaronAgent
 from aoa.team.alan import AlanAgent
@@ -731,31 +731,13 @@ class TeamOrchestrator:
         *,
         parallel: bool,
     ) -> list[AlgorithmReport]:
-        if not parallel or len(trends) <= 1 or self.config.parallel_workers <= 1:
-            out: list[AlgorithmReport] = []
-            for trend in trends:
-                snap = snapshots.get(trend.symbol)
-                if snap:
-                    out.append(self.julie.refine(trend, snap, code_quality=code_quality))
-            return out
-
-        algorithms: list[AlgorithmReport] = []
-        workers = min(self.config.parallel_workers, len(trends))
-
-        def _one(trend: TrendReport) -> AlgorithmReport | None:
-            snap = snapshots.get(trend.symbol)
-            if not snap:
-                return None
-            return self.julie.refine(trend, snap, code_quality=code_quality)
-
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_one, t): t for t in trends}
-            for fut in as_completed(futures):
-                report = fut.result()
-                if report is not None:
-                    algorithms.append(report)
-        algorithms.sort(key=lambda a: a.symbol)
-        return algorithms
+        with_data = [t for t in trends if t.symbol in snapshots]
+        return fan_out(
+            lambda t: self.julie.refine(t, snapshots[t.symbol], code_quality=code_quality),
+            with_data,
+            workers=self.config.parallel_workers,
+            parallel=parallel,
+        )
 
     def _dispatch_cycle_notifications(
         self, result: TeamCycleResult, *, run_id: str
