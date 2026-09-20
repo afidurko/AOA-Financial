@@ -206,6 +206,14 @@ _LOOP_SKILLS = (
     "loop-triage",
     "minimal-fix",
     "loop-verifier",
+    "fable-repair",
+    "coding-engineer",
+)
+
+_CODING_LOOP_REGISTRY = (
+    "user-response-loop",
+    "fable-repair",
+    "attl",
 )
 
 
@@ -223,13 +231,24 @@ def _check_loop_scaffold(root: Path) -> CodeFinding:
 
     registry = root / "patterns" / "registry.yaml"
     registry_text = registry.read_text(encoding="utf-8") if registry.is_file() else ""
-    if "user-response-loop" not in registry_text:
-        parts.append("patterns/registry.yaml missing user-response-loop entry")
+    for entry in _CODING_LOOP_REGISTRY:
+        if entry not in registry_text:
+            parts.append(f"patterns/registry.yaml missing {entry} entry")
 
     prompts = root / "loop-prompts.yaml"
     prompts_text = prompts.read_text(encoding="utf-8") if prompts.is_file() else ""
     if "BRIEF:" not in prompts_text:
         parts.append("loop-prompts.yaml missing BRIEF shortkey")
+
+    # Coding / fix / simplify must be wired through ATTL (aoa team code / attl run).
+    cli_text = _read(root / "src" / "aoa" / "cli.py")
+    if "cmd_team_code" not in cli_text or 'team_command == "code"' not in cli_text:
+        parts.append("aoa team code entry missing (required coding/fix/simplify path)")
+    constraints = _read(root / "loop-constraints.md")
+    if "coding / fix / simplify" not in constraints.lower() and (
+        "must use the attl" not in constraints.lower()
+    ):
+        parts.append("loop-constraints.md missing required coding-via-ATTL rule")
 
     if parts:
         return CodeFinding(
@@ -240,7 +259,7 @@ def _check_loop_scaffold(root: Path) -> CodeFinding:
     return CodeFinding(
         "loop_scaffold",
         HealthStatus.OK,
-        "Loop engineering scaffold files, skills, and response loop present.",
+        "Loop engineering scaffold + required coding-via-ATTL path present.",
     )
 
 

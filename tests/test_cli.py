@@ -177,6 +177,94 @@ def test_cli_openquant_skips_env_template(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / ".env").exists()
 
 
+
+def test_cmd_team_code_skips_broker_and_runs_attl(monkeypatch, capsys):
+    from aoa.cli import cmd_team_code
+    from aoa.constraints import ConstraintSet
+    from aoa.team.code_engineering import CodeQualityReport
+
+    cfg = Config(anthropic_api_key="sk-test", env="test")
+
+    def _fail_broker(*_a, **_k):
+        raise AssertionError("coding path must not construct a live broker")
+
+    monkeypatch.setattr("aoa.cli.build_broker", _fail_broker)
+    monkeypatch.setattr("aoa.cli.build_team", _fail_broker)
+    monkeypatch.setattr(
+        "aoa.constraints.load_constraints",
+        lambda: ConstraintSet(path=Path("loop-constraints.md"), mode="auto-12"),
+    )
+    monkeypatch.setattr(
+        "aoa.team.code_engineering.run_code_quality_audit",
+        lambda **_k: CodeQualityReport(
+            findings=[], can_proceed=True, summary="ok"
+        ),
+    )
+    monkeypatch.setattr("aoa.cli.cmd_repair_triage", lambda _cfg, *, no_sync: 0)
+
+    class _Snap:
+        outcome = "auto-continue"
+        notes = ["dry"]
+        selected_task = {"id": "upg-test", "title": "demo"}
+
+        def run(self, *, dry_run=True):
+            assert dry_run is True
+            return self
+
+    monkeypatch.setattr("aoa.attl.orchestrator.AttlOrchestrator", lambda: _Snap())
+    code = cmd_team_code(cfg, dry_run=True)
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "MUST use the ATTL loop" in out
+    assert "ATTL outcome: auto-continue" in out
+    assert "demo" in out
+
+
+def test_cmd_team_code_halts_when_paused(monkeypatch, capsys):
+    from aoa.cli import cmd_team_code
+    from aoa.constraints import ConstraintSet
+
+    cfg = Config(anthropic_api_key="sk-test", env="test")
+    cs = ConstraintSet(path=Path("loop-constraints.md"), pause_active=True)
+    monkeypatch.setattr("aoa.constraints.load_constraints", lambda: cs)
+    monkeypatch.setattr(
+        "aoa.cli.build_broker",
+        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("no broker")),
+    )
+    code = cmd_team_code(cfg, dry_run=True)
+    out = capsys.readouterr().out
+    assert code == 1
+    assert "loop-pause-all" in out
+
+
+def test_print_repair_result_marks_escalated_hold(capsys):
+    from aoa.cli import _print_repair_result
+    from aoa.repair.models import RepairItem, RepairRun
+    from aoa.repair.orchestrator import RepairResult
+
+    result = RepairResult(
+        run=RepairRun(
+            run_id="r1",
+            items=[
+                RepairItem(
+                    item_id="e1",
+                    title="Needs CEO",
+                    source="state",
+                    severity="critical",
+                    fixable=True,
+                    requires_escalation=True,
+                )
+            ],
+        ),
+        queue_path=Path("q.json"),
+        state_path=Path("STATE.md"),
+    )
+    _print_repair_result(result)
+    out = capsys.readouterr().out
+    assert "[HOLD]" in out
+    assert "Needs CEO" in out
+
+
 def test_cmd_setup_moomoo_runs_helper(monkeypatch, capsys):
     cfg = Config(anthropic_api_key="sk-test", broker="moomoo")
     calls: list[list[str]] = []
