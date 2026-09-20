@@ -2654,6 +2654,260 @@ def cmd_setup_mac(_cfg: Config) -> int:
     return int(result.returncode)
 
 
+def cmd_crypto_status(*, as_json: bool = False) -> int:
+    """Show cache, model, and connectome state for the crypto research lane."""
+    from aoa.connectome.elegans import build_market_worm
+    from aoa.crypto.assets import ASSETS, TRAINING_EPOCH
+    from aoa.crypto.history import HistoryStore
+    from aoa.crypto.training import PatternMemory
+
+    store = HistoryStore()
+    model_dir = Path("data/crypto/models")
+    rows: list[dict] = []
+    for code, asset in ASSETS.items():
+        candles = store.load(asset)
+        mem_path = model_dir / f"{code.lower()}_memory.json"
+        memory = None
+        if mem_path.exists():
+            memory = PatternMemory.from_dict(json.loads(mem_path.read_text()))
+        rows.append(
+            {
+                "asset": code,
+                "candles": len(candles),
+                "first": candles[0].day.isoformat() if candles else None,
+                "last": candles[-1].day.isoformat() if candles else None,
+                "trained_market_days": memory.market_days if memory else 0,
+                "memory_last_day": memory.last_day if memory else None,
+            }
+        )
+    payload = {
+        "training_epoch": TRAINING_EPOCH.isoformat(),
+        "connectome": build_market_worm().describe(),
+        "assets": rows,
+    }
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    worm = payload["connectome"]
+    print(f"Crypto research lane — training epoch {payload['training_epoch']}")
+    print(
+        f"Connectome: {worm['neurons']} neurons, {worm['synapses']} synapses, "
+        f"motor groups {worm['motor_groups']}"
+    )
+    for row in rows:
+        span = f"{row['first']} → {row['last']}" if row["candles"] else "no cached data"
+        print(
+            f"  {row['asset']:>4}: {row['candles']:>5} candles ({span}); "
+            f"trained on {row['trained_market_days']} market days"
+        )
+    return 0
+
+
+def cmd_crypto_fetch(*, assets: str = "all", refresh: bool = False, as_json: bool = False) -> int:
+    """Fetch and cache daily history for the core crypto assets."""
+    from aoa.crypto.assets import DEFAULT_ASSETS, get_asset
+    from aoa.crypto.history import HistoryStore
+
+    codes = DEFAULT_ASSETS if assets == "all" else tuple(a.strip() for a in assets.split(","))
+    store = HistoryStore()
+    out: list[dict] = []
+    rc = 0
+    for code in codes:
+        asset = get_asset(code)
+        try:
+            candles = store.ensure(asset, refresh=refresh)
+        except Exception as exc:  # noqa: BLE001 — report per-asset and continue
+            print(f"  {asset.code}: FAILED — {exc}", file=sys.stderr)
+            rc = 1
+            continue
+        info = {
+            "asset": asset.code,
+            "candles": len(candles),
+            "first": candles[0].day.isoformat(),
+            "last": candles[-1].day.isoformat(),
+            "path": str(store.path_for(asset)),
+        }
+        out.append(info)
+        if not as_json:
+            print(
+                f"  {asset.code:>4}: {info['candles']} daily candles "
+                f"{info['first']} → {info['last']}  ({info['path']})"
+            )
+    if as_json:
+        print(json.dumps(out, indent=2))
+    return rc
+
+
+def cmd_crypto_train(
+    *,
+    assets: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+    fresh: bool = False,
+    ensemble: bool = False,
+    as_json: bool = False,
+) -> int:
+    """Day-by-day walk-forward training from the epoch (or ``--start``)."""
+    from datetime import date as _date
+
+    from aoa.crypto.assets import DEFAULT_ASSETS, TRAINING_EPOCH, get_asset
+    from aoa.crypto.history import HistoryStore
+    from aoa.crypto.traders import HedgeEnsemble
+    from aoa.crypto.training import DayByDayTrainer
+
+    codes = DEFAULT_ASSETS if assets == "all" else tuple(a.strip() for a in assets.split(","))
+    start_day = _date.fromisoformat(start) if start else TRAINING_EPOCH
+    end_day = _date.fromisoformat(end) if end else None
+    store = HistoryStore()
+    reports: list[dict] = []
+    for code in codes:
+        asset = get_asset(code)
+        candles = store.ensure(asset)
+        if ensemble:
+            swarm = _fresh_ensemble(asset) if fresh else HedgeEnsemble(asset)
+            window = [c for c in candles if c.day >= start_day and (end_day is None or c.day <= end_day)]
+            summary = swarm.train(window, partner_closes=_partner_closes(store, asset), save=not fresh)
+            reports.append(summary)
+            if not as_json:
+                print(f"  {summary['asset']:>4}: swarm learned {summary['days_learned']} days")
+                for name, weight in sorted(summary["weights"].items(), key=lambda kv: -kv[1]):
+                    hr = summary["hit_rates"].get(name)
+                    n = summary["decisions"].get(name, 0)
+                    hr_txt = f"{hr:.1%} over {n}" if hr is not None else "no decisions"
+                    print(f"        {weight:6.1%}  {name:<18} hit-rate {hr_txt}")
+            continue
+        trainer = _fresh_trainer(asset) if fresh else DayByDayTrainer(asset)
+        report = trainer.train(candles, start=start_day, end=end_day)
+        reports.append(report.to_dict())
+        if not as_json:
+            r = report
+            print(
+                f"  {r.asset:>4}: walked {r.days_walked} days ({r.start} → {r.end}) — "
+                f"{r.market_days} market, {r.pre_genesis_days} pre-genesis, "
+                f"{r.pre_market_days} pre-market, {r.gap_days} gaps"
+            )
+            print(
+                f"        head hit-rate {r.hit_rate:.1%} over {r.adapter_updates} updates; "
+                f"worm hit-rate {r.worm_hit_rate:.1%} over {r.worm_decisions} decisions"
+            )
+    if as_json:
+        print(json.dumps(reports, indent=2))
+    return 0
+
+
+def _fresh_trainer(asset):  # noqa: ANN001, ANN202 — CLI-local helper
+    """A trainer that ignores (and does not overwrite) persisted state."""
+    import tempfile
+
+    from aoa.crypto.training import DayByDayTrainer
+
+    return DayByDayTrainer(asset, model_dir=tempfile.mkdtemp(prefix="aoa-crypto-fresh-"))
+
+
+def _fresh_ensemble(asset):  # noqa: ANN001, ANN202 — CLI-local helper
+    """An ensemble that ignores (and does not overwrite) persisted state."""
+    import tempfile
+
+    from aoa.crypto.traders import HedgeEnsemble
+
+    return HedgeEnsemble(asset, model_dir=tempfile.mkdtemp(prefix="aoa-crypto-fresh-"))
+
+
+def _partner_closes(store, asset):  # noqa: ANN001, ANN202 — CLI-local helper
+    """Partner asset daily closes for the pairs trader (or None)."""
+    from aoa.crypto.assets import ASSETS
+    from aoa.crypto.traders import PAIR_PARTNERS
+
+    partner_code = PAIR_PARTNERS.get(asset.code)
+    if not partner_code or partner_code not in ASSETS:
+        return None
+    partner = ASSETS[partner_code]
+    candles = store.load(partner) or store.ensure(partner)
+    return {c.day: c.close for c in candles}
+
+
+def cmd_crypto_traders(*, assets: str = "all", as_json: bool = False) -> int:
+    """Show the trader swarm roster, Hedge weights, and survival-gate state."""
+    from aoa.crypto.assets import DEFAULT_ASSETS, get_asset
+    from aoa.crypto.traders import HedgeEnsemble
+
+    codes = DEFAULT_ASSETS if assets == "all" else tuple(a.strip() for a in assets.split(","))
+    payload = []
+    for code in codes:
+        ensemble = HedgeEnsemble(get_asset(code))
+        payload.append(ensemble.describe())
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    for desc in payload:
+        print(f"{desc['asset']} — swarm of {len(desc['traders'])} traders "
+              f"(learned {desc['days_learned']} days, "
+              f"{desc['survival_regimes']} survival regimes)")
+        for name, weight in sorted(desc["weights"].items(), key=lambda kv: -kv[1]):
+            print(f"    {weight:6.1%}  {name}")
+    return 0
+
+
+def cmd_crypto_backtest(
+    *,
+    assets: str = "all",
+    start: str | None = None,
+    end: str | None = None,
+    cash: float = 10_000.0,
+    take_profit: float = 0.32,
+    stop_loss: float = 0.26,
+    show_trades: int = 0,
+    ensemble: bool = False,
+    as_json: bool = False,
+) -> int:
+    """Walk-forward backtest with the mandatory pre-execution bracket."""
+    from datetime import date as _date
+
+    from aoa.crypto.assets import DEFAULT_ASSETS, TRAINING_EPOCH, get_asset
+    from aoa.crypto.backtest import BracketPolicy, CryptoBacktester
+    from aoa.crypto.history import HistoryStore
+
+    codes = DEFAULT_ASSETS if assets == "all" else tuple(a.strip() for a in assets.split(","))
+    start_day = _date.fromisoformat(start) if start else TRAINING_EPOCH
+    end_day = _date.fromisoformat(end) if end else None
+    store = HistoryStore()
+    policy = BracketPolicy(take_profit_pct=take_profit, stop_loss_pct=stop_loss)
+    results: list[dict] = []
+    for code in codes:
+        asset = get_asset(code)
+        candles = store.ensure(asset)
+        # Fresh strategy: the backtest learns strictly inside its own walk, so
+        # results are honest walk-forward (no leakage from a prior full-tape run).
+        trainer = _fresh_ensemble(asset) if ensemble else _fresh_trainer(asset)
+        partners = _partner_closes(store, asset) if ensemble else None
+        bt = CryptoBacktester(asset, policy=policy, starting_cash=cash)
+        result = bt.run(candles, trainer, start=start_day, end=end_day, partner_closes=partners)
+        payload = result.to_dict()
+        if ensemble:
+            payload["ensemble"] = trainer.describe()
+        if show_trades:
+            payload["trades"] = [t.to_dict() for t in result.trades[-show_trades:]]
+        results.append(payload)
+        if not as_json:
+            print(result.summary())
+            if ensemble:
+                weights = ", ".join(
+                    f"{n} {w:.0%}"
+                    for n, w in sorted(trainer.weights.items(), key=lambda kv: -kv[1])[:4]
+                )
+                print(f"  swarm top weights: {weights}")
+            if show_trades:
+                for t in result.trades[-show_trades:]:
+                    print(
+                        f"    {t.entry_day} → {t.exit_day}  {t.return_pct:+7.1f}%  "
+                        f"({t.exit_reason}, {t.holding_days}d)"
+                    )
+            print()
+    if as_json:
+        print(json.dumps(results, indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="aoa", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -3265,7 +3519,98 @@ def main(argv: list[str] | None = None) -> int:
     )
     ship_ready.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    crypto = sub.add_parser(
+        "crypto",
+        help="Crypto research lane: history, connectome, day-by-day training, backtests.",
+    )
+    crypto_sub = crypto.add_subparsers(dest="crypto_command", required=True)
+    cr_status = crypto_sub.add_parser("status", help="Cache/model/connectome state.")
+    cr_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    cr_fetch = crypto_sub.add_parser("fetch", help="Fetch & cache daily BTC/ETH/SOL/XRP history.")
+    cr_fetch.add_argument("--assets", default="all", help="Comma list (BTC,ETH,SOL,XRP) or 'all'.")
+    cr_fetch.add_argument("--refresh", action="store_true", help="Refetch even if cached.")
+    cr_fetch.add_argument("--json", action="store_true", help="Emit JSON.")
+    cr_train = crypto_sub.add_parser(
+        "train", help="Day-by-day walk-forward training from 2007-07-17."
+    )
+    cr_train.add_argument("--assets", default="all", help="Comma list or 'all'.")
+    cr_train.add_argument("--start", default=None, help="ISO date (default 2007-07-17).")
+    cr_train.add_argument("--end", default=None, help="ISO date (default: last candle).")
+    cr_train.add_argument(
+        "--fresh", action="store_true", help="Ignore persisted model state (throwaway run)."
+    )
+    cr_train.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Train the multi-trader swarm (Hedge ensemble) instead of the single trainer.",
+    )
+    cr_train.add_argument("--json", action="store_true", help="Emit JSON.")
+    cr_bt = crypto_sub.add_parser(
+        "backtest",
+        help="Walk-forward backtest with the +32%%/−26%% bracket attached before every entry.",
+    )
+    cr_bt.add_argument("--assets", default="all", help="Comma list or 'all'.")
+    cr_bt.add_argument("--start", default=None, help="ISO date (default 2007-07-17).")
+    cr_bt.add_argument("--end", default=None, help="ISO date (default: last candle).")
+    cr_bt.add_argument("--cash", type=float, default=10_000.0, help="Starting cash.")
+    cr_bt.add_argument(
+        "--take-profit", type=float, default=0.32, help="Take-profit fraction (default 0.32)."
+    )
+    cr_bt.add_argument(
+        "--stop-loss", type=float, default=0.26, help="Stop-loss fraction (default 0.26)."
+    )
+    cr_bt.add_argument("--trades", type=int, default=0, help="Show the last N trades.")
+    cr_bt.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Drive the backtest with the multi-trader swarm instead of the single trainer.",
+    )
+    cr_bt.add_argument("--json", action="store_true", help="Emit JSON.")
+    cr_traders = crypto_sub.add_parser(
+        "traders", help="Show the trader swarm roster, Hedge weights, and survival gate."
+    )
+    cr_traders.add_argument("--assets", default="all", help="Comma list or 'all'.")
+    cr_traders.add_argument("--json", action="store_true", help="Emit JSON.")
+
     args = parser.parse_args(argv)
+
+    # Offline research lane — no .env template and no Config/broker side effects.
+    if args.command == "crypto":
+        if args.crypto_command == "status":
+            return cmd_crypto_status(as_json=getattr(args, "json", False))
+        if args.crypto_command == "fetch":
+            return cmd_crypto_fetch(
+                assets=args.assets,
+                refresh=getattr(args, "refresh", False),
+                as_json=getattr(args, "json", False),
+            )
+        if args.crypto_command == "train":
+            return cmd_crypto_train(
+                assets=args.assets,
+                start=args.start,
+                end=args.end,
+                fresh=getattr(args, "fresh", False),
+                ensemble=getattr(args, "ensemble", False),
+                as_json=getattr(args, "json", False),
+            )
+        if args.crypto_command == "backtest":
+            return cmd_crypto_backtest(
+                assets=args.assets,
+                start=args.start,
+                end=args.end,
+                cash=args.cash,
+                take_profit=args.take_profit,
+                stop_loss=args.stop_loss,
+                show_trades=getattr(args, "trades", 0),
+                ensemble=getattr(args, "ensemble", False),
+                as_json=getattr(args, "json", False),
+            )
+        if args.crypto_command == "traders":
+            return cmd_crypto_traders(
+                assets=args.assets,
+                as_json=getattr(args, "json", False),
+            )
+        return 2
 
     # Offline research lanes — no .env template and no Config/broker side effects.
     if args.command == "visualhft":

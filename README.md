@@ -606,6 +606,16 @@ aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # Companion map: docs/how-to/hft-research-lane.md
 aoa openquant status
 aoa openquant smoke
+
+# Crypto research lane (offline; connectome + day-by-day deep-learning walk):
+aoa crypto status                       # cache/model/connectome state
+aoa crypto fetch                        # daily BTC/ETH/SOL/XRP history (Bitstamp + Yahoo)
+aoa crypto train                        # walk every day since 2007-07-17 and learn patterns
+aoa crypto train --ensemble             # train the 8-trader swarm (Hedge weights + survival gate)
+aoa crypto traders                      # swarm roster, trust weights, survival regimes
+aoa crypto backtest                     # walk-forward backtest, +32%/−26% bracket pre-attached
+aoa crypto backtest --ensemble          # same, driven by the trader swarm
+# See docs/design/crypto-connectome-lane.md + docs/design/account-repo-mesh.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -970,6 +980,8 @@ Companion tools that sit beside this repo (not vendored here):
 | **[loop-engineering](https://github.com/afidurko/loop-engineering)** | Triage + repair loop scaffold behind `LOOP.md` |
 | **[waste](https://github.com/afidurko/waste)** | Optional local large-model runtime (stream weights from NVMe) |
 | **[avellaneda-stoikov](https://github.com/afidurko/avellaneda-stoikov)** | AS reservation-price MM sim — `aoa avellaneda` research lane |
+| **[stonkfly](https://github.com/nftechie/stonkfly)** | Fly-connectome trading sim (sensory → connectome → readout → guarded orders) — architecture reference for `aoa.connectome` |
+| **[worm-sim](https://github.com/heyseth/worm-sim)** | Browser C. elegans connectome (Busbice accumulate-and-fire model) — dynamics reference for `aoa.connectome.engine` |
 
 Companion mesh guide: [docs/how-to/workspaces.md](docs/how-to/workspaces.md).
 
