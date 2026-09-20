@@ -77,12 +77,26 @@ Toggle: `AOA_INTEGRITY_NOTIFY_QUEUE=true` (default). Check: `aoa integrity statu
 
 **Cursor Needs Attention:** `aoa integrity attention --cursor` emits `external_action` items for MCP `request-environment-setup-actions`. Dashboard tab **Needs Attention** + `/api/needs-attention` for local approve/reject.
 
+## Follow-ups / suggestions
+
+Priority order for the next Integrity Ten slice:
+
+1. **Merge `origin/main`** — branch is behind; ship discover flags merge-base.
+2. **Configure a real notify channel** — set `AOA_NTFY_TOPIC` (or Pushover) so queue alerts leave the machine.
+3. **Automation schedule** — Cursor Automation that runs `aoa integrity run` then `aoa integrity attention --cursor` and posts MCP Needs Attention when pending &gt; 0.
+4. **File lock on the corrective queue** — prevent lost updates under concurrent `watch` + approve.
+5. **Wire OpenD / API key blockers** — repair triage still lists Moomoo OpenD and `ANTHROPIC_API_KEY` as human-only High Priority.
+6. **Dashboard harden remaining tabs** — Approvals / Research / Promotions still interpolate unescaped titles (Needs Attention is escaped).
+7. **Per-item Cursor cards by default** — prefer `queue --push --per-item` (or digest=false) when more than one proposal is pending so each Needs Attention action maps 1:1.
+
 ## Acceptance
 
 1. Roster is exactly 10 unique names, all subset of the twelve-member roster.
 2. `aoa integrity run` produces domain reports without requiring a live broker.
 3. Non-OK findings create a pending proposal; implant requires explicit approve.
 4. Approve writes a brain capture and optional Reed handoff; never merges.
-5. `aoa integrity queue --push` notifies via configured channels (or reports setup hint).
-6. `aoa integrity attention --cursor` emits MCP-ready external_action payload.
-7. Tests cover roster size, cohesion check, propose/approve/reject, queue notify, CLI smoke.
+5. Approve/reject refreshes `cursor_needs_attention.json` and clears linked analytics alerts.
+6. `aoa integrity queue --push` notifies via configured channels (or reports setup hint).
+7. `aoa integrity attention --cursor` emits MCP-ready external_action payload.
+8. Corrupt `corrective_queue.json` fails closed (never wiped as empty).
+9. Tests cover roster, cohesion, propose/approve/reject, attention refresh, CLI smoke.

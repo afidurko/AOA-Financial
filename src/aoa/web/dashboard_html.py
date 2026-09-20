@@ -160,6 +160,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div id="toast"></div>
   <script>
     const fmt = n => n==null?'—':'$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+    const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
     const toast = m => { const el=document.getElementById('toast'); el.textContent=m; el.style.display='block'; setTimeout(()=>el.style.display='none',4000); };
     document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
       document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -358,23 +359,23 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       document.getElementById('attention-list').innerHTML=items.length?items.map(it=>{
         const btns=(it.actions||[]).map(a=>{
           if(it.source==='integrity' && a.id==='approve')
-            return `<button class="ok" onclick="resolveIntegrity('${it.id}','approved')">Approve implant</button>`;
+            return `<button class="ok" onclick="resolveIntegrity('${esc(it.id)}','approved')">Approve implant</button>`;
           if(it.source==='integrity' && a.id==='reject')
-            return `<button class="danger" onclick="resolveIntegrity('${it.id}','rejected')">Reject</button>`;
+            return `<button class="danger" onclick="resolveIntegrity('${esc(it.id)}','rejected')">Reject</button>`;
           if(it.source==='alert' && a.id==='approve')
-            return `<button class="ok" onclick="respondAlert('${(it.payload&&it.payload.notification_id)||''}','approve')">Approve</button>`;
+            return `<button class="ok" onclick="respondAlert('${esc((it.payload&&it.payload.notification_id)||'')}','approve')">Approve</button>`;
           if(it.source==='alert' && a.id==='reject')
-            return `<button class="danger" onclick="respondAlert('${(it.payload&&it.payload.notification_id)||''}','reject')">Reject</button>`;
+            return `<button class="danger" onclick="respondAlert('${esc((it.payload&&it.payload.notification_id)||'')}','reject')">Reject</button>`;
           if(it.source==='approval' && a.id==='approve')
-            return `<button class="ok" onclick="resolveApproval('${(it.payload&&it.payload.approval_id)||''}','approved')">Approve</button>`;
+            return `<button class="ok" onclick="resolveApproval('${esc((it.payload&&it.payload.approval_id)||'')}','approved')">Approve</button>`;
           if(it.source==='approval' && a.id==='reject')
-            return `<button class="danger" onclick="resolveApproval('${(it.payload&&it.payload.approval_id)||''}','rejected')">Reject</button>`;
+            return `<button class="danger" onclick="resolveApproval('${esc((it.payload&&it.payload.approval_id)||'')}','rejected')">Reject</button>`;
           return '';
         }).join(' ');
         return `<div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.5rem;border-left:3px solid ${it.priority==='high'?'var(--red)':'var(--amber)'}">
-          <strong>${it.title}</strong>
-          <span style="color:var(--muted);font-size:.75rem;margin-left:.35rem">${it.source}</span>
-          <pre style="font-size:.8rem;margin:.35rem 0;white-space:pre-wrap;color:var(--muted)">${(it.detail||'').slice(0,500)}</pre>
+          <strong>${esc(it.title)}</strong>
+          <span style="color:var(--muted);font-size:.75rem;margin-left:.35rem">${esc(it.source)}</span>
+          <pre style="font-size:.8rem;margin:.35rem 0;white-space:pre-wrap;color:var(--muted)">${esc((it.detail||'').slice(0,500))}</pre>
           <div style="display:flex;gap:.5rem;flex-wrap:wrap">${btns}</div>
         </div>`;
       }).join(''):'<p class="stat-sm">All clear — Integrity Ten and approval inbox are empty.</p>';
@@ -384,13 +385,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       renderAttention(attention);
     }
     async function resolveIntegrity(id,status){
-      await fetch(`/api/integrity/${id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+      const r=await fetch(`/api/integrity/${id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.detail||`Failed (${r.status})`); return; }
       toast(status==='approved'?`Implanted ${id}`:`Rejected ${id}`);
       refresh();
     }
     async function respondAlert(id,action){
       if(!id) return;
-      await fetch(`/api/alerts/${id}/respond`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+      const r=await fetch(`/api/alerts/${id}/respond`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.detail||`Failed (${r.status})`); return; }
       toast(`${action} alert ${id}`);
       refresh();
     }

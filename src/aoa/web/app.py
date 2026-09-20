@@ -203,15 +203,52 @@ def create_app(cfg: Config | None = None) -> FastAPI:
     def resolve_approval(
         request: Request, approval_id: str, body: ResolveBody
     ) -> dict[str, Any]:
+        from pathlib import Path
+
+        from aoa.config import data_dir_for
+        from aoa.integrity.squad import IntegritySquad
+
         store: AnalyticsStore | None = request.app.state.analytics_store
         if store is None:
             raise HTTPException(status_code=404, detail="Analytics disabled")
         if body.status not in {"approved", "rejected", "deferred"}:
             raise HTTPException(status_code=400, detail="Invalid status")
+
+        row = store.get_approval(approval_id)
+        integrity_result: dict[str, Any] | None = None
+        if (
+            row is not None
+            and str(row.get("kind") or "") == "integrity_corrective"
+            and body.status in {"approved", "rejected"}
+        ):
+            cfg: Config = request.app.state.cfg
+            squad = IntegritySquad(
+                repo_root=Path.cwd(),
+                data_dir=data_dir_for(cfg.env) / "integrity",
+                analytics_store=store,
+            )
+            payload = row.get("payload") or {}
+            proposal_id = str(payload.get("proposal_id") or approval_id)
+            try:
+                if body.status == "approved":
+                    integrity_result = squad.approve(
+                        proposal_id, note="approvals inbox"
+                    )
+                else:
+                    integrity_result = squad.reject(
+                        proposal_id, note="approvals inbox"
+                    )
+            except (KeyError, ValueError) as exc:
+                # Queue may already be applied; still try to close the inbox row.
+                integrity_result = {"error": str(exc)}
+
         ok = store.resolve_approval(approval_id, body.status)
-        if not ok:
+        if not ok and integrity_result is None:
             raise HTTPException(status_code=404, detail="Approval not found")
-        return {"id": approval_id, "status": body.status}
+        out: dict[str, Any] = {"id": approval_id, "status": body.status}
+        if integrity_result is not None:
+            out["integrity"] = integrity_result
+        return out
 
     @app.get("/api/research/proposals")
     def list_research(request: Request, status: str | None = None) -> dict[str, Any]:
@@ -335,9 +372,11 @@ def create_app(cfg: Config | None = None) -> FastAPI:
                 status_code=400, detail="status must be approved or rejected"
             )
         cfg: Config = request.app.state.cfg
+        store: AnalyticsStore | None = request.app.state.analytics_store
         squad = IntegritySquad(
             repo_root=Path.cwd(),
             data_dir=data_dir_for(cfg.env) / "integrity",
+            analytics_store=store,
         )
         try:
             if body.status == "approved":

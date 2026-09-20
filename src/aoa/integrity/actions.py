@@ -60,6 +60,10 @@ class CorrectiveProposal:
         )
 
 
+class QueueCorruptError(RuntimeError):
+    """Raised when corrective_queue.json exists but is not valid JSON."""
+
+
 def default_queue_path(repo_root: Path, data_dir: Path | None = None) -> Path:
     base = data_dir or (repo_root / "data" / "paper" / "integrity")
     return base / "corrective_queue.json"
@@ -69,12 +73,19 @@ def load_queue(path: Path) -> list[CorrectiveProposal]:
     if not path.is_file():
         return []
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
+        text = path.read_text(encoding="utf-8")
+    except OSError:
         return []
+    if not text.strip():
+        return []
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        # Fail closed — never treat corrupt JSON as empty (would wipe proposals).
+        raise QueueCorruptError(f"Corrupt integrity queue at {path}: {exc}") from exc
     items = data.get("items") if isinstance(data, dict) else data
     if not isinstance(items, list):
-        return []
+        raise QueueCorruptError(f"Corrupt integrity queue at {path}: items is not a list")
     return [CorrectiveProposal.from_dict(x) for x in items if isinstance(x, dict)]
 
 
@@ -161,9 +172,14 @@ def resolve_proposal(
     found: CorrectiveProposal | None = None
     for prop in items:
         if prop.id == proposal_id:
+            # pending → applied|rejected|approved; approved → applied (legacy)
             if prop.status not in {"pending", "approved"}:
                 raise ValueError(
                     f"Proposal {proposal_id} is {prop.status}; cannot set {status}."
+                )
+            if prop.status == "approved" and status == "rejected":
+                raise ValueError(
+                    f"Proposal {proposal_id} is already approved; cannot reject."
                 )
             prop.status = status
             prop.note = note
@@ -180,6 +196,7 @@ def apply_safe_fixes(
     proposal: CorrectiveProposal,
     *,
     repo_root: Path,
+    handoff_dir: Path | None = None,
 ) -> dict[str, Any]:
     """Apply only safe, non-code-mutating integrity repairs after user approval.
 
@@ -211,7 +228,9 @@ def apply_safe_fixes(
     ]
     repair_queued = False
     if codeish:
-        repair_queued = _append_repair_hint(repo_root, proposal)
+        repair_queued = _append_repair_hint(
+            repo_root, proposal, handoff_dir=handoff_dir
+        )
 
     return {
         "proposal_id": proposal.id,
@@ -223,9 +242,15 @@ def apply_safe_fixes(
     }
 
 
-def _append_repair_hint(repo_root: Path, proposal: CorrectiveProposal) -> bool:
-    """Append a human-visible repair note under data/.../integrity for Reed."""
-    path = repo_root / "data" / "paper" / "integrity" / "reed_handoff.jsonl"
+def _append_repair_hint(
+    repo_root: Path,
+    proposal: CorrectiveProposal,
+    *,
+    handoff_dir: Path | None = None,
+) -> bool:
+    """Append a human-visible repair note next to the integrity queue for Reed."""
+    base = handoff_dir or (repo_root / "data" / "paper-dry" / "integrity")
+    path = Path(base) / "reed_handoff.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     row = {
         "at": datetime.now(timezone.utc).isoformat(),

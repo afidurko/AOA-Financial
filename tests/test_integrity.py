@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from aoa.cli import main
 from aoa.integrity.actions import (
     apply_safe_fixes,
@@ -240,6 +242,92 @@ def test_cursor_attention_payload(tmp_path: Path):
     assert path.is_file()
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved["pending"] == 1
+
+
+def test_corrupt_queue_fails_closed(tmp_path: Path):
+    from aoa.integrity.actions import QueueCorruptError, load_queue, propose_from_reports
+
+    queue = tmp_path / "corrective_queue.json"
+    queue.write_text("{not-json", encoding="utf-8")
+    with pytest.raises(QueueCorruptError):
+        load_queue(queue)
+    reports = [
+        DomainReport(
+            domain="code",
+            agent="Bob",
+            status=IntegritySeverity.DEGRADED,
+            findings=[
+                IntegrityFinding(
+                    domain="code",
+                    agent="Bob",
+                    status=IntegritySeverity.DEGRADED,
+                    detail="x",
+                )
+            ],
+            summary="x",
+        )
+    ]
+    with pytest.raises(QueueCorruptError):
+        propose_from_reports(reports, queue_path=queue)
+    # Corrupt file must remain untouched
+    assert queue.read_text(encoding="utf-8") == "{not-json"
+
+
+def test_approve_refreshes_cursor_attention(tmp_path: Path):
+    from aoa.integrity.actions import propose_from_reports
+    from aoa.integrity.attention import cursor_mcp_payload
+
+    _seed_minimal_repo(tmp_path)
+    queue = tmp_path / "data" / "integrity" / "corrective_queue.json"
+    queue.parent.mkdir(parents=True, exist_ok=True)
+    reports = [
+        DomainReport(
+            domain="code",
+            agent="Bob",
+            status=IntegritySeverity.DEGRADED,
+            findings=[
+                IntegrityFinding(
+                    domain="code",
+                    agent="Bob",
+                    status=IntegritySeverity.DEGRADED,
+                    detail="attention refresh",
+                    automatable=True,
+                )
+            ],
+            summary="attn",
+        )
+    ]
+    prop = propose_from_reports(reports, queue_path=queue)
+    assert prop is not None
+    squad = IntegritySquad(repo_root=tmp_path, data_dir=tmp_path / "data" / "integrity")
+    squad.queue_path = queue
+    before = cursor_mcp_payload(queue)
+    assert before["pending"] == 1
+    squad.approve(prop.id, note="test")
+    after = cursor_mcp_payload(queue)
+    assert after["pending"] == 0
+    attention = queue.parent / "cursor_needs_attention.json"
+    assert attention.is_file()
+    saved = json.loads(attention.read_text(encoding="utf-8"))
+    assert saved["pending"] == 0
+
+
+def test_reed_handoff_uses_queue_dir(tmp_path: Path):
+    from aoa.integrity.actions import CorrectiveProposal, apply_safe_fixes
+
+    _seed_minimal_repo(tmp_path)
+    handoff = tmp_path / "data" / "paper-dry" / "integrity"
+    prop = CorrectiveProposal(
+        id="int-handoff",
+        title="t",
+        summary="s",
+        findings=[{"domain": "code", "status": "degraded"}],
+        status="pending",
+    )
+    out = apply_safe_fixes(prop, repo_root=tmp_path, handoff_dir=handoff)
+    assert out["repair_hint_queued"] is True
+    assert (handoff / "reed_handoff.jsonl").is_file()
+    assert not (tmp_path / "data" / "paper" / "integrity" / "reed_handoff.jsonl").exists()
 
 
 def test_cli_integrity_attention_cursor(capsys, tmp_path, monkeypatch):

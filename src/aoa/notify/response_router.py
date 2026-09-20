@@ -81,29 +81,49 @@ def route_response(
     payload = notification.get("payload") or {}
     approval_id = payload.get("approval_id")
     proposal_id = payload.get("proposal_id")
+    proposal_ids: list[str] = []
+    if proposal_id:
+        proposal_ids = [str(proposal_id)]
+    for raw in payload.get("proposal_ids") or []:
+        pid = str(raw)
+        if pid and pid not in proposal_ids:
+            proposal_ids.append(pid)
 
     # Integrity Ten — implant / dismiss via Needs Attention or alert reply.
-    if action in ("approve", "reject") and proposal_id:
+    if action in ("approve", "reject") and proposal_ids:
         try:
-            applied_detail = _apply_integrity_decision(
-                str(proposal_id),
-                action=action,
-                note=note,
-                repo_root=repo_root or Path.cwd(),
-                queue_path=integrity_queue_path,
-            )
+            details: list[str] = []
+            errors: list[str] = []
+            for pid in proposal_ids:
+                try:
+                    details.append(
+                        _apply_integrity_decision(
+                            pid,
+                            action=action,
+                            note=note,
+                            repo_root=repo_root or Path.cwd(),
+                            queue_path=integrity_queue_path,
+                        )
+                    )
+                except (KeyError, ValueError) as exc:
+                    errors.append(f"{pid}: {exc}")
+            if not details and errors:
+                raise ResponseError("; ".join(errors))
             if approval_id:
                 store.resolve_approval(
                     str(approval_id),
                     "approved" if action == "approve" else "rejected",
                 )
+            detail = "; ".join(details + errors)
             return ResponseResult(
                 notification_id=notification_id,
                 action=action,
                 routed_to="integrity_queue",
-                applied=True,
-                detail=applied_detail,
+                applied=bool(details),
+                detail=detail,
             )
+        except ResponseError:
+            raise
         except Exception as exc:  # noqa: BLE001
             raise ResponseError(f"Integrity action failed: {exc}") from exc
 

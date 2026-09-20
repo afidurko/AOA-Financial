@@ -54,12 +54,15 @@ def build_queue_notifications(
 ) -> list[dict[str, Any]]:
     """Build notification payloads for pending queue items.
 
-    When ``digest`` is True (default), one summary alert covers the queue.
-    Otherwise each proposal gets its own approval alert.
+    When ``digest`` is True, one summary alert covers the queue but still
+    carries ``proposal_id`` (first) and ``proposal_ids`` (all) so replies can
+    implant every pending item. Prefer ``digest=False`` when each item needs
+    an independent Needs Attention card.
     """
     if not pending:
         return []
     if digest:
+        ids = [p.id for p in pending]
         return [
             {
                 "kind": "approval",
@@ -72,7 +75,9 @@ def build_queue_notifications(
                     for p in pending
                 )
                 else "normal",
-                "proposal_ids": [p.id for p in pending],
+                "proposal_id": ids[0],
+                "proposal_ids": ids,
+                "automatable": all(p.automatable for p in pending),
             }
         ]
     return [build_user_notification(p) for p in pending]

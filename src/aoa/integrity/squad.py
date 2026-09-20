@@ -220,13 +220,26 @@ class IntegritySquad:
 
     def approve(self, proposal_id: str, *, note: str = "") -> dict[str, Any]:
         """User implants corrective action — safe repairs + Reed handoff."""
-        prop = resolve_proposal(
-            self.queue_path, proposal_id, status="approved", note=note
+        from aoa.integrity.actions import get_proposal
+
+        prop = get_proposal(self.queue_path, proposal_id)
+        if prop is None:
+            raise KeyError(f"No proposal with id {proposal_id}")
+        if prop.status != "pending":
+            raise ValueError(
+                f"Proposal {proposal_id} is {prop.status}; only pending can be implanted."
+            )
+        prop.note = note
+        # Apply first while still pending — avoid stuck "approved" on failure.
+        applied = apply_safe_fixes(
+            prop,
+            repo_root=self.repo_root,
+            handoff_dir=self.queue_path.parent,
         )
-        applied = apply_safe_fixes(prop, repo_root=self.repo_root)
         prop = resolve_proposal(
             self.queue_path, proposal_id, status="applied", note=note
         )
+        self._sync_after_resolve(proposal_id, status="approved")
         return {
             "proposal": prop.to_dict(),
             "applied": applied,
@@ -238,7 +251,40 @@ class IntegritySquad:
         prop = resolve_proposal(
             self.queue_path, proposal_id, status="rejected", note=note
         )
+        self._sync_after_resolve(proposal_id, status="rejected")
         return {"proposal": prop.to_dict()}
+
+    def _sync_after_resolve(self, proposal_id: str, *, status: str) -> None:
+        """Refresh Cursor attention + clear linked analytics approval/alerts."""
+        from aoa.integrity.attention import write_cursor_attention_file
+
+        write_cursor_attention_file(self.queue_path)
+        store = self.analytics_store
+        if store is None:
+            return
+        try:
+            store.resolve_approval(proposal_id, status)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            for note in store.list_pending_responses(limit=100):
+                payload = note.get("payload") or {}
+                pids = [str(x) for x in (payload.get("proposal_ids") or [])]
+                single = str(payload.get("proposal_id") or "")
+                if proposal_id != single and proposal_id not in pids:
+                    continue
+                nid = note.get("id")
+                if nid is None:
+                    continue
+                action = "approve" if status == "approved" else "reject"
+                store.record_response(
+                    int(nid),
+                    action=action,
+                    note="integrity sync after resolve",
+                    actor="integrity",
+                )
+        except Exception:  # noqa: BLE001
+            pass
 
     def notify_queue(self, *, digest: bool = True, force: bool = False) -> dict[str, Any]:
         """Push notifications for pending corrective-queue items (Aaron path)."""
@@ -306,7 +352,7 @@ class IntegritySquad:
         notification.setdefault("channels", [])
         if store is not None:
             try:
-                approval_id = store.add_approval(
+                approval_id = store.upsert_approval(
                     kind="integrity_corrective",
                     title=proposal.title,
                     summary=proposal.summary,
@@ -327,7 +373,9 @@ class IntegritySquad:
                             if k != "channels"
                         },
                         "approval_id": approval_id,
-                        "proposal_id": proposal.id,
+                        "proposal_id": notification.get("proposal_id") or proposal.id,
+                        "proposal_ids": notification.get("proposal_ids")
+                        or [proposal.id],
                     },
                     pushed=False,
                 )

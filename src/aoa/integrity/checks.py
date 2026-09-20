@@ -293,21 +293,28 @@ def check_neural_memory(repo_root: Path) -> DomainReport:
         )
     members = store.member_names()
     expected = set(roster_names())
-    if set(members) != expected and len(members) != 12:
+    if set(members) != expected:
         findings.append(
             IntegrityFinding(
                 domain="neural_memory",
                 agent="Nova",
                 status=IntegritySeverity.DEGRADED,
-                detail=f"Mesh members={len(members)} (expected 12).",
+                detail=(
+                    f"Mesh members mismatch: got {len(members)} "
+                    f"({', '.join(members) or 'none'}); expected 12 unique roster."
+                ),
                 automatable=False,
                 fix_hint="Align brain/mesh/index.yaml with TWELVE_MEMBER_ROSTER",
             )
         )
-    # Plasticity file may be absent until first consolidate — degraded, not critical.
+    # Plasticity lives under data/{env}/journal/plasticity.json (not plasticity/).
+    from aoa.config import plasticity_path_for
+
     plastic_candidates = [
-        repo_root / "data" / "paper" / "plasticity" / "memory.json",
-        repo_root / "data" / "paper-dry" / "plasticity" / "memory.json",
+        plasticity_path_for("paper-dry"),
+        plasticity_path_for("paper"),
+        repo_root / "data" / "paper-dry" / "journal" / "plasticity.json",
+        repo_root / "data" / "paper" / "journal" / "plasticity.json",
     ]
     plastic_ok = False
     for path in plastic_candidates:
@@ -320,9 +327,9 @@ def check_neural_memory(repo_root: Path) -> DomainReport:
                         domain="neural_memory",
                         agent="Nova",
                         status=IntegritySeverity.DEGRADED,
-                        detail=f"Invalid plasticity cycles at {path.name}.",
+                        detail=f"Invalid plasticity cycles at {path}.",
                         automatable=True,
-                        fix_hint="Reset plasticity memory.json",
+                        fix_hint="Reset plasticity journal file",
                     )
                 )
             break
