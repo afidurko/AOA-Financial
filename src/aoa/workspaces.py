@@ -173,7 +173,7 @@ def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
             never_live=True,
             detail={
                 "module": "aoa.research.open_quant_patterns",
-                "cli": "aoa openquant status|smoke|compare|billion",
+                "cli": "aoa openquant status|smoke|compare|billion|trillion",
                 "study_card": "bridge-oqlb-risk-entropy",
             },
         ),

@@ -24,7 +24,7 @@ Commands:
   aoa vault      Sync schema-driven vault property notes.
   aoa study      Study cortex — learn DE/physics/econ bridges, use, export.
   aoa hftish     Order-book imbalance research lane (example-hftish patterns).
-  aoa openquant  Open quant research lane (risk parity / entropy / TE / billion stress).
+  aoa openquant  Open quant research lane (risk parity / entropy / TE / billion+trillion stress).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
   aoa burnin     Run N paper cycles and print a burn-in summary.
@@ -1894,6 +1894,37 @@ def cmd_openquant_billion(
     return 0 if result.get("ok") else 1
 
 
+def cmd_openquant_trillion(
+    *,
+    iterations: int,
+    seed: int,
+    as_json: bool,
+) -> int:
+    """Trillion-scale property stress including tangency/HRP/stylized/network."""
+    from aoa.research.open_quant_patterns import trillion_stress
+
+    result = trillion_stress(iterations=iterations, seed=seed)
+    if as_json:
+        print(json.dumps(result, indent=2))
+    else:
+        print("=== open-quant trillion stress ===")
+        print(f"  ok:              {result.get('ok')}")
+        print(f"  iterations:      {result.get('iterations')}")
+        print(f"  backend:         {result.get('backend')}")
+        print(f"  inverse_vol:     {result.get('inverse_vol_checks')}")
+        print(f"  erc_checks:      {result.get('erc_checks')}")
+        print(f"  mi_checks:       {result.get('mi_checks')}")
+        print(f"  tangency:        {result.get('tangency_checks')}")
+        print(f"  hrp:             {result.get('hrp_checks')}")
+        print(f"  stylized:        {result.get('stylized_checks')}")
+        print(f"  network:         {result.get('network_checks')}")
+        if not result.get("ok"):
+            print(f"  failed_at:       {result.get('failed_at')}")
+            print(f"  reason:          {result.get('reason')}")
+        print(f"  never_live:      {result.get('never_live', True)}")
+    return 0 if result.get("ok") else 1
+
+
 def cmd_openquant_compare(*, seed: int, as_json: bool) -> int:
     """Compare inverse-vol / ERC / tangency / HRP on a synthetic return panel."""
     from aoa.research.open_quant_patterns import compare_allocators, coupled_ar_series
@@ -2809,6 +2840,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     oq_billion.add_argument("--seed", type=int, default=7, help="LCG seed.")
     oq_billion.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_trillion = oq_sub.add_parser(
+        "trillion",
+        help="Trillion-scale stress incl. tangency / HRP / stylized / network.",
+    )
+    oq_trillion.add_argument(
+        "--iterations",
+        type=int,
+        default=1_000_000_000_000,
+        help="Number of inverse-vol checks (default: 1000000000000).",
+    )
+    oq_trillion.add_argument("--seed", type=int, default=7, help="RNG / LCG seed.")
+    oq_trillion.add_argument("--json", action="store_true", help="Emit JSON.")
     oq_compare = oq_sub.add_parser(
         "compare",
         help="Compare inverse-vol / ERC / tangency / HRP on synthetic returns.",
@@ -2952,6 +2995,12 @@ def main(argv: list[str] | None = None) -> int:
         if args.openquant_command == "billion":
             return cmd_openquant_billion(
                 iterations=getattr(args, "iterations", 1_000_000_000),
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        if args.openquant_command == "trillion":
+            return cmd_openquant_trillion(
+                iterations=getattr(args, "iterations", 1_000_000_000_000),
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )

@@ -110,6 +110,14 @@ def _normalize(values: Sequence[float]) -> list[float]:
     return [float(v) / total for v in values]
 
 
+def _normalize_signed(values: Sequence[float]) -> list[float]:
+    """Normalize so weights sum to 1, allowing a negative gross (short tangency)."""
+    total = sum(values)
+    if abs(total) < 1e-18 or not math.isfinite(total):
+        raise ValueError("cannot normalize near-zero or non-finite weight sum")
+    return [float(v) / total for v in values]
+
+
 def _validate_cov(cov: Sequence[Sequence[float]]) -> list[list[float]]:
     n = len(cov)
     if n < 1:
@@ -708,7 +716,14 @@ def tangency_weights(
             raw = [max(0.0, x) for x in raw]
             if sum(raw) <= 0:
                 raw = [1.0 / n] * n
-        w = _normalize(raw)
+            w = _normalize(raw)
+        else:
+            # Unconstrained tangency: ``w ∝ Σ^{-1}(μ−r_f)`` with signed
+            # renormalization (sum may be negative when all excess returns are).
+            try:
+                w = _normalize_signed(raw)
+            except ValueError:
+                w = [1.0 / n] * n
     er = sum(w[i] * float(mu[i]) for i in range(n))
     vol = _portfolio_vol(sigma, w)
     sharpe = (er - risk_free) / vol if vol > 0 else 0.0
@@ -787,7 +802,11 @@ def _single_linkage_order(dist: Sequence[Sequence[float]]) -> list[int]:
 
 
 def _cluster_variance(cov: Sequence[Sequence[float]], members: Sequence[int]) -> float:
-    """Variance of an equal-weight sub-portfolio on ``members``."""
+    """Variance of an equal-weight sub-portfolio on ``members``.
+
+    Floors at ``1e-18`` so a zero-diagonal leaf cannot absorb the entire HRP
+    budget via ``alpha → 1`` when the sibling cluster has positive variance.
+    """
     m = len(members)
     if m == 0:
         return 0.0
@@ -796,16 +815,20 @@ def _cluster_variance(cov: Sequence[Sequence[float]], members: Sequence[int]) ->
     for i in members:
         for j in members:
             var += w * w * float(cov[i][j])
-    return max(var, 0.0)
+    return max(var, 1e-18)
 
 
 def hierarchical_risk_parity(cov: Sequence[Sequence[float]]) -> RiskParityResult:
     """Hierarchical risk parity via single-linkage order + recursive bisection.
 
     Educational port of the book ML / HRP idea — pure Python, no sklearn.
+    Requires strictly positive diagonal variances (zero-vol assets would otherwise
+    absorb the entire budget under inverse-variance cluster splits).
     """
     sigma = _validate_cov(cov)
     n = len(sigma)
+    if any(sigma[i][i] <= 0.0 for i in range(n)):
+        raise ValueError("HRP requires positive diagonal variances")
     if n == 1:
         return RiskParityResult(
             weights=(1.0,),
@@ -973,81 +996,222 @@ def billion_stress(
     Default is one billion property checks. Heavy ERC/MI probes run every
     100_000 iterations. Research-only — no broker calls.
     """
+    return _property_stress(
+        iterations=iterations,
+        seed=seed,
+        progress_every=progress_every,
+        label="billion",
+        heavy_every=100_000,
+    )
+
+
+def trillion_stress(
+    *,
+    iterations: int = 1_000_000_000_000,
+    seed: int = 7,
+    progress_every: int = 10_000_000_000,
+    batch_size: int = 5_000_000,
+) -> dict[str, object]:
+    """Trillion-scale property stress covering inverse-vol + add-on allocators.
+
+    Uses NumPy batching when available (optional), else a pure-Python LCG loop.
+    Heavy probes every 100_000 samples cover ERC, unconstrained tangency, HRP,
+    stylized facts, and correlation networks. Research-only — no broker calls.
+    """
+    return _property_stress(
+        iterations=iterations,
+        seed=seed,
+        progress_every=progress_every,
+        label="trillion",
+        heavy_every=100_000,
+        batch_size=batch_size,
+        include_addons=True,
+    )
+
+
+def _property_stress(
+    *,
+    iterations: int,
+    seed: int,
+    progress_every: int,
+    label: str,
+    heavy_every: int,
+    batch_size: int = 0,
+    include_addons: bool = False,
+) -> dict[str, object]:
     if iterations < 1:
         raise ValueError("iterations must be >= 1")
-    state = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+
     checked = 0
     erc_checked = 0
     mi_checked = 0
+    tan_checked = 0
+    hrp_checked = 0
+    stylized_checked = 0
+    network_checked = 0
 
-    def _next_unit() -> float:
-        nonlocal state
-        state, u = _lcg_uniform(state)
-        # Map Uniform(-1,1) → (1e-6, 1+1e-6] for stable positive vols / vars.
-        return abs(u) + 1e-6
+    def _fail(i: int, reason: str, **extra: object) -> dict[str, object]:
+        return {
+            "ok": False,
+            "label": label,
+            "iterations": iterations,
+            "failed_at": i,
+            "reason": reason,
+            "never_live": True,
+            **extra,
+        }
 
-    for i in range(iterations):
-        v0 = _next_unit()
-        v1 = _next_unit() * (0.5 + _next_unit())
-        weights = inverse_vol_weights((v0, v1))
-        total = weights[0] + weights[1]
-        if abs(total - 1.0) > 1e-9 or any(not math.isfinite(w) for w in weights):
-            return {
-                "ok": False,
-                "iterations": iterations,
-                "failed_at": i,
-                "reason": "inverse_vol_invariant",
-                "weights": list(weights),
-                "vols": [v0, v1],
-                "never_live": True,
-            }
-        checked += 1
+    def _heavy(i: int, v0: float, v1: float) -> dict[str, object] | None:
+        nonlocal erc_checked, mi_checked, tan_checked, hrp_checked
+        nonlocal stylized_checked, network_checked
+        cov = [[v0 * v0, 0.0], [0.0, v1 * v1]]
+        erc = equal_risk_contribution(cov)
+        if abs(sum(erc.weights) - 1.0) > 1e-8:
+            return _fail(i, "erc_weight_sum", erc_weights=list(erc.weights))
+        if abs(erc.risk_fractions[0] - 0.5) > 1e-3:
+            return _fail(i, "erc_risk_fraction", risk_fractions=list(erc.risk_fractions))
+        erc_checked += 1
 
-        if i % 100_000 == 0:
-            # Diagonal ERC must match inverse-vol and equalize risk fractions.
-            cov = [[v0 * v0, 0.0], [0.0, v1 * v1]]
-            erc = equal_risk_contribution(cov)
-            if abs(sum(erc.weights) - 1.0) > 1e-8:
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "erc_weight_sum",
-                    "erc_weights": list(erc.weights),
-                    "never_live": True,
-                }
-            if abs(erc.risk_fractions[0] - 0.5) > 1e-3:
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "erc_risk_fraction",
-                    "risk_fractions": list(erc.risk_fractions),
-                    "never_live": True,
-                }
-            erc_checked += 1
+        xs = [v0, v1, v0 + 0.01, v1 - 0.01]
+        ys = [v1, v0, v1 + 0.02, v0 - 0.02]
+        mi = mutual_information_stats(xs, ys, bins=2)
+        if mi.mutual_information < 0 or not math.isfinite(mi.global_correlation):
+            return _fail(i, "mi_invariant", mutual_information=mi.mutual_information)
+        mi_checked += 1
 
-            # Tiny MI series must stay finite / non-negative.
-            xs = [v0, v1, v0 + 0.01, v1 - 0.01]
-            ys = [v1, v0, v1 + 0.02, v0 - 0.02]
-            mi = mutual_information_stats(xs, ys, bins=2)
-            if mi.mutual_information < 0 or not math.isfinite(mi.global_correlation):
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "mi_invariant",
-                    "mutual_information": mi.mutual_information,
-                    "never_live": True,
-                }
-            mi_checked += 1
+        if not include_addons:
+            return None
 
-        if progress_every > 0 and i > 0 and i % progress_every == 0:
-            # Progress markers keep long runs observable without flooding.
-            pass
+        # Unconstrained tangency must survive all-negative excess returns.
+        mu = (v0 * 0.01 - 0.05, v1 * 0.01 - 0.04)
+        tan = tangency_weights(mu, cov, long_only=False)
+        if abs(sum(tan.weights) - 1.0) > 1e-8 or any(
+            not math.isfinite(w) for w in tan.weights
+        ):
+            return _fail(i, "tangency_invariant", tangency_weights=list(tan.weights))
+        tan_lo = tangency_weights(mu, cov, long_only=True)
+        if abs(sum(tan_lo.weights) - 1.0) > 1e-8 or any(w < -1e-12 for w in tan_lo.weights):
+            return _fail(i, "tangency_long_only", tangency_weights=list(tan_lo.weights))
+        tan_checked += 1
 
-    return {
+        # 3-asset HRP with positive diagonals derived from the LCG vols.
+        v2 = 0.5 * (v0 + v1) + 1e-3
+        cov3 = [
+            [v0 * v0, 0.0, 0.0],
+            [0.0, v1 * v1, 0.0],
+            [0.0, 0.0, v2 * v2],
+        ]
+        hrp = hierarchical_risk_parity(cov3)
+        if abs(sum(hrp.weights) - 1.0) > 1e-8 or any(w < -1e-12 for w in hrp.weights):
+            return _fail(i, "hrp_invariant", hrp_weights=list(hrp.weights))
+        hrp_checked += 1
+
+        series = [v0 - 0.5, v1 - 0.5, v0 - v1, v1 - v0, 0.01 * v0, -0.01 * v1]
+        facts = stylized_facts(series)
+        if not math.isfinite(facts.excess_kurtosis) or not math.isfinite(facts.acf1):
+            return _fail(i, "stylized_invariant")
+        stylized_checked += 1
+
+        corr = [
+            [1.0, 0.8, 0.1],
+            [0.8, 1.0, 0.05],
+            [0.1, 0.05, 1.0],
+        ]
+        net = correlation_network(corr, threshold=0.5)
+        if len(net.edges) < 1 or len(net.degree) != 3:
+            return _fail(i, "network_invariant", network_edges=len(net.edges))
+        network_checked += 1
+        return None
+
+    # --- Fast path: NumPy batched inverse-vol (optional) ---
+    np = None
+    used_numpy = False
+    if batch_size > 0 and iterations >= batch_size:
+        try:
+            import numpy as np  # type: ignore
+        except ImportError:
+            np = None
+
+    if np is not None and batch_size > 0 and iterations >= batch_size:
+        used_numpy = True
+        rng = np.random.default_rng(seed)
+        done = 0
+        while done < iterations:
+            n = min(batch_size, iterations - done)
+            # Match the LCG stress distribution shape: positive vols.
+            u0 = rng.random(n, dtype=np.float64) * 2.0 - 1.0
+            u1 = rng.random(n, dtype=np.float64) * 2.0 - 1.0
+            u2 = rng.random(n, dtype=np.float64) * 2.0 - 1.0
+            v0 = np.abs(u0) + 1e-6
+            v1 = (np.abs(u1) + 1e-6) * (0.5 + (np.abs(u2) + 1e-6))
+            inv0 = 1.0 / v0
+            inv1 = 1.0 / v1
+            total = inv0 + inv1
+            w0 = inv0 / total
+            w1 = inv1 / total
+            if not bool(np.all(np.isfinite(w0)) and np.all(np.isfinite(w1))):
+                bad = int(np.argmin(np.isfinite(w0) & np.isfinite(w1)))
+                return _fail(
+                    done + bad,
+                    "inverse_vol_invariant",
+                    weights=[float(w0[bad]), float(w1[bad])],
+                    vols=[float(v0[bad]), float(v1[bad])],
+                )
+            if not bool(np.all(np.abs(w0 + w1 - 1.0) <= 1e-9)):
+                bad = int(np.argmax(np.abs(w0 + w1 - 1.0)))
+                return _fail(
+                    done + bad,
+                    "inverse_vol_invariant",
+                    weights=[float(w0[bad]), float(w1[bad])],
+                    vols=[float(v0[bad]), float(v1[bad])],
+                )
+            checked += n
+
+            # Heavy probes at the same cadence as the scalar path.
+            start = done
+            end = done + n
+            first = ((start + heavy_every - 1) // heavy_every) * heavy_every
+            for i in range(first, end, heavy_every):
+                local = i - done
+                failed = _heavy(i, float(v0[local]), float(v1[local]))
+                if failed is not None:
+                    return failed
+
+            done = end
+            if progress_every > 0 and done % progress_every == 0:
+                pass
+    else:
+        # --- Pure-Python LCG path (also used by billion_stress) ---
+        state = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+
+        def _next_unit() -> float:
+            nonlocal state
+            state, u = _lcg_uniform(state)
+            return abs(u) + 1e-6
+
+        for i in range(iterations):
+            v0 = _next_unit()
+            v1 = _next_unit() * (0.5 + _next_unit())
+            weights = inverse_vol_weights((v0, v1))
+            total = weights[0] + weights[1]
+            if abs(total - 1.0) > 1e-9 or any(not math.isfinite(w) for w in weights):
+                return _fail(
+                    i,
+                    "inverse_vol_invariant",
+                    weights=list(weights),
+                    vols=[v0, v1],
+                )
+            checked += 1
+            if i % heavy_every == 0:
+                failed = _heavy(i, v0, v1)
+                if failed is not None:
+                    return failed
+            if progress_every > 0 and i > 0 and i % progress_every == 0:
+                pass
+
+    out: dict[str, object] = {
         "ok": True,
+        "label": label,
         "iterations": iterations,
         "inverse_vol_checks": checked,
         "erc_checks": erc_checked,
@@ -1057,6 +1221,17 @@ def billion_stress(
         "module": "aoa.research.open_quant_patterns",
         "companion": "open-quant-live-book",
     }
+    if include_addons:
+        out.update(
+            {
+                "tangency_checks": tan_checked,
+                "hrp_checks": hrp_checked,
+                "stylized_checks": stylized_checked,
+                "network_checks": network_checked,
+                "backend": "numpy" if used_numpy else "python",
+            }
+        )
+    return out
 
 
 __all__ = [
@@ -1088,4 +1263,5 @@ __all__ = [
     "stylized_facts",
     "synthetic_smoke",
     "tangency_weights",
+    "trillion_stress",
 ]

@@ -61,7 +61,7 @@ In-repo: [LOOP.md](../LOOP.md), [safety.md](safety.md), [how-to/fresh-clone.md](
 - HFT: `./scripts/hft-setup.sh` · `vault/system/hft.md` · [hft-reference.md](how-to/hft-reference.md)
 - SGX: `./scripts/sgx-orderbook-setup.sh` · `vault/system/sgx-orderbook.md` · [sgx-orderbook-reference.md](how-to/sgx-orderbook-reference.md) · LOB bridge `snapshot_from_limit_order_book` · [hft-research-lane.md](how-to/hft-research-lane.md)
 - example-hftish: `./scripts/example-hftish-setup.sh` · `vault/system/example-hftish.md` · [example-hftish-reference.md](how-to/example-hftish-reference.md) · CLI `aoa hftish status|smoke`
-- open-quant-live-book: `./scripts/open-quant-live-book-setup.sh` · `vault/system/open-quant-live-book.md` · [open-quant-live-book-reference.md](how-to/open-quant-live-book-reference.md) · CLI `aoa openquant status|smoke|compare|billion`
+- open-quant-live-book: `./scripts/open-quant-live-book-setup.sh` · `vault/system/open-quant-live-book.md` · [open-quant-live-book-reference.md](how-to/open-quant-live-book-reference.md) · CLI `aoa openquant status|smoke|compare|billion|trillion`
 - deepstock: `./scripts/deepstock-setup.sh` · `vault/system/deepstock.md` · [deepstock-reference.md](how-to/deepstock-reference.md)
 ## Local model runtime (optional)
 

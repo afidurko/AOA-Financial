@@ -144,6 +144,39 @@ def test_billion_stress_small_ok() -> None:
     assert result["never_live"] is True
 
 
+def test_trillion_stress_addons_ok() -> None:
+    from aoa.research.open_quant_patterns import trillion_stress
+
+    result = trillion_stress(iterations=250_000, seed=11, batch_size=50_000)
+    assert result["ok"] is True
+    assert result["inverse_vol_checks"] == 250_000
+    assert result["tangency_checks"] >= 3
+    assert result["hrp_checks"] >= 3
+    assert result["stylized_checks"] >= 3
+    assert result["network_checks"] >= 3
+    assert result["never_live"] is True
+
+
+def test_tangency_unconstrained_negative_excess() -> None:
+    """All-negative excess returns must still yield finite weights summing to 1."""
+    from aoa.research.open_quant_patterns import tangency_weights
+
+    tan = tangency_weights(
+        (-0.03, -0.02),
+        [[0.04, 0.01], [0.01, 0.05]],
+        long_only=False,
+    )
+    assert abs(sum(tan.weights) - 1.0) < 1e-8
+    assert all(math.isfinite(w) for w in tan.weights)
+
+
+def test_hrp_rejects_zero_diagonal() -> None:
+    from aoa.research.open_quant_patterns import hierarchical_risk_parity
+
+    with pytest.raises(ValueError, match="positive diagonal"):
+        hierarchical_risk_parity([[0.0, 0.0], [0.0, 0.04]])
+
+
 def test_tangency_and_hrp_sum_to_one() -> None:
     from aoa.research.open_quant_patterns import (
         hierarchical_risk_parity,
