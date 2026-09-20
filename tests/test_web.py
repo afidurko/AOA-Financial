@@ -61,6 +61,7 @@ def test_dashboard_html(client):
     assert "esc(a.title)" in r.text
     assert "esc(a.summary" in r.text
     assert "&#39;" in r.text
+    assert 'href="/m"' in r.text
 
 
 def test_api_needs_attention(client):
@@ -123,6 +124,22 @@ def test_api_integrity_resolve_roundtrip(client, tmp_path, monkeypatch):
     assert cursor_mcp_payload(queue)["pending"] == 0
 
 
+def test_mobile_dashboard_html(client):
+    r = client.get("/m")
+    assert r.status_code == 200
+    assert "AOA Mobile" in r.text
+    assert "/m/assets/" in r.text
+    # Built JS bundle must be reachable and include reworked shell markers.
+    asset = r.text.split('src="')[1].split('"')[0]
+    assert asset.startswith("/m/assets/")
+    js = client.get(asset)
+    assert js.status_code == 200
+    body = js.text
+    assert "AOA Financial" in body
+    assert "Run cycle" in body
+    assert "PullToRefresh" in body or "onRefresh" in body
+
+
 def test_api_status(client):
     r = client.get("/api/status")
     assert r.status_code == 200
@@ -151,6 +168,8 @@ def test_api_config_team_mode(client):
     assert "spine_enabled" in data
     assert "qm_url" in data
     assert "visualhft_url" in data
+    assert "antd_mobile_url" in data
+    assert data["mobile_path"] == "/m"
 
 
 def test_api_config_openstock_url(fake_broker, fake_llm, monkeypatch, tmp_path):
