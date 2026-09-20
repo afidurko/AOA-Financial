@@ -50,16 +50,18 @@ aoa = "aoa.cli:main"
 
 [tool.setuptools.package-dir]
 "" = "src"
+"aoa_financial" = "aoa_financial"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "."]
+include = ["aoa*", "aoa_financial*"]
 
 [tool.setuptools.package-data]
 aoa = ["web/static/mobile/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "."]
 addopts = "--ignore=tests/test_core.py"
 filterwarnings = [
     "ignore:.*websockets\\.legacy is deprecated.*:DeprecationWarning",
