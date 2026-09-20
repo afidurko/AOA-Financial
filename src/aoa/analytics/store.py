@@ -315,6 +315,14 @@ class AnalyticsStore:
                 )
             return pid
 
+    def get_approval(self, approval_id: str) -> dict[str, Any] | None:
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM approval_inbox WHERE id=?",
+                (approval_id,),
+            ).fetchone()
+            return _row_to_dict(row) if row else None
+
     def resolve_approval(self, approval_id: str, status: str) -> bool:
         now = datetime.now(timezone.utc).isoformat()
         with self.transaction() as c:

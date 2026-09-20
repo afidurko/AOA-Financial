@@ -1,6 +1,7 @@
 # Companion workspaces mesh
 
-> Trading companions (`aoa workspaces`) — OpenStock, QM, VisualHFT, hftbacktest.
+> Trading companions (`aoa workspaces`) — OpenStock, QM, VisualHFT, hftbacktest,
+> ant-design-mobile.
 > For the Obsidian/Spine/Cursor multi-root vault mesh, see [workspace-mesh.md](workspace-mesh.md).
 
 AOA Financial stays the brokerage/risk authority. Optional **sibling workspaces**
@@ -11,9 +12,10 @@ them place live orders.
 ┌──────────────────┐   AOA_OPENSTOCK_URL    ┌────────────┐
 │  AOA Financial   │───────────────────────▶│ OpenStock  │
 │  aoa serve :8080 │   AOA_QM_URL           │ charts UI  │
-│                  │───────────────────────▶│ QM harness │
+│  /m phone shell  │───────────────────────▶│ QM harness │
 │  aoa visualhft   │   AOA_VISUALHFT_URL    │ VisualHFT  │
 │  aoa workspaces  │───────────────────────▶│ desktop L2 │
+│                  │   AOA_ANTD_MOBILE_URL  │ antd-mobile│
 │                  │   optional extra       │ hftbacktest│
 └──────────────────┘───────────────────────▶└────────────┘
 ```
@@ -36,6 +38,7 @@ Shows whether each companion is **linked** (env URL / install) and **present**
 | QM | `./scripts/qm-setup.sh` | `AOA_QM_URL` | [qm-integration.md](qm-integration.md) |
 | VisualHFT | `./scripts/visualhft-setup.sh` | `AOA_VISUALHFT_URL` | [visualhft-integration.md](visualhft-integration.md) |
 | hftbacktest | `pip install -e ".[hftbacktest]"` (orderbook vendored) | (optional package) | [hftbacktest-integration.md](hftbacktest-integration.md) |
+| ant-design-mobile | `./scripts/antd-mobile-setup.sh` | `AOA_ANTD_MOBILE_URL` | [antd-mobile-integration.md](antd-mobile-integration.md) |
 
 One-shot (all companions that have setup scripts):
 
@@ -50,10 +53,13 @@ the optional `hftbacktest` extra is installed. `aoa hft`, `aoa visualhft`, and
 
 VisualHFT Positions/Orders empty: [visualhft-positions-orders.md](visualhft-positions-orders.md).
 
+Phone UI (`/m`) is always served by `aoa serve` — see [antd-mobile-integration.md](antd-mobile-integration.md).
+
 ## Dashboard
 
 When the corresponding `AOA_*_URL` is set, `aoa serve` exposes header shortcuts
-(OpenStock ↗, QM ↗, VisualHFT ↗) via `/api/config`.
+(OpenStock ↗, QM ↗, VisualHFT ↗, UI kit ↗) via `/api/config`. The desktop header
+always links to **Mobile** (`/m`).
 
 ## Safety
 
