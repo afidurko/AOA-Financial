@@ -215,6 +215,7 @@ class DeskRunner:
     use_fundamentals: bool = True
     brain_root: Path | None = None
     verbose: bool = False
+    label: str = "desk"  # report file prefix: desk-<stamp>.json / latest-<label>.json
 
     def __post_init__(self) -> None:
         if self.connectome is None:
@@ -424,10 +425,12 @@ class DeskRunner:
     def write_report(self, report: DeskReport) -> Path:
         self.report_dir.mkdir(parents=True, exist_ok=True)
         stamp = report.started_at.replace(":", "").replace("-", "")[:15]
-        path = self.report_dir / f"desk-{stamp}.json"
-        path.write_text(json.dumps(report.to_dict(), indent=1, default=str), encoding="utf-8")
-        latest = self.report_dir / "latest.json"
-        latest.write_text(json.dumps(report.to_dict(), indent=1, default=str), encoding="utf-8")
+        payload = json.dumps(report.to_dict(), indent=1, default=str)
+        path = self.report_dir / f"{self.label}-{stamp}.json"
+        path.write_text(payload, encoding="utf-8")
+        (self.report_dir / f"latest-{self.label}.json").write_text(payload, encoding="utf-8")
+        if self.label == "desk":
+            (self.report_dir / "latest.json").write_text(payload, encoding="utf-8")
         return path
 
     def write_capture(self, report: DeskReport) -> Path | None:

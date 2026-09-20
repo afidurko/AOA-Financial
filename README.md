@@ -606,6 +606,17 @@ aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # Companion map: docs/how-to/hft-research-lane.md
 aoa openquant status
 aoa openquant smoke
+
+# TradingView desk — Pine v6 presets (HFT → position), TradingView-semantics
+# backtests, walk-forward, neural memory, fly-brain connectome (no orders):
+aoa tv presets                                        # 17 presets, crypto + equity, 1s → 1W
+aoa tv pine swing-equity-1d-trend                     # Pine Script v6 → paste into TradingView
+aoa tv pine --all                                     # tradingview/*.pine
+aoa tv backtest swing-equity-1d-trend --symbol AAPL --folds 3 --monte-carlo
+aoa tv desk run --symbols AAPL,BTC-USD --folds 3 --export-pine
+aoa tv universe-sweep --preset swing-equity-1d-trend --limit 250 --workers 4   # 2000 US stocks
+aoa tv memory · aoa tv connectome status              # learned trust · motor mapping
+# See docs/how-to/tradingview-desk.md · webhook: POST /api/tradingview/webhook (human-gated)
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,
@@ -838,6 +849,9 @@ src/aoa/                   # live trading swarm (primary package)
   journal/                 # append-only JSONL audit log (legacy default path)
   cli.py                   # `aoa` command-line entry point
   web/                     # FastAPI dashboard + REST API + loop runner
+  tradingview/             # TradingView desk: Pine v6 presets, TV-semantics backtester,
+                           #   walk-forward, 2000-stock universe, neural memory, fly connectome
+tradingview/               # generated Pine Script v6 strategies (`aoa tv pine --all`)
 
 aoa_financial/             # optional deep analysis & forecasting (no live orders)
   config.py                # central configuration

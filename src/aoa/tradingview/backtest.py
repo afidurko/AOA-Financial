@@ -259,6 +259,17 @@ def run_backtest(
             ts = ts.replace(tzinfo=timezone.utc)
         return ts.date()
 
+    def _edge_ok(atr: float | None, price: float) -> bool:
+        """HFT/scalp guard: expected edge must clear ``min_edge_cost_mult`` × round-trip cost."""
+        if risk.min_edge_cost_mult <= 0 or not atr or price <= 0:
+            return True
+        edge_atr = risk.target_atr or risk.trail_atr or risk.stop_atr
+        if edge_atr <= 0:
+            return True
+        slip = (cfg.tick_size * costs.slippage_ticks / price) if cfg.tick_size else costs.slippage_pct / 100.0
+        round_trip = 2.0 * (costs.commission_pct / 100.0 + slip)
+        return edge_atr * atr / price >= risk.min_edge_cost_mult * round_trip
+
     for i, bar in enumerate(bars):
         ts = bar.timestamp
         # --- 1. pending orders fill at this bar's open ---------------------------
@@ -311,7 +322,7 @@ def run_backtest(
             side = "long" if sig.long_entry else ("short" if sig.short_entry else None)
             day = _session_key(ts)
             cap_ok = risk.max_trades_per_day <= 0 or entries_today.get(day, 0) < risk.max_trades_per_day
-            if side and session_ok and not last_session_bar and cap_ok:
+            if side and session_ok and not last_session_bar and cap_ok and _edge_ok(sig.atr, bar.close):
                 if cfg.fill_on_close:
                     _open_trade(side, i, bar.close, sig.atr, ts)
                     entries_today[day] = entries_today.get(day, 0) + 1
@@ -410,11 +421,13 @@ def compute_metrics(
     if bars and len(bars) > start_index and bars[start_index].close > 0:
         bh = (bars[-1].close / bars[start_index].close - 1.0) * 100.0
     bars_in_pos = sum(t.bars_held for t in closed)
+    # Van Tharp SQN; needs a minimum sample and is capped so two near-identical
+    # trades cannot produce a ±1000 "quality" number.
     sqn = 0.0
-    if len(pnl_pcts) > 1:
+    if len(pnl_pcts) >= 3:
         sd = statistics.pstdev(pnl_pcts)
         if sd > 0:
-            sqn = math.sqrt(len(pnl_pcts)) * statistics.fmean(pnl_pcts) / sd
+            sqn = max(-10.0, min(10.0, math.sqrt(len(pnl_pcts)) * statistics.fmean(pnl_pcts) / sd))
     reasons: dict[str, int] = {}
     for t in closed:
         reasons[t.exit_reason] = reasons.get(t.exit_reason, 0) + 1

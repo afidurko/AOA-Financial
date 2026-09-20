@@ -224,8 +224,9 @@ def cmd_backtest(args: argparse.Namespace) -> int:
     return 0
 
 
-def _runner_from_args(args: argparse.Namespace) -> DeskRunner:
+def _runner_from_args(args: argparse.Namespace, *, label: str = "desk") -> DeskRunner:
     return DeskRunner(
+        label=label,
         source=getattr(args, "source", "auto"),
         folds=getattr(args, "folds", 3),
         monte_carlo=not getattr(args, "no_monte_carlo", False),
@@ -318,7 +319,7 @@ def cmd_universe(args: argparse.Namespace) -> int:
 def cmd_universe_sweep(args: argparse.Namespace) -> int:
     entries, meta = load_universe(n=args.n, exchanges=tuple(_csv_list(args.exchanges)) or None)
     batch = entries[args.offset : args.offset + args.limit]
-    runner = _runner_from_args(args)
+    runner = _runner_from_args(args, label="sweep")
     preset = get_preset(args.preset)
     tfs = [args.timeframe] if args.timeframe else None
     report = runner.run([e.symbol for e in batch], presets=[preset.name], timeframes=tfs, export_pine=False)

@@ -93,6 +93,9 @@ def _risk_inputs(preset: Preset) -> list[str]:
         f'maxPerDay  = input.int({int(r.max_trades_per_day)}, "Max entries per day (0 = off)", minval=0, group=grpRisk)',
         f'allowShort = input.bool({_b(preset.allow_short)}, "Allow shorts", group=grpRisk)',
         f'atrLen     = input.int({int(preset.params.get("atr_len", 14))}, "ATR length", minval=1, group=grpRisk)',
+        f'minEdgeMult = input.float({_f(r.min_edge_cost_mult)}, "Min edge / round-trip cost (0 = off)", minval=0, step=0.5, group=grpRisk)',
+        f"commPct    = {_f(preset.costs.commission_pct)}  // must match strategy() commission_value",
+        f"slipTicks  = {int(preset.costs.slippage_ticks)}  // must match strategy() slippage",
     ]
     if r.session:
         lines.append(f'sessInput  = input.session("{r.session}", "Session (exchange time)", group=grpRisk)')
@@ -314,7 +317,11 @@ def _execution_block(preset: Preset) -> list[str]:
         "flat    = strategy.position_size == 0",
         "barsInTrade = strategy.opentrades > 0 ? bar_index - strategy.opentrades.entry_bar_index(0) : 0",
         "perDayOk = maxPerDay == 0 or tradesToday < maxPerDay",
-        "canEnter = flat and inSession and not lastSessionBar and perDayOk and fundOk and barstate.isconfirmed",
+        "// HFT/scalp guard: ATR-scaled edge must clear minEdgeMult x round-trip cost (both sides)",
+        "rtCost   = 2 * (commPct / 100 + slipTicks * syminfo.mintick / close)",
+        "edgeAtr  = targetAtr > 0 ? targetAtr : trailAtr > 0 ? trailAtr : stopAtr",
+        "edgeOk   = minEdgeMult == 0 or edgeAtr == 0 or edgeAtr * atrVal / close >= minEdgeMult * rtCost",
+        "canEnter = flat and inSession and not lastSessionBar and perDayOk and fundOk and edgeOk and barstate.isconfirmed",
         "",
         "// entries fill on the next bar open (process_orders_on_close=false)",
         "if canEnter and longCond",

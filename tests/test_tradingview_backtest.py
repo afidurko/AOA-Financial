@@ -232,6 +232,39 @@ def test_commission_and_slippage_reduce_pnl(scripted) -> None:
     assert tick.trades[0].entry_price == pytest.approx(100.01)
 
 
+def test_min_edge_cost_gate_blocks_sub_cost_entries(scripted) -> None:
+    bars = _flat([100.0] * 6)
+    costs = CostModel(commission_pct=0.04, slippage_ticks=1, slippage_pct=0.01)  # 0.10% round trip
+    base = Preset(**{**_preset().__dict__, "costs": costs})
+    # target 1.5 ATR with ATR = 0.02 → edge 0.03% < 2 × 0.10% → no trade
+    scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.02)
+    gated = Preset(**{**base.__dict__, "risk": RiskModel(stop_atr=1.0, target_atr=1.5, min_edge_cost_mult=2.0)})
+    assert run_backtest(bars, gated).trades == []
+    # same setup with ATR = 0.5 → edge 0.75% ≥ 0.20% → trades
+    scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.5)
+    assert run_backtest(bars, gated).trades
+    # gate off → trades even when sub-cost
+    scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.02)
+    off = Preset(**{**base.__dict__, "risk": RiskModel(stop_atr=1.0, target_atr=1.5, min_edge_cost_mult=0.0)})
+    assert run_backtest(bars, off).trades
+    # tick-size slippage path
+    scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.02)
+    assert run_backtest(bars, gated, cfg=EmulatorConfig(tick_size=0.01)).trades == []
+
+
+def test_sqn_needs_three_trades_and_is_capped(scripted) -> None:
+    bars = _flat([100, 100, 101, 101, 100, 100, 101, 101, 100])
+    two = {0: Signal(long_entry=True), 2: Signal(exit_long=True), 4: Signal(long_entry=True), 6: Signal(exit_long=True)}
+    scripted(two)
+    assert run_backtest(bars, _preset()).metrics["sqn"] == 0.0  # only 2 trades
+    bars3 = _flat([100, 100, 101, 101, 100, 100, 101.01, 101.01, 100, 100, 101.02, 101.02, 100])
+    three = {i: Signal(long_entry=True) for i in (0, 4, 8)}
+    three.update({i: Signal(exit_long=True) for i in (2, 6, 10)})
+    scripted(three)
+    m = run_backtest(bars3, _preset()).metrics
+    assert m["total_trades"] == 3 and m["sqn"] == 10.0  # near-identical winners → capped, not 170+
+
+
 def test_open_trade_force_closed_at_end(scripted) -> None:
     bars = _flat([100, 100, 110])
     scripted({0: Signal(long_entry=True)})

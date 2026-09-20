@@ -146,6 +146,10 @@ class RiskModel:
     qty_pct_equity: float = 10.0  # percent of equity per position
     max_trades_per_day: int = 0  # 0 = unlimited
     session: str | None = None  # Pine session string for equities, e.g. "0935-1555"
+    # HFT/scalp rule: skip entries whose ATR-scaled edge (target, else trail, else
+    # stop) is below this multiple of the round-trip cost (commission + slippage
+    # both ways). 0 disables. Keeps sub-cost trades from ever being taken.
+    min_edge_cost_mult: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -262,7 +266,7 @@ PRESETS: dict[str, Preset] = {
                 "requires a TradingView plan with seconds charts and bar magnifier."
             ),
             params=_momentum_params(5, 13, 7, 52.0, 1.2) | {"atr_len": 7, "vol_len": 30},
-            risk=RiskModel(stop_atr=1.0, target_atr=1.5, max_bars_in_trade=45, qty_pct_equity=15.0),
+            risk=RiskModel(stop_atr=1.0, target_atr=1.5, max_bars_in_trade=45, qty_pct_equity=15.0, min_edge_cost_mult=2.0),
             costs=_HFT_COSTS,
             allow_short=True,
             tunable={"ema_fast": (3, 5, 8), "ema_slow": (13, 21), "rsi_floor": (50.0, 52.0, 55.0)},
@@ -287,7 +291,7 @@ PRESETS: dict[str, Preset] = {
                 "vol_len": 30,
                 "vol_mult": 1.0,
             },
-            risk=RiskModel(stop_atr=1.2, target_atr=1.8, max_bars_in_trade=60, qty_pct_equity=15.0),
+            risk=RiskModel(stop_atr=1.2, target_atr=1.8, max_bars_in_trade=60, qty_pct_equity=15.0, min_edge_cost_mult=2.0),
             costs=_HFT_COSTS,
             allow_short=True,
             tunable={"z_entry": (1.2, 1.6, 2.0), "delta_len": (20, 30, 50)},
@@ -304,7 +308,7 @@ PRESETS: dict[str, Preset] = {
                 "when RSI(7) is stretched; exit at the basis or on stop."
             ),
             params={"bb_len": 20, "bb_mult": 2.0, "rsi_len": 7, "rsi_low": 25.0, "rsi_high": 75.0, "atr_len": 10},
-            risk=RiskModel(stop_atr=1.5, target_atr=0.0, max_bars_in_trade=40, qty_pct_equity=12.0),
+            risk=RiskModel(stop_atr=1.5, target_atr=0.0, max_bars_in_trade=40, qty_pct_equity=12.0, min_edge_cost_mult=2.0),
             costs=_HFT_COSTS,
             allow_short=True,
             tunable={"bb_mult": (1.8, 2.0, 2.4), "rsi_low": (20.0, 25.0, 30.0)},
@@ -319,7 +323,7 @@ PRESETS: dict[str, Preset] = {
             timeframe="1",
             description="1-minute EMA(8/21) momentum with RSI(9), VWAP side and volume surge filter.",
             params=_momentum_params(8, 21, 9, 52.0, 1.3),
-            risk=RiskModel(stop_atr=1.2, target_atr=2.0, max_bars_in_trade=90, qty_pct_equity=12.0),
+            risk=RiskModel(stop_atr=1.2, target_atr=2.0, max_bars_in_trade=90, qty_pct_equity=12.0, min_edge_cost_mult=1.5),
             costs=_SCALP_COSTS,
             allow_short=True,
             tunable={"ema_fast": (5, 8, 13), "ema_slow": (21, 34), "vol_mult": (1.0, 1.3, 1.6)},
@@ -338,7 +342,7 @@ PRESETS: dict[str, Preset] = {
             params=_momentum_params(9, 21, 9, 52.0, 1.5),
             risk=RiskModel(
                 stop_atr=1.2, target_atr=2.0, max_bars_in_trade=60, qty_pct_equity=10.0,
-                max_trades_per_day=6, session=_EQUITY_SESSION,
+                max_trades_per_day=6, session=_EQUITY_SESSION, min_edge_cost_mult=1.5,
             ),
             costs=_SCALP_COSTS,
             tunable={"ema_fast": (5, 9, 13), "rsi_floor": (50.0, 52.0, 55.0)},
@@ -357,7 +361,7 @@ PRESETS: dict[str, Preset] = {
             params={"delta_len": 24, "z_entry": 1.5, "z_exit": 0.0, "atr_len": 14, "use_vwap": True, "vol_len": 20, "vol_mult": 1.1},
             risk=RiskModel(
                 stop_atr=1.3, target_atr=2.2, max_bars_in_trade=36, qty_pct_equity=10.0,
-                max_trades_per_day=4, session=_EQUITY_SESSION,
+                max_trades_per_day=4, session=_EQUITY_SESSION, min_edge_cost_mult=1.5,
             ),
             costs=_SCALP_COSTS,
             tunable={"z_entry": (1.2, 1.5, 1.8), "delta_len": (12, 24, 36)},

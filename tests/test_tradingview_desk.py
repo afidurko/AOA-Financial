@@ -98,6 +98,11 @@ def test_generated_pine_lints_and_contains_contract(name: str) -> None:
             literal = f"input.float({_f(value)},"
         assert literal in src, f"param {key}={value!r} not surfaced as an input default"
     assert f"atrLen     = input.int({preset.params.get('atr_len', 14)}," in src
+    assert f"minEdgeMult = input.float({_f(preset.risk.min_edge_cost_mult)}," in src
+    assert f"commPct    = {_f(preset.costs.commission_pct)}" in src
+    assert "and edgeOk and barstate.isconfirmed" in src
+    if preset.horizon in ("hft", "scalp"):
+        assert preset.risk.min_edge_cost_mult > 0, "HFT/scalp presets must carry the edge-vs-cost guard"
     assert pine_filename(preset) == f"{preset.name}.pine"
 
 
@@ -166,9 +171,14 @@ def test_desk_flags_insufficient_bars_and_reuses_memory(desk_env: Path) -> None:
     assert len(report.rows) == 1 and report.rows[0].error.startswith("insufficient bars")
     assert report.proposals == []
     # second cycle sees the first cycle's memory and increments consolidations
-    runner2 = DeskRunner(source="synthetic", report_dir=desk_env / "reports", use_fundamentals=False, folds=0, monte_carlo=False)
+    runner2 = DeskRunner(source="synthetic", report_dir=desk_env / "reports", use_fundamentals=False, folds=0, monte_carlo=False, label="sweep")
     runner2.run(["MSFT"], presets=["swing-equity-1d-trend"], limit=600, seed=1, capture=False)
     assert DeskMemory.load().consolidations == 2
+    # a labelled (sweep) run does not clobber the desk's latest.json
+    latest = json.loads((desk_env / "reports" / "latest.json").read_text())
+    assert latest["rows"][0]["preset"] == "position-equity-1d-fundamental"
+    assert (desk_env / "reports" / "latest-sweep.json").is_file()
+    assert list((desk_env / "reports").glob("sweep-*.json"))
 
 
 def test_desk_fundamentals_gate_zeroes_reward(desk_env: Path, monkeypatch) -> None:

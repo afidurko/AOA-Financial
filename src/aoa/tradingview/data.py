@@ -278,7 +278,11 @@ def synthetic_bars(
     """Seeded regime-switching GBM with volume clustering (offline fallback)."""
     rng = random.Random(seed if seed is not None else hash((symbol, tf.key)) & 0xFFFF)
     dt_years = tf.seconds / (365 * 86400 if market == "crypto" else 252 * 6.5 * 3600)
-    regimes = [(0.10, 0.18), (0.30, 0.25), (-0.25, 0.45), (0.0, 0.12)]
+    # (annualised drift, annualised vol) regimes — crypto majors run ~3x equity vol
+    if market == "crypto":
+        regimes = [(0.20, 0.55), (0.60, 0.70), (-0.50, 1.10), (0.0, 0.40)]
+    else:
+        regimes = [(0.10, 0.18), (0.30, 0.25), (-0.25, 0.45), (0.0, 0.12)]
     mu, sigma = regimes[0]
     price = start_price
     ts = datetime(2020, 1, 1, tzinfo=timezone.utc)
