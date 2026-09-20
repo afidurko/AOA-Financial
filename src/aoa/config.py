@@ -250,6 +250,7 @@ class Config:
     notify_push_opportunities: bool = True
     notify_push_halts: bool = True
     notify_min_conviction: float = 0.65
+    integrity_notify_queue: bool = True
 
     # Idle opportunity sweep — market analysis when no alerts or opportunity pushes
     opportunity_sweep_enabled: bool = True
@@ -282,6 +283,7 @@ class Config:
     spine_enabled: bool = False
     qm_url: str = ""
     visualhft_url: str = ""
+    antd_mobile_url: str = ""
 
     # Aaron — iPhone push alerts (never email)
     custom_app_webhook_url: str = ""
@@ -464,6 +466,7 @@ class Config:
             notify_push_opportunities=_bool("AOA_NOTIFY_PUSH_OPPORTUNITIES", True),
             notify_push_halts=_bool("AOA_NOTIFY_PUSH_HALTS", True),
             notify_min_conviction=_float("AOA_NOTIFY_MIN_CONVICTION", 0.65),
+            integrity_notify_queue=_bool("AOA_INTEGRITY_NOTIFY_QUEUE", True),
             opportunity_sweep_enabled=_bool("AOA_OPPORTUNITY_SWEEP_ENABLED", True),
             opportunity_sweep_seconds=max(60, _int("AOA_OPPORTUNITY_SWEEP_SECONDS", 900)),
             opportunity_sweep_poll_seconds=max(15, _int("AOA_OPPORTUNITY_SWEEP_POLL_SECONDS", 60)),
@@ -489,6 +492,7 @@ class Config:
             spine_enabled=_bool("AOA_SPINE_ENABLED", False),
             qm_url=os.environ.get("AOA_QM_URL", "").strip(),
             visualhft_url=os.environ.get("AOA_VISUALHFT_URL", "").strip(),
+            antd_mobile_url=os.environ.get("AOA_ANTD_MOBILE_URL", "").strip(),
             custom_app_webhook_url=os.environ.get("AOA_CUSTOM_APP_WEBHOOK_URL", ""),
             custom_app_api_key=os.environ.get("AOA_CUSTOM_APP_API_KEY", ""),
             custom_app_device_id=os.environ.get("AOA_CUSTOM_APP_DEVICE_ID", ""),

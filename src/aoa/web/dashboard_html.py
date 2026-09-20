@@ -51,6 +51,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <a id="obsidian-link" href="#" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">Second Brain ↗</a>
       <a id="qm-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">QM ↗</a>
       <a id="visualhft-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">VisualHFT ↗</a>
+      <a id="antd-mobile-link" href="#" target="_blank" rel="noopener" style="display:none;color:var(--accent);font-size:.85rem;text-decoration:none">UI kit ↗</a>
+      <a href="/m" style="color:var(--accent);font-size:.85rem;text-decoration:none">Mobile</a>
       <div id="market-status" class="stat-sm">Market: —</div>
     </div>
   </header>
@@ -70,8 +72,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="card"><h2>ROI summary</h2><div class="stat-sm" id="roi-summary">—</div></div>
     </div>
     <div class="tabs">
+      <div class="tab active" data-tab="attention">Needs Attention</div>
       <div class="tab" data-tab="assistant">Assistant</div>
-      <div class="tab active" data-tab="team">Team</div>
+      <div class="tab" data-tab="team">Team</div>
       <div class="tab" data-tab="analysts">Analysts</div>
       <div class="tab" data-tab="trades">Trades</div>
       <div class="tab" data-tab="approvals">Approvals</div>
@@ -82,6 +85,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tab" data-tab="risk">Risk plans</div>
       <div class="tab" data-tab="journal">Journal</div>
     </div>
+    <div id="panel-attention" class="panel active card">
+      <h2>Needs Attention</h2>
+      <p class="stat-sm" style="margin-bottom:.75rem">
+        Integrity Ten corrective queue, alerts, and approvals — works in the dashboard and in Cursor’s Needs Attention tab.
+      </p>
+      <div id="attention-badge" class="stat-sm" style="margin-bottom:.5rem">—</div>
+      <div id="attention-list"></div>
+      <button class="secondary" style="margin-top:.75rem" onclick="refreshAttention()">Refresh</button>
+    </div>
     <div id="panel-assistant" class="panel card">
       <h2>Alex — your priorities</h2>
       <div class="stat-sm" id="assistant-focus">Focus: —</div>
@@ -91,7 +103,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div id="assistant-later"></div>
       <button class="secondary" style="margin-top:.75rem" onclick="loadAssistant()">Refresh priorities</button>
     </div>
-    <div id="panel-team" class="panel active card">
+    <div id="panel-team" class="panel card">
       <h2>Team roster — click to expand</h2>
       <div class="team-grid" id="team-roster"></div>
     </div>
@@ -150,6 +162,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div id="toast"></div>
   <script>
     const fmt = n => n==null?'—':'$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
+    const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const toast = m => { const el=document.getElementById('toast'); el.textContent=m; el.style.display='block'; setTimeout(()=>el.style.display='none',4000); };
     document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
       document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -159,7 +172,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     });
     function toggleMember(el){ el.classList.toggle('open'); }
     async function refresh(){
-      const [status,config,last,journal,roi,approvals,research,promotions] = await Promise.all([
+      const [status,config,last,journal,roi,approvals,research,promotions,attention] = await Promise.all([
         fetch('/api/status').then(r=>r.json()),
         fetch('/api/config').then(r=>r.json()).catch(()=>({})),
         fetch('/api/last-cycle').then(r=>r.json()),
@@ -168,6 +181,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         fetch('/api/approvals').then(r=>r.json()).catch(()=>({items:[]})),
         fetch('/api/research/proposals').then(r=>r.json()).catch(()=>({items:[]})),
         fetch('/api/team/expansions').then(r=>r.json()).catch(()=>({items:[]})),
+        fetch('/api/needs-attention').then(r=>r.json()).catch(()=>({count:0,items:[]})),
       ]);
       const osLink=document.getElementById('openstock-link');
       if(config.openstock_url){
@@ -178,7 +192,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       }
       const obsLink=document.getElementById('obsidian-link');
       if(config.obsidian_vault_path){
-        const vaultName=config.obsidian_vault_path.replace(/\\/g,'/').split('/').filter(Boolean).pop()||'vault';
+        const vaultName=config.obsidian_vault_path.replaceAll('\\\\','/').split('/').filter(Boolean).pop()||'vault';
         obsLink.href='obsidian://open?vault='+encodeURIComponent(vaultName);
         obsLink.style.display='inline';
       } else {
@@ -197,6 +211,13 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         vhLink.style.display='inline';
       } else {
         vhLink.style.display='none';
+      }
+      const admLink=document.getElementById('antd-mobile-link');
+      if(config.antd_mobile_url){
+        admLink.href=config.antd_mobile_url;
+        admLink.style.display='inline';
+      } else {
+        admLink.style.display='none';
       }
       const badge=document.getElementById('mode-badge');
       badge.textContent=status.mode;
@@ -228,6 +249,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       renderPromotions(promotions.items||[]);
       renderCatalysts(r.catalysts||[]);
       renderRiskPlans(r.risk_plans||[]);
+      renderAttention(attention);
       window._overlays=r.chart_overlays||[];
       const sel=document.getElementById('overlay-symbol');
       const prev=sel.value;
@@ -326,10 +348,63 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     function renderApprovals(items){
       document.getElementById('approvals-list').innerHTML=items.length?items.map(a=>`
         <div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.5rem">
-          <strong>${a.title}</strong> <span style="color:var(--muted)">(${a.status})</span>
-          <p style="font-size:.85rem;margin:.35rem 0">${a.summary||''}</p>
-          ${a.status==='pending'?`<button class="ok" onclick="resolveApproval('${a.id}','approved')">Approve</button> <button class="danger" onclick="resolveApproval('${a.id}','rejected')">Reject</button>`:''}
+          <strong>${esc(a.title)}</strong> <span style="color:var(--muted)">(${esc(a.status)})</span>
+          <p style="font-size:.85rem;margin:.35rem 0">${esc(a.summary||'')}</p>
+          ${a.status==='pending'?`<button class="ok" onclick="resolveApproval('${esc(a.id)}','approved')">Approve</button> <button class="danger" onclick="resolveApproval('${esc(a.id)}','rejected')">Reject</button>`:''}
         </div>`).join(''):'<p class="stat-sm">No pending approvals</p>';
+    }
+    function renderAttention(feed){
+      const items=feed.items||[];
+      const badge=document.getElementById('attention-badge');
+      const integ=feed.integrity_pending||0;
+      badge.textContent=items.length
+        ? `${items.length} item(s) · ${integ} integrity · Cursor actions: ${(feed.cursor&&feed.cursor.actions||[]).length}`
+        : 'Nothing needs attention';
+      const tab=document.querySelector('.tab[data-tab="attention"]');
+      if(tab){
+        tab.textContent=items.length?`Needs Attention (${items.length})`:'Needs Attention';
+        tab.style.borderColor=items.length?'var(--amber)':'';
+      }
+      document.getElementById('attention-list').innerHTML=items.length?items.map(it=>{
+        const btns=(it.actions||[]).map(a=>{
+          if(it.source==='integrity' && a.id==='approve')
+            return `<button class="ok" onclick="resolveIntegrity('${esc(it.id)}','approved')">Approve implant</button>`;
+          if(it.source==='integrity' && a.id==='reject')
+            return `<button class="danger" onclick="resolveIntegrity('${esc(it.id)}','rejected')">Reject</button>`;
+          if(it.source==='alert' && a.id==='approve')
+            return `<button class="ok" onclick="respondAlert('${esc((it.payload&&it.payload.notification_id)||'')}','approve')">Approve</button>`;
+          if(it.source==='alert' && a.id==='reject')
+            return `<button class="danger" onclick="respondAlert('${esc((it.payload&&it.payload.notification_id)||'')}','reject')">Reject</button>`;
+          if(it.source==='approval' && a.id==='approve')
+            return `<button class="ok" onclick="resolveApproval('${esc((it.payload&&it.payload.approval_id)||'')}','approved')">Approve</button>`;
+          if(it.source==='approval' && a.id==='reject')
+            return `<button class="danger" onclick="resolveApproval('${esc((it.payload&&it.payload.approval_id)||'')}','rejected')">Reject</button>`;
+          return '';
+        }).join(' ');
+        return `<div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.5rem;border-left:3px solid ${it.priority==='high'?'var(--red)':'var(--amber)'}">
+          <strong>${esc(it.title)}</strong>
+          <span style="color:var(--muted);font-size:.75rem;margin-left:.35rem">${esc(it.source)}</span>
+          <pre style="font-size:.8rem;margin:.35rem 0;white-space:pre-wrap;color:var(--muted)">${esc((it.detail||'').slice(0,500))}</pre>
+          <div style="display:flex;gap:.5rem;flex-wrap:wrap">${btns}</div>
+        </div>`;
+      }).join(''):'<p class="stat-sm">All clear — Integrity Ten and approval inbox are empty.</p>';
+    }
+    async function refreshAttention(){
+      const attention=await fetch('/api/needs-attention').then(r=>r.json()).catch(()=>({count:0,items:[]}));
+      renderAttention(attention);
+    }
+    async function resolveIntegrity(id,status){
+      const r=await fetch(`/api/integrity/${id}/resolve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status})});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.detail||`Failed (${r.status})`); return; }
+      toast(status==='approved'?`Implanted ${id}`:`Rejected ${id}`);
+      refresh();
+    }
+    async function respondAlert(id,action){
+      if(!id) return;
+      const r=await fetch(`/api/alerts/${id}/respond`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action})});
+      if(!r.ok){ const d=await r.json().catch(()=>({})); toast(d.detail||`Failed (${r.status})`); return; }
+      toast(`${action} alert ${id}`);
+      refresh();
     }
     function renderResearch(items){
       document.getElementById('research-list').innerHTML=items.length?items.map(p=>`

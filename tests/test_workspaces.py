@@ -13,12 +13,13 @@ def test_workspaces_report_shape(monkeypatch):
     monkeypatch.delenv("AOA_OPENSTOCK_URL", raising=False)
     monkeypatch.delenv("AOA_QM_URL", raising=False)
     monkeypatch.delenv("AOA_VISUALHFT_URL", raising=False)
+    monkeypatch.delenv("AOA_ANTD_MOBILE_URL", raising=False)
     cfg = Config.from_env(load_dotenv=False)
     report = workspaces_report(cfg)
-    assert report["count"] == 4
+    assert report["count"] == 5
     assert report["never_live"] is True
     ids = {w["id"] for w in report["workspaces"]}
-    assert ids == {"openstock", "qm", "visualhft", "hftbacktest"}
+    assert ids == {"openstock", "qm", "visualhft", "hftbacktest", "antd-mobile"}
     vh = next(w for w in report["workspaces"] if w["id"] == "visualhft")
     assert vh["docs"].endswith("visualhft-integration.md")
     assert vh["detail"]["python_lane"]["offline_only"] is True
@@ -28,6 +29,11 @@ def test_workspaces_report_shape(monkeypatch):
     assert hft["detail"]["orderbook"].get("ok") is True
     assert hft["linked"] is True
     assert hft["present"] is True
+    adm = next(w for w in report["workspaces"] if w["id"] == "antd-mobile")
+    assert adm["docs"].endswith("antd-mobile-integration.md")
+    assert adm["detail"]["mobile_path"] == "/m"
+    assert adm["linked"] is False
+    assert adm["never_live"] is True
 
 
 def test_cli_hft_skips_env_template(tmp_path, monkeypatch, capsys):
@@ -76,8 +82,20 @@ def test_cli_workspaces_skips_env_template(tmp_path, monkeypatch, capsys):
     code = main(["workspaces", "status", "--json"])
     out = json.loads(capsys.readouterr().out)
     assert code == 0
-    assert out["count"] == 4
+    assert out["count"] == 5
     assert not (tmp_path / ".env").exists()
+
+
+def test_workspaces_respects_antd_mobile_url(monkeypatch):
+    monkeypatch.setenv(
+        "AOA_ANTD_MOBILE_URL", "https://github.com/afidurko/ant-design-mobile"
+    )
+    cfg = Config.from_env(load_dotenv=False)
+    assert cfg.antd_mobile_url == "https://github.com/afidurko/ant-design-mobile"
+    rows = probe_workspaces(cfg)
+    adm = next(w for w in rows if w.id == "antd-mobile")
+    assert adm.linked is True
+    assert adm.url == "https://github.com/afidurko/ant-design-mobile"
 
 
 def test_cli_workspaces_setup_help():

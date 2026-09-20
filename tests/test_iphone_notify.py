@@ -21,6 +21,43 @@ def test_notifier_not_configured_raises():
         )
 
 
+def test_placeholder_webhook_is_not_configured():
+    notifier = IPhoneNotifier(
+        custom_app_webhook_url="https://your-server.example.com/aoa/alerts"
+    )
+    assert notifier.configured is False
+    assert notifier.channel_names() == []
+    assert "NTFY" in (notifier.status().get("setup_hint") or "")
+
+
+def test_ntfy_and_placeholder_webhook_uses_ntfy_only(monkeypatch):
+    calls = []
+
+    class FakeResp:
+        def raise_for_status(self):
+            pass
+
+    def fake_post(url, **kwargs):
+        calls.append(url)
+        return FakeResp()
+
+    monkeypatch.setattr("aoa.notify.iphone.httpx.post", fake_post)
+    notifier = IPhoneNotifier(
+        custom_app_webhook_url="https://your-server.example.com/aoa/alerts",
+        ntfy_topic="aoa-queue",
+    )
+    assert notifier.channel_names() == ["ntfy"]
+    channels = notifier.send(
+        IPhoneNotification(
+            title="Queue",
+            message="pending",
+            reason=NotificationReason.NEEDS_VERIFICATION,
+        )
+    )
+    assert channels == ["ntfy"]
+    assert calls[0].endswith("/aoa-queue")
+
+
 def test_pushover_send(monkeypatch):
     calls = []
 

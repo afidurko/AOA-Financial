@@ -65,6 +65,11 @@ repos:
     role: Legacy DL experiments (news Text CNN, price ConvNet); archival reference for aoa_financial sentiment/forecast lineage
     workspace: ./deepstock
     setup: ./scripts/deepstock-setup.sh
+  - name: ant-design-mobile
+    url: https://github.com/afidurko/ant-design-mobile
+    role: Mobile React UI kit; AOA serves phone shell at /m
+    workspace: ./ant-design-mobile
+    setup: ./scripts/antd-mobile-setup.sh
 
 # Vendored / local workspaces (not separate git clones)
 local:
