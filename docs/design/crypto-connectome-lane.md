@@ -95,6 +95,39 @@ free sources bound what a fresh clone can fetch:
 
 Pre-coverage days are walked and labeled honestly rather than fabricated.
 
+## The trader swarm (second pass)
+
+`aoa.crypto.traders` scales the lane from one trainer to a **swarm** — the
+account-repo mesh (`docs/design/account-repo-mesh.md`) maps each member to the
+GitHub repo it was distilled from:
+
+| Trader | Model | Source repo |
+|--------|-------|-------------|
+| `momentum-head` | LoRA-style low-rank head | (in-repo `aoa.adapt`) |
+| `deep-mlp-16x8`, `deep-mlp-24x12x6` | deep backprop MLPs + return lags | deepstock, Stock-Price-Prediction |
+| `gated-reservoir` | input-selective gated recurrence | GHOST, Deep-Learning--Stock-Market-Prediction |
+| `connectome-worm` | C. elegans motor circuit | stonkfly, worm-sim |
+| `pattern-memory` | persistent pattern statistics | (in-repo) |
+| `ar-forecaster` | online AR(5) | Stock-Market-App |
+| `pairs-vs-*` | log-ratio z-score mean reversion | Pairs-Trading-Analyzer |
+
+The **Hedge ensemble** (AutoHedge/HAAS distillation) fuses votes with
+multiplicative weights — each trader's weight decays exponentially with its
+realized directional loss — and the **survival gate**
+(`aoa.crypto.survival.BracketSurvival`, from the lifelines/scikit-survival
+forks) vetoes entries in regimes where history shows the −26% stop wins the
+race against the +32% target. Everything persists (`*_ensemble.json`), and the
+backtester drives either the single trainer or the swarm through the same
+`decide`/`learn` strategy protocol.
+
+First honest walk-forward swarm results (fresh state, 25 bps fees): BTC
++176,624% (vs +47,854% single-trainer), ETH +159% (vs +2%), SOL +58%
+(vs +2,499%), XRP −82% (vs +15%) — the ensemble helps where per-trader skill
+differs (BTC/ETH) and hurts where no member has an edge (XRP). Hedge weights
+after full training: connectome dominates BTC (56%), pairs traders dominate
+ETH/SOL/XRP (30–38%), and the gated reservoir earns the best hit rates
+(57.7% BTC, 55.5% XRP).
+
 ## Verification
 
 `python3 -m pytest -q` (all suites) plus dedicated offline tests:

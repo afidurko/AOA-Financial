@@ -611,8 +611,11 @@ aoa openquant smoke
 aoa crypto status                       # cache/model/connectome state
 aoa crypto fetch                        # daily BTC/ETH/SOL/XRP history (Bitstamp + Yahoo)
 aoa crypto train                        # walk every day since 2007-07-17 and learn patterns
+aoa crypto train --ensemble             # train the 8-trader swarm (Hedge weights + survival gate)
+aoa crypto traders                      # swarm roster, trust weights, survival regimes
 aoa crypto backtest                     # walk-forward backtest, +32%/−26% bracket pre-attached
-# See docs/design/crypto-connectome-lane.md
+aoa crypto backtest --ensemble          # same, driven by the trader swarm
+# See docs/design/crypto-connectome-lane.md + docs/design/account-repo-mesh.md
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,

@@ -2477,6 +2477,7 @@ def cmd_crypto_train(
     start: str | None = None,
     end: str | None = None,
     fresh: bool = False,
+    ensemble: bool = False,
     as_json: bool = False,
 ) -> int:
     """Day-by-day walk-forward training from the epoch (or ``--start``)."""
@@ -2484,6 +2485,7 @@ def cmd_crypto_train(
 
     from aoa.crypto.assets import DEFAULT_ASSETS, TRAINING_EPOCH, get_asset
     from aoa.crypto.history import HistoryStore
+    from aoa.crypto.traders import HedgeEnsemble
     from aoa.crypto.training import DayByDayTrainer
 
     codes = DEFAULT_ASSETS if assets == "all" else tuple(a.strip() for a in assets.split(","))
@@ -2494,6 +2496,19 @@ def cmd_crypto_train(
     for code in codes:
         asset = get_asset(code)
         candles = store.ensure(asset)
+        if ensemble:
+            swarm = _fresh_ensemble(asset) if fresh else HedgeEnsemble(asset)
+            window = [c for c in candles if c.day >= start_day and (end_day is None or c.day <= end_day)]
+            summary = swarm.train(window, partner_closes=_partner_closes(store, asset), save=not fresh)
+            reports.append(summary)
+            if not as_json:
+                print(f"  {summary['asset']:>4}: swarm learned {summary['days_learned']} days")
+                for name, weight in sorted(summary["weights"].items(), key=lambda kv: -kv[1]):
+                    hr = summary["hit_rates"].get(name)
+                    n = summary["decisions"].get(name, 0)
+                    hr_txt = f"{hr:.1%} over {n}" if hr is not None else "no decisions"
+                    print(f"        {weight:6.1%}  {name:<18} hit-rate {hr_txt}")
+            continue
         trainer = _fresh_trainer(asset) if fresh else DayByDayTrainer(asset)
         report = trainer.train(candles, start=start_day, end=end_day)
         reports.append(report.to_dict())
@@ -2522,6 +2537,50 @@ def _fresh_trainer(asset):  # noqa: ANN001, ANN202 — CLI-local helper
     return DayByDayTrainer(asset, model_dir=tempfile.mkdtemp(prefix="aoa-crypto-fresh-"))
 
 
+def _fresh_ensemble(asset):  # noqa: ANN001, ANN202 — CLI-local helper
+    """An ensemble that ignores (and does not overwrite) persisted state."""
+    import tempfile
+
+    from aoa.crypto.traders import HedgeEnsemble
+
+    return HedgeEnsemble(asset, model_dir=tempfile.mkdtemp(prefix="aoa-crypto-fresh-"))
+
+
+def _partner_closes(store, asset):  # noqa: ANN001, ANN202 — CLI-local helper
+    """Partner asset daily closes for the pairs trader (or None)."""
+    from aoa.crypto.assets import ASSETS
+    from aoa.crypto.traders import PAIR_PARTNERS
+
+    partner_code = PAIR_PARTNERS.get(asset.code)
+    if not partner_code or partner_code not in ASSETS:
+        return None
+    partner = ASSETS[partner_code]
+    candles = store.load(partner) or store.ensure(partner)
+    return {c.day: c.close for c in candles}
+
+
+def cmd_crypto_traders(*, assets: str = "all", as_json: bool = False) -> int:
+    """Show the trader swarm roster, Hedge weights, and survival-gate state."""
+    from aoa.crypto.assets import DEFAULT_ASSETS, get_asset
+    from aoa.crypto.traders import HedgeEnsemble
+
+    codes = DEFAULT_ASSETS if assets == "all" else tuple(a.strip() for a in assets.split(","))
+    payload = []
+    for code in codes:
+        ensemble = HedgeEnsemble(get_asset(code))
+        payload.append(ensemble.describe())
+    if as_json:
+        print(json.dumps(payload, indent=2))
+        return 0
+    for desc in payload:
+        print(f"{desc['asset']} — swarm of {len(desc['traders'])} traders "
+              f"(learned {desc['days_learned']} days, "
+              f"{desc['survival_regimes']} survival regimes)")
+        for name, weight in sorted(desc["weights"].items(), key=lambda kv: -kv[1]):
+            print(f"    {weight:6.1%}  {name}")
+    return 0
+
+
 def cmd_crypto_backtest(
     *,
     assets: str = "all",
@@ -2531,6 +2590,7 @@ def cmd_crypto_backtest(
     take_profit: float = 0.32,
     stop_loss: float = 0.26,
     show_trades: int = 0,
+    ensemble: bool = False,
     as_json: bool = False,
 ) -> int:
     """Walk-forward backtest with the mandatory pre-execution bracket."""
@@ -2549,17 +2609,26 @@ def cmd_crypto_backtest(
     for code in codes:
         asset = get_asset(code)
         candles = store.ensure(asset)
-        # Fresh trainer: the backtest learns strictly inside its own walk, so
+        # Fresh strategy: the backtest learns strictly inside its own walk, so
         # results are honest walk-forward (no leakage from a prior full-tape run).
-        trainer = _fresh_trainer(asset)
+        trainer = _fresh_ensemble(asset) if ensemble else _fresh_trainer(asset)
+        partners = _partner_closes(store, asset) if ensemble else None
         bt = CryptoBacktester(asset, policy=policy, starting_cash=cash)
-        result = bt.run(candles, trainer, start=start_day, end=end_day)
+        result = bt.run(candles, trainer, start=start_day, end=end_day, partner_closes=partners)
         payload = result.to_dict()
+        if ensemble:
+            payload["ensemble"] = trainer.describe()
         if show_trades:
             payload["trades"] = [t.to_dict() for t in result.trades[-show_trades:]]
         results.append(payload)
         if not as_json:
             print(result.summary())
+            if ensemble:
+                weights = ", ".join(
+                    f"{n} {w:.0%}"
+                    for n, w in sorted(trainer.weights.items(), key=lambda kv: -kv[1])[:4]
+                )
+                print(f"  swarm top weights: {weights}")
             if show_trades:
                 for t in result.trades[-show_trades:]:
                     print(
@@ -3107,6 +3176,11 @@ def main(argv: list[str] | None = None) -> int:
     cr_train.add_argument(
         "--fresh", action="store_true", help="Ignore persisted model state (throwaway run)."
     )
+    cr_train.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Train the multi-trader swarm (Hedge ensemble) instead of the single trainer.",
+    )
     cr_train.add_argument("--json", action="store_true", help="Emit JSON.")
     cr_bt = crypto_sub.add_parser(
         "backtest",
@@ -3123,7 +3197,17 @@ def main(argv: list[str] | None = None) -> int:
         "--stop-loss", type=float, default=0.26, help="Stop-loss fraction (default 0.26)."
     )
     cr_bt.add_argument("--trades", type=int, default=0, help="Show the last N trades.")
+    cr_bt.add_argument(
+        "--ensemble",
+        action="store_true",
+        help="Drive the backtest with the multi-trader swarm instead of the single trainer.",
+    )
     cr_bt.add_argument("--json", action="store_true", help="Emit JSON.")
+    cr_traders = crypto_sub.add_parser(
+        "traders", help="Show the trader swarm roster, Hedge weights, and survival gate."
+    )
+    cr_traders.add_argument("--assets", default="all", help="Comma list or 'all'.")
+    cr_traders.add_argument("--json", action="store_true", help="Emit JSON.")
 
     args = parser.parse_args(argv)
 
@@ -3143,6 +3227,7 @@ def main(argv: list[str] | None = None) -> int:
                 start=args.start,
                 end=args.end,
                 fresh=getattr(args, "fresh", False),
+                ensemble=getattr(args, "ensemble", False),
                 as_json=getattr(args, "json", False),
             )
         if args.crypto_command == "backtest":
@@ -3154,6 +3239,12 @@ def main(argv: list[str] | None = None) -> int:
                 take_profit=args.take_profit,
                 stop_loss=args.stop_loss,
                 show_trades=getattr(args, "trades", 0),
+                ensemble=getattr(args, "ensemble", False),
+                as_json=getattr(args, "json", False),
+            )
+        if args.crypto_command == "traders":
+            return cmd_crypto_traders(
+                assets=args.assets,
                 as_json=getattr(args, "json", False),
             )
         return 2
