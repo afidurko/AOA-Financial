@@ -195,7 +195,9 @@ def _build_api() -> None:
     def load_lora_adapter(
         model: nn.Module, path: str, *, strict: bool = False
     ) -> None:
-        state = torch.load(path, map_location="cpu")
+        # weights_only guards against pickle code execution from an
+        # untrusted adapter checkpoint; LoRA state dicts are pure tensors.
+        state = torch.load(path, map_location="cpu", weights_only=True)
         model.load_state_dict(state, strict=strict)
 
     globals().update(

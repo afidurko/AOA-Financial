@@ -662,11 +662,75 @@ STRESS_SCALES: dict[str, int] = {
 }
 
 
+def _stress_shard(shard: tuple[int, int]) -> dict[str, object]:
+    iterations, seed = shard
+    return billion_stress(iterations=iterations, seed=seed)
+
+
+def split_shards(iterations: int, workers: int, *, seed: int = 7) -> list[tuple[int, int]]:
+    """Split ``iterations`` into ``workers`` (iterations, seed) shards.
+
+    Shard sizes differ by at most one and always sum to ``iterations``;
+    each shard gets a distinct seed so the LCG streams do not overlap.
+    """
+    if workers < 1:
+        raise ValueError("workers must be >= 1")
+    workers = min(workers, iterations)
+    base, extra = divmod(iterations, workers)
+    return [
+        (base + (1 if w < extra else 0), seed + w)
+        for w in range(workers)
+    ]
+
+
+def sharded_stress(
+    *,
+    iterations: int,
+    seed: int = 7,
+    workers: int = 1,
+) -> dict[str, object]:
+    """Run :func:`billion_stress` split across ``workers`` processes.
+
+    ``workers=1`` is a plain in-process run. With more workers the property
+    sample is sharded with distinct seeds and the results are merged:
+    ``ok`` only when every shard passed, counters summed, and any shard
+    failures returned verbatim under ``failures``.
+    """
+    if iterations < 1:
+        raise ValueError("iterations must be >= 1")
+    if workers <= 1:
+        return billion_stress(iterations=iterations, seed=seed)
+
+    from multiprocessing import get_context
+
+    shards = split_shards(iterations, workers, seed=seed)
+    with get_context("spawn").Pool(processes=len(shards)) as pool:
+        results = pool.map(_stress_shard, shards)
+
+    merged: dict[str, object] = {
+        "ok": all(bool(r.get("ok")) for r in results),
+        "iterations": sum(int(r.get("iterations", 0)) for r in results),
+        "inverse_vol_checks": sum(int(r.get("inverse_vol_checks", 0)) for r in results),
+        "erc_checks": sum(int(r.get("erc_checks", 0)) for r in results),
+        "mi_checks": sum(int(r.get("mi_checks", 0)) for r in results),
+        "workers": len(shards),
+        "seed": seed,
+        "never_live": True,
+        "module": "aoa.research.open_quant_patterns",
+        "companion": "open-quant-live-book",
+    }
+    failures = [r for r in results if not r.get("ok")]
+    if failures:
+        merged["failures"] = failures
+    return merged
+
+
 def scale_stress(
     scale: str,
     *,
     seed: int = 7,
     iterations: int | None = None,
+    workers: int = 1,
 ) -> dict[str, object]:
     """Run :func:`billion_stress` for a named scale (or explicit iterations)."""
     key = (scale or "smoke").strip().lower()
@@ -676,7 +740,7 @@ def scale_stress(
                 f"Unknown scale {scale!r}; choose one of {sorted(STRESS_SCALES)}"
             )
         iterations = STRESS_SCALES[key]
-    result = billion_stress(iterations=iterations, seed=seed)
+    result = sharded_stress(iterations=iterations, seed=seed, workers=workers)
     result["scale"] = key if key in STRESS_SCALES else "custom"
     return result
 
@@ -697,6 +761,8 @@ __all__ = [
     "net_information_flow",
     "risk_contributions",
     "scale_stress",
+    "sharded_stress",
+    "split_shards",
     "shannon_entropy",
     "synthetic_smoke",
 ]

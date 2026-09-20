@@ -274,7 +274,9 @@ class Config:
     parallel_workers: int = 4
 
     news_enabled: bool = True
-    web_host: str = "0.0.0.0"
+    # Loopback by default; set AOA_WEB_HOST=0.0.0.0 to expose on LAN/tailnet
+    # (docs/how-to/always-on-dashboard.md).
+    web_host: str = "127.0.0.1"
     web_port: int = 8080
     web_auto_loop: bool = False
     openstock_url: str = ""
@@ -482,7 +484,7 @@ class Config:
             live_acknowledged=live_ack,
             parallel_workers=max(1, _int("AOA_PARALLEL_WORKERS", 4)),
             news_enabled=_bool("AOA_NEWS_ENABLED", True),
-            web_host=os.environ.get("AOA_WEB_HOST", "0.0.0.0"),
+            web_host=os.environ.get("AOA_WEB_HOST", "127.0.0.1"),
             web_port=_int("AOA_WEB_PORT", 8080),
             web_auto_loop=_bool("AOA_WEB_AUTO_LOOP", False),
             openstock_url=os.environ.get("AOA_OPENSTOCK_URL", "").strip(),

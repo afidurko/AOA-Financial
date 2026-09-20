@@ -31,8 +31,44 @@ trading paper/dry-run; they compound agent + human throughput.
    knowledge-stack + qm + visualhft setup scripts.
 7. **Paper profile split in cloud** — keep local `paper-dry` on Moomoo; cloud
    agents export `AOA_BROKER=alpaca` so doctor/team health are not OpenD-bound.
-8. **Trillion-class overnight job** — `aoa openquant stress --scale trillion`
-   (~3×10⁹ checks; ~hours). Full 10¹² only with `--iterations 1000000000000`.
+8. **Trillion-class job** — `aoa openquant stress --scale trillion --workers 4`
+   (~3×10⁹ checks sharded across cores; ~40 min on 4 cores instead of ~2.5 h
+   single-core). Full 10¹² only with `--iterations 1000000000000`.
+
+## Mesh & security add-ons (2026-09-20 loop run)
+
+Landed this run:
+
+| Add-on | How |
+|--------|-----|
+| Neural endpoint mesh | `aoa mesh status\|sync\|recall` — unified graph + persistent run memory (`docs/design/neural-endpoint-mesh.md`) |
+| ATTL memory feed | every `aoa attl run` reinforces mesh weights under `data/{env}/mesh/memory.json` |
+| Loopback-by-default dashboard | `AOA_WEB_HOST` now defaults to `127.0.0.1`; keep `0.0.0.0` in `.env` for tailnet |
+| Safe LoRA checkpoints | `torch.load(..., weights_only=True)` in `aoa.adapt.torch_lora` |
+| LLM URL scheme gate | `AOA_LLM_BASE_URL` must be `http(s)://` |
+
+Recommended next:
+
+1. **Mesh health on the dashboard** — surface `aoa mesh status --json`
+   (health, weakest nodes) as a web panel; alert via ntfy when health < 0.4.
+2. **Feed ship/repair outcomes into mesh memory** — today only ATTL records;
+   `ship proofread` and `repair gate` outcomes would sharpen node weights.
+3. **Live endpoint probes** — optional `aoa mesh probe` reachability checks
+   (OpenD, LLM, dashboard) recorded as mesh runs; keeps memory honest.
+4. **Security scan automation** — weekly `bandit -r src -ll` + `pip-audit` in
+   CI or a Cursor Automation; this run caught 4 fixable findings that way.
+5. **Environment CVE hygiene** — upgrade `pyjwt`, `urllib3`, `setuptools`,
+   `pip`, `wheel` in the cloud image (pip-audit flags known CVEs; none are
+   project-pinned deps).
+6. **hftbacktest lane in cloud** — `pip install -e ".[dev,web]"` skips the
+   L2 replay lane (`aoa hft smoke` prints "not installed" and exits 0).
+   Either add `hftbacktest` to `.cursor/environment.json` install or accept
+   the silent skip; installing took ~20 s and the smoke passes.
+7. **Flake watch** — nightly automation running the pytest suite 3×
+   back-to-back; this run's 3× sweep was clean (568×3, zero flakes).
+8. **Web API smoke task** — a `aoa tasks run web-smoke` step (TestClient →
+   `/health`, `/api/config`) so tier1 exercises the dashboard wiring without
+   booting uvicorn.
 
 ## Human gates (unchanged)
 

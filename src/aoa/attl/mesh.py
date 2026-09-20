@@ -247,8 +247,30 @@ class MeshController:
             outcome=snap.outcome,
             note=f"attl mesh selected={(selected or {}).get('id', '-')} kai={kai.get('verdict')}",
         )
+        self._record_mesh_memory(snap)
         snap.notes = notes
         return snap
+
+    def _record_mesh_memory(self, snap: MeshSnapshot) -> None:
+        """Feed this run into the persistent neural endpoint mesh (best-effort)."""
+        try:
+            from aoa.mesh.graph import NeuralEndpointMesh
+
+            mesh = NeuralEndpointMesh.build(
+                repo_root=self.repo_root,
+                mesh_dir=self.data_dir.parent / "mesh",
+            )
+            activated = ["member.nova", "member.reed", "loop.attl-mesh", "anchor.brain"]
+            if snap.kai.get("engaged"):
+                activated.append("member.kai")
+            mesh.record_run(
+                outcome=snap.outcome,
+                activated=activated,
+                ok=snap.outcome not in {"paused", "critical-report"},
+                note=f"selected={(snap.selected_task or {}).get('id', '-')}",
+            )
+        except Exception:  # noqa: BLE001 — memory must never break the loop
+            pass
 
 
 class _NullLLM:

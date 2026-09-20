@@ -84,6 +84,11 @@ class LLMClient:
                     "AOA_LLM_BASE_URL is required for openai_compatible "
                     "(e.g. http://127.0.0.1:8000/v1)."
                 )
+            if not self.base_url.startswith(("http://", "https://")):
+                raise LLMError(
+                    "AOA_LLM_BASE_URL must use http:// or https:// "
+                    f"(got {self.base_url!r})."
+                )
             if not self._api_key:
                 self._api_key = "local"
 

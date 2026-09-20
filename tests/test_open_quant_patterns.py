@@ -158,6 +158,54 @@ def test_scale_stress_smoke_and_unknown() -> None:
         scale_stress("nope")
 
 
+def test_split_shards_covers_all_iterations() -> None:
+    from aoa.research.open_quant_patterns import split_shards
+
+    shards = split_shards(10, 3, seed=7)
+    assert [it for it, _ in shards] == [4, 3, 3]
+    assert [s for _, s in shards] == [7, 8, 9]
+    assert sum(it for it, _ in shards) == 10
+
+    # More workers than iterations collapses to one shard per iteration.
+    tiny = split_shards(2, 8, seed=1)
+    assert len(tiny) == 2
+    assert sum(it for it, _ in tiny) == 2
+
+    with pytest.raises(ValueError, match="workers"):
+        split_shards(10, 0)
+
+
+def test_sharded_stress_merges_worker_results() -> None:
+    from aoa.research.open_quant_patterns import sharded_stress
+
+    result = sharded_stress(iterations=200_001, seed=3, workers=2)
+    assert result["ok"] is True
+    assert result["iterations"] == 200_001
+    assert result["inverse_vol_checks"] == 200_001
+    assert result["workers"] == 2
+    assert result["erc_checks"] >= 2
+    assert result["never_live"] is True
+    assert "failures" not in result
+
+    # workers=1 is a plain single-process run (no workers key).
+    single = sharded_stress(iterations=1_000, seed=3, workers=1)
+    assert single["ok"] is True
+    assert "workers" not in single
+
+    with pytest.raises(ValueError, match="iterations"):
+        sharded_stress(iterations=0, workers=2)
+
+
+def test_scale_stress_accepts_workers() -> None:
+    from aoa.research.open_quant_patterns import scale_stress
+
+    result = scale_stress("custom", iterations=50_000, seed=1, workers=2)
+    assert result["ok"] is True
+    assert result["scale"] == "custom"
+    assert result["iterations"] == 50_000
+    assert result["workers"] == 2
+
+
 def test_erc_weights_sum_and_positive_vol() -> None:
     cov = [[0.09, 0.01, 0.0], [0.01, 0.04, 0.0], [0.0, 0.0, 0.01]]
     res = equal_risk_contribution(cov)

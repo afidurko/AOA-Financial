@@ -1,11 +1,13 @@
 # Loop State — AOA-Financial
 
-Last run: 2026-08-15 22:05 UTC (ship proofread + Moomoo skill merge)
+Last run: 2026-09-20 04:08 UTC (Fable 5 repair triage, run 782f9c636d50)
 
 ## High Priority (loop is acting or waiting on human)
 
-- **Start Moomoo OpenD** — runtime path is Moomoo. OpenD required on `127.0.0.1:11111`. Use `/install-moomoo-opend` or `aoa setup moomoo`, then `aoa doctor && aoa run`. (~S)
-- **Set real ANTHROPIC_API_KEY** — rotate any exposed keys; template key blocks LLM reasoning (~S)
+- **Start Moomoo OpenD** — runtime path is Moomoo. OpenD required on `127.0.0.1:11111`. Use `/install-moomoo-opend` or `aoa setup moomoo`, then `aoa doctor && aoa run`. (~S)  
+  Source: `state` | Skill: `fable-repair` | id: `e5dbdda6`
+- **Set real ANTHROPIC_API_KEY** — rotate any exposed keys; template key blocks LLM reasoning (~S)  
+  Source: `state` | Skill: `fable-repair` | id: `4ea07a26`
 
 ## Watch List
 
@@ -15,7 +17,7 @@ Last run: 2026-08-15 22:05 UTC (ship proofread + Moomoo skill merge)
 - **Fable 5 repair active** — `aoa repair triage` + `fable-repair` skill (L2)
 - **Credential split** — Fable trial = loop automation; Max 5× = setup/review; API = swarm runtime → [docs/how-to/fable-max-operating-schedule.md](docs/how-to/fable-max-operating-schedule.md)
 - **Task chain automated** — `aoa tasks chain advance --complete <id>` queues next item; alerts only on human-only blockers
-- **Workspaces** — `aoa workspaces setup` then open `AOA.code-workspace`; Cursor Cloud env via `.cursor/environment.json`; VisualHFT Positions empty → [docs/how-to/visualhft-positions-orders.md](docs/how-to/visualhft-positions-orders.md)
+- **Workspaces** — `aoa workspaces setup` then open `AOA.code-workspace`; Cursor Cloud env via `.cursor/environment.json`; VisualHFT Positions empty → [docs/how-to/visualhft-positions-orders.md](docs/how-to/visualhft-po
 - **VisualHFT Plugin Manager (upstream #29)** — large enhancement; track [visualHFT/VisualHFT#29](https://github.com/visualHFT/VisualHFT/issues/29) (not AOA-blocking)
 
 ## Loop automation
@@ -28,13 +30,7 @@ Last run: 2026-08-15 22:05 UTC (ship proofread + Moomoo skill merge)
 
 ## Repair queue
 
-Machine-readable queue: `data/{AOA_ENV}/repair/queue.json`
-
-## Post-Run Critique (from last run)
-
-- Moomoo OpenD skills wired into runtime; helpers simplified after proofread.
-- Kept `AOA_BROKER=moomoo` (user choice) over main's alpaca paper-profile flip.
-- Tests green after merge-base catch-up; OpenD + real API key still human.
+Machine-readable queue: `data/{AOA_ENV}/repair/queue.json` (10 items)
 
 ---
 Run log: loop-run-log.md

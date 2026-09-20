@@ -96,6 +96,10 @@ loops:
   - id: attl-mesh
     module: aoa.attl.mesh
     cli: aoa attl run
+  - id: endpoint-mesh
+    module: aoa.mesh.graph
+    cli: aoa mesh status
+    feeds: [nova, reed, bob]
   - id: repair
     module: aoa.repair
     feeds: [reed, kai]

@@ -19,6 +19,7 @@ python3 -m aoa.cli repair gate --for triage
 python3 -m aoa.cli repair gate --for repair
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
+python3 -m aoa.cli mesh status
 python3 -m aoa.cli ship discover
 python3 -m aoa.cli ship proofread
 python3 -m aoa.cli team health
