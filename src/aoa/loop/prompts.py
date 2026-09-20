@@ -128,13 +128,22 @@ def _append_run_log(repo_root: Path, loop: str, level: str, outcome: str, notes:
 
 
 def _run_cmd(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        cmd,
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        return subprocess.run(
+            cmd,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        missing = cmd[0] if cmd else "command"
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=127,
+            stdout="",
+            stderr=f"{missing} not found: {exc}",
+        )
 
 
 def run_task(

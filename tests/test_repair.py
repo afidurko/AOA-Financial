@@ -205,3 +205,15 @@ def test_sync_state_preserves_loop_automation_section(tmp_path):
     assert "## Loop automation" in text
     assert "L2: disabled" in text
     assert "## Next actions" in text
+
+
+def test_clip_detail_repairs_broken_markdown_link():
+    from aoa.repair.orchestrator import _clip_detail
+
+    broken = (
+        "`aoa workspaces setup`; VisualHFT → "
+        "[docs/how-to/visualhft-positions-orders.md](docs/how-to/visualhft-po"
+    )
+    fixed = _clip_detail(broken)
+    assert fixed.endswith("visualhft-positions-orders.md)")
+    assert "visualhft-po)" not in fixed

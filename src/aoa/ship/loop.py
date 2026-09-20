@@ -156,7 +156,16 @@ def save_state(state: ShipLoopState, path: Path) -> None:
 
 
 def _run(cmd: list[str], *, cwd: Path) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    try:
+        return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        missing = cmd[0] if cmd else "command"
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=127,
+            stdout="",
+            stderr=f"{missing} not found: {exc}",
+        )
 
 
 def _git(cwd: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -256,35 +265,41 @@ class ShipLoopAgent:
             )
 
         # Jim/Cindy vs ATTL twelve roster coherence
-        roster_py = (self.repo_root / "src" / "aoa" / "team" / "roster.py").read_text(
-            encoding="utf-8"
-        )
-        has_jim_agent = (self.repo_root / "src" / "aoa" / "team" / "jim.py").is_file()
-        jim_in_roster = '"Jim"' in roster_py or "'Jim'" in roster_py
-        if has_jim_agent and not jim_in_roster:
-            decision = self.repo_root / "brain" / "decisions"
-            decided = False
-            if decision.is_dir():
-                for p in decision.glob("*.md"):
-                    text = p.read_text(encoding="utf-8")
-                    if "Jim" in text and "Cindy" in text and ("specialist" in text.lower() or "outside" in text.lower() or "fourteen" in text.lower() or "14" in text):
-                        decided = True
-                        break
-            if not decided:
-                found.append(
-                    ShipIssue(
-                        id="roster-jim-cindy",
-                        title="Jim/Cindy roster placement undecided vs ATTL twelve",
-                        kind=IssueKind.ROSTER,
-                        detail=(
-                            "Jim/Cindy agents exist but are not on TWELVE_MEMBER_ROSTER. "
-                            "Record a brain decision: specialists-outside-twelve OR expand roster."
-                        ),
-                        fix_hint="Write brain/decisions/*-jim-cindy-roster.md and align Aaron/UI",
+        roster_path = self.repo_root / "src" / "aoa" / "team" / "roster.py"
+        if roster_path.is_file():
+            roster_py = roster_path.read_text(encoding="utf-8")
+            has_jim_agent = (self.repo_root / "src" / "aoa" / "team" / "jim.py").is_file()
+            jim_in_roster = '"Jim"' in roster_py or "'Jim'" in roster_py
+            if has_jim_agent and not jim_in_roster:
+                decision = self.repo_root / "brain" / "decisions"
+                decided = False
+                if decision.is_dir():
+                    for p in decision.glob("*.md"):
+                        text = p.read_text(encoding="utf-8")
+                        if "Jim" in text and "Cindy" in text and (
+                            "specialist" in text.lower()
+                            or "outside" in text.lower()
+                            or "fourteen" in text.lower()
+                            or "14" in text
+                        ):
+                            decided = True
+                            break
+                if not decided:
+                    found.append(
+                        ShipIssue(
+                            id="roster-jim-cindy",
+                            title="Jim/Cindy roster placement undecided vs ATTL twelve",
+                            kind=IssueKind.ROSTER,
+                            detail=(
+                                "Jim/Cindy agents exist but are not on TWELVE_MEMBER_ROSTER. "
+                                "Record a brain decision: specialists-outside-twelve OR expand roster."
+                            ),
+                            fix_hint="Write brain/decisions/*-jim-cindy-roster.md and align Aaron/UI",
+                        )
                     )
-                )
 
-        # Proofread gate always required before ready
+        # Proofread gate always required before ready — rediscover clears stale PASS.
+        state.proofread = None
         found.append(
             ShipIssue(
                 id="proofread",
@@ -305,8 +320,8 @@ class ShipLoopAgent:
                 # Re-open if discover still finds it
                 issue.status = IssueStatus.OPEN
                 issue.attempts = prev.attempts
-            elif prev and issue.kind is IssueKind.PROOFREAD and state.proofread and state.proofread.ok:
-                issue.status = IssueStatus.FIXED
+            elif prev and issue.kind is IssueKind.PROOFREAD:
+                # Always require a fresh proofread after discover.
                 issue.attempts = prev.attempts
             elif prev:
                 issue.attempts = prev.attempts
@@ -316,7 +331,11 @@ class ShipLoopAgent:
 
         # Keep custom issues that were manually added and still open/blocked
         for iid, prev in known.items():
-            if iid not in seen and prev.kind is IssueKind.CUSTOM:
+            if (
+                iid not in seen
+                and prev.kind is IssueKind.CUSTOM
+                and prev.status in (IssueStatus.OPEN, IssueStatus.BLOCKED)
+            ):
                 merged.append(prev)
 
         state.issues = merged
@@ -334,18 +353,23 @@ class ShipLoopAgent:
 
     def mark_fixed(self, issue_id: str, *, note: str = "") -> ShipLoopState:
         state = load_state(self.state_path)
+        found = False
         for issue in state.issues:
             if issue.id == issue_id:
                 issue.status = IssueStatus.FIXED
                 if note:
                     issue.detail = note
+                found = True
                 break
+        if not found:
+            raise ValueError(f"unknown ship issue id: {issue_id}")
         state.notes.append(f"fixed {issue_id} @ {_now()}")
         save_state(state, self.state_path)
         return state
 
     def mark_attempt(self, issue_id: str, *, blocked: bool = False, detail: str = "") -> ShipLoopState:
         state = load_state(self.state_path)
+        found = False
         for issue in state.issues:
             if issue.id == issue_id:
                 issue.attempts += 1
@@ -353,7 +377,10 @@ class ShipLoopAgent:
                     issue.detail = detail
                 if blocked or issue.attempts >= self.max_attempts_per_issue:
                     issue.status = IssueStatus.BLOCKED
+                found = True
                 break
+        if not found:
+            raise ValueError(f"unknown ship issue id: {issue_id}")
         save_state(state, self.state_path)
         return state
 

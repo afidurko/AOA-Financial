@@ -192,6 +192,8 @@ def equal_risk_contribution(
 
     if not (0.0 < damp <= 1.0):
         raise ValueError("damp must be in (0, 1]")
+    if max_iter < 1:
+        raise ValueError("max_iter must be >= 1")
 
     # Diagonal-aware start: w_i ∝ √b_i / σ_i (exact ERC when Σ is diagonal).
     raw = [
@@ -260,10 +262,17 @@ def _entropy_from_counts(counts: Sequence[int]) -> float:
     return h
 
 
+def _require_finite_series(values: Sequence[float], *, label: str = "values") -> None:
+    for v in values:
+        if not math.isfinite(v):
+            raise ValueError(f"{label} must be finite")
+
+
 def _histogram_counts(values: Sequence[float], bins: int) -> list[int]:
     bins = _require_bins(bins)
     if not values:
         raise ValueError("values must be non-empty")
+    _require_finite_series(values)
     lo = min(values)
     hi = max(values)
     if hi == lo:
@@ -287,6 +296,8 @@ def _joint_counts(
         raise ValueError("xs and ys must have the same length")
     if not xs:
         raise ValueError("series must be non-empty")
+    _require_finite_series(xs, label="xs")
+    _require_finite_series(ys, label="ys")
     x_lo, x_hi = min(xs), max(xs)
     y_lo, y_hi = min(ys), max(ys)
     x_width = (x_hi - x_lo) / bins if x_hi != x_lo else 0.0
@@ -437,6 +448,8 @@ def linear_granger_causality(
     n = len(effect)
     if n <= lags + 1:
         raise ValueError("series too short for requested lags")
+    _require_finite_series(cause, label="cause")
+    _require_finite_series(effect, label="effect")
 
     y, design_r, design_u = _lagged_design(cause, effect, lags=lags)
     var_r = max(_residual_variance(design_r, y), 1e-18)
@@ -487,6 +500,7 @@ def cov_from_returns(returns: Sequence[Sequence[float]]) -> list[list[float]]:
     for row in returns:
         if len(row) != t:
             raise ValueError("all return series must share the same length")
+        _require_finite_series(row, label="returns")
     means = [sum(row) / t for row in returns]
     cov = [[0.0] * n for _ in range(n)]
     for i in range(n):
