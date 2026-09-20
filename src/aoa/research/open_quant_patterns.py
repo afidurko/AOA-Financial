@@ -1011,19 +1011,24 @@ def trillion_stress(
     seed: int = 7,
     progress_every: int = 10_000_000_000,
     batch_size: int = 5_000_000,
+    heavy_every: int | None = None,
 ) -> dict[str, object]:
     """Trillion-scale property stress covering inverse-vol + add-on allocators.
 
     Uses NumPy batching when available (optional), else a pure-Python LCG loop.
-    Heavy probes every 100_000 samples cover ERC, unconstrained tangency, HRP,
-    stylized facts, and correlation networks. Research-only — no broker calls.
+    Heavy probes cover ERC, unconstrained tangency, HRP, stylized facts, and
+    correlation networks. Default ``heavy_every`` scales with ``iterations`` so
+    large runs stay inverse-vol dominated (~10k heavy probes). Research-only.
     """
+    if heavy_every is None:
+        # ~10k heavy probes across the full run (floor 100k for small tests).
+        heavy_every = max(100_000, iterations // 10_000)
     return _property_stress(
         iterations=iterations,
         seed=seed,
         progress_every=progress_every,
         label="trillion",
-        heavy_every=100_000,
+        heavy_every=heavy_every,
         batch_size=batch_size,
         include_addons=True,
     )
