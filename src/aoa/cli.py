@@ -40,6 +40,8 @@ import time
 from pathlib import Path
 
 from aoa.adapt.signal_adapter import SignalAdapter
+from aoa.analytics.report import VIEWS as ANALYTICS_VIEWS
+from aoa.analytics.report import run_analytics_view
 from aoa.brokerage.alpaca import AlpacaBroker
 from aoa.brokerage.alpaca_bars import (
     AlpacaBarsFetcher,
@@ -2447,6 +2449,19 @@ def main(argv: list[str] | None = None) -> int:
     jp = sub.add_parser("journal", help="Tail the decision/trade journal.")
     jp.add_argument("-n", type=int, default=20, help="Number of entries to show.")
     sub.add_parser("report", help="Summarize activity and live P&L.")
+    an = sub.add_parser(
+        "analytics",
+        help="Decision analytics: agent hit rates, stage latency, proposal funnel.",
+    )
+    an.add_argument(
+        "view",
+        nargs="?",
+        default="summary",
+        choices=ANALYTICS_VIEWS,
+        help="Which view to print (default: summary).",
+    )
+    an.add_argument("--runs", type=int, default=200, help="How many recent runs to include.")
+    an.add_argument("--json", action="store_true", help="Emit JSON.")
     bp = sub.add_parser(
         "burnin",
         help="Run N paper cycles and print a burn-in summary.",
@@ -3051,6 +3066,10 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_journal(cfg, args.n)
         if args.command == "report":
             return cmd_report(cfg)
+        if args.command == "analytics":
+            return run_analytics_view(
+                cfg.analytics_db_path, args.view, limit_runs=args.runs, as_json=args.json
+            )
         if args.command == "burnin":
             pause = args.pause or cfg.cycle_seconds or 60
             return cmd_burnin(cfg, cycles=max(1, args.cycles), pause=pause)
