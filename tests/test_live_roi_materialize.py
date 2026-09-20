@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import datetime, timedelta, timezone
 
 from aoa.brokerage.models import AssetClass, Bar, Position, Quote, Side
@@ -58,7 +59,63 @@ def _pos(symbol: str, qty: float, avg: float, mark: float) -> Position:
     )
 
 
-def test_live_forecast_roi_edges_match_price_semantics():
+def test_simple_cone_clamps_non_positive_p10():
+    # Deeply negative expected return + wide vol would otherwise emit p10 < 0.
+    closes = [100.0] * 30
+    cone = simple_forecast_cone(
+        closes, atr=50.0, horizon_bars=63, expected_return=-0.9
+    )
+    assert cone is not None
+    assert cone["p10"] > 0
+    assert cone["p90"] >= cone["p10"]
+    edges = forecast_roi_edges(cone, cost_pct=0.0)
+    # Clamped p10 near zero ⇒ ~-100% tail, so long edge must stay finite and small.
+    assert edges["p10_return"] < -0.99
+    assert math.isfinite(edges["roi_edge_long"])
+    assert roi_edge_quality(edges["roi_edge_long"]) < 0.5
+
+
+def test_forecast_roi_edges_treats_missing_p10_as_total_loss():
+    roi = forecast_roi_edges(
+        {
+            "last_price": 100.0,
+            "expected_return": 0.05,
+            "p10": -10.0,  # invalid
+            "p90": 120.0,
+        },
+        cost_pct=0.0,
+    )
+    assert abs(roi["p10_return"] - (-1.0)) < 1e-12
+    # net 5% / ~100% tail ⇒ edge ~0.05
+    assert abs(roi["roi_edge_long"] - 0.05) < 1e-9
+
+
+def test_materialize_journals_when_scaled_notional_below_one_share(tmp_path):
+    from aoa.journal.store import Journal
+
+    closes = [120.0 - i * 0.05 for i in range(40)]  # mild down → weak scale
+    bb = Blackboard()
+    bb.snapshots["AAPL"] = _snap("AAPL", closes, atr=8.0, price=100.0)
+    journal = Journal(tmp_path / "j.jsonl")
+    props = _materialize_proposals(
+        [
+            {
+                "symbol": "AAPL",
+                "instrument": "equity",
+                "side": "buy",
+                "target_notional": 50,  # tiny; after ROI scale floors to 0 shares
+                "conviction": 0.5,
+                "rationale": "tiny",
+            }
+        ],
+        bb,
+        journal=journal,
+        risk=RiskLimits(transaction_cost_pct=0.02),
+    )
+    assert props == []
+    events = [e["event"] for e in journal.tail(20)]
+    assert "proposal.skipped" in events or "proposal.roi_scale" in events
+
     fc = {
         "last_price": 100.0,
         "expected_return": 0.05,

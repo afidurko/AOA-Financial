@@ -33,9 +33,31 @@ def forecast_roi_edges(
     p10_price = float(forecast.get("p10") or 0.0)
     p90_price = float(forecast.get("p90") or 0.0)
     cost = float(cost_pct)
+    if not math.isfinite(last):
+        last = 0.0
+    if not math.isfinite(expected_return):
+        expected_return = 0.0
+    if not math.isfinite(p10_price):
+        p10_price = 0.0
+    if not math.isfinite(p90_price):
+        p90_price = 0.0
+    if not math.isfinite(cost):
+        cost = 0.0
 
-    p10_ret = (p10_price / last - 1.0) if last > 0 and p10_price > 0 else 0.0
-    p90_ret = (p90_price / last - 1.0) if last > 0 and p90_price > 0 else 0.0
+    # Non-positive p10/p90 ⇒ treat as near-total loss / unbounded upside so we
+    # never silently zero the tail and inflate ROI edge.
+    if last > 0 and p10_price > 0:
+        p10_ret = p10_price / last - 1.0
+    elif last > 0:
+        p10_ret = -1.0
+    else:
+        p10_ret = 0.0
+    if last > 0 and p90_price > 0:
+        p90_ret = p90_price / last - 1.0
+    elif last > 0:
+        p90_ret = 1.0
+    else:
+        p90_ret = 0.0
 
     net_expected = expected_return - cost
     net_p10 = p10_ret - cost
@@ -59,7 +81,7 @@ def forecast_roi_edges(
 
 def horizon_to_bars(horizon: str | None) -> int:
     """Map meshed horizon labels to a trading-day window."""
-    key = (horizon or "swing").strip().lower()
+    key = str(horizon or "swing").strip().lower()
     if key in {"intraday", "day", "1d"}:
         return 5
     if key in {"position", "long", "swing_long"}:
@@ -82,7 +104,7 @@ def simple_forecast_cone(
     if len(closes) < 2:
         return None
     last = float(closes[-1])
-    if last <= 0:
+    if last <= 0 or not math.isfinite(last):
         return None
 
     h = max(1, int(horizon_bars))
@@ -91,18 +113,32 @@ def simple_forecast_cone(
             expected_return = last / float(closes[-h - 1]) - 1.0
         else:
             expected_return = 0.0
+    if not math.isfinite(float(expected_return)):
+        expected_return = 0.0
 
     atr_val = float(atr) if atr and atr > 0 else last * 0.02
+    if not math.isfinite(atr_val) or atr_val <= 0:
+        atr_val = last * 0.02
     # Approx one-sigma move over the horizon in return space.
     vol_move = (atr_val * math.sqrt(h)) / last
     vol_move = max(0.01, min(0.5, vol_move))
 
+    # Prices must stay strictly positive — a negative p10 would otherwise be
+    # treated as "missing" in forecast_roi_edges and understate tail loss.
+    price_floor = last * 1e-4
+    p10 = max(price_floor, last * (1.0 + float(expected_return) - vol_move))
+    p90 = max(p10, last * (1.0 + float(expected_return) + vol_move))
+
+    conf = float(confidence)
+    if not math.isfinite(conf):
+        conf = 0.6
+
     return {
         "last_price": last,
         "expected_return": float(expected_return),
-        "p10": last * (1.0 + float(expected_return) - vol_move),
-        "p90": last * (1.0 + float(expected_return) + vol_move),
-        "confidence": max(0.05, min(0.99, float(confidence))),
+        "p10": p10,
+        "p90": p90,
+        "confidence": max(0.05, min(0.99, conf)),
     }
 
 
@@ -145,6 +181,16 @@ def apply_cost_basis_sell_qty(
     return req
 
 
+def _finite_conviction(conviction: float) -> float:
+    try:
+        val = float(conviction)
+    except (TypeError, ValueError):
+        return 0.5
+    if not math.isfinite(val):
+        return 0.5
+    return max(0.05, min(0.99, val if val else 0.5))
+
+
 def buy_notional_roi_scale(
     *,
     closes: list[float],
@@ -161,7 +207,7 @@ def buy_notional_roi_scale(
         closes,
         atr=atr,
         horizon_bars=horizon_to_bars(horizon),
-        confidence=max(0.05, min(0.99, float(conviction) if conviction else 0.5)),
+        confidence=_finite_conviction(conviction),
     )
     if cone is None:
         return 1.0, {"roi_quality": 1.0, "reason": "insufficient_history"}
@@ -169,6 +215,8 @@ def buy_notional_roi_scale(
     edges = forecast_roi_edges(cone, cost_pct=cost_pct)
     # Live PM notionals already embed conviction — scale by ROI edge only.
     quality = roi_edge_quality(edges["roi_edge_long"])
+    if not math.isfinite(quality):
+        quality = 0.0
     quality = float(max(0.0, min(1.0, quality)))
     payload = {
         **edges,

@@ -818,6 +818,18 @@ def _materialize_proposals(
                     )
                 qty = math.floor(sized_target / price)
                 if qty <= 0:
+                    if journal is not None:
+                        journal.record(
+                            "proposal.skipped",
+                            {
+                                "symbol": symbol,
+                                "reason": "roi_scaled_notional_below_one_share",
+                                "target_notional": target,
+                                "scaled_notional": sized_target,
+                                "scale": round(scale, 6),
+                                "price": float(price),
+                            },
+                        )
                     continue
             stop_price, take_profit = (None, None)
             if side is Side.BUY:

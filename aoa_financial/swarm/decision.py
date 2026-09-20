@@ -91,10 +91,15 @@ def forecast_roi_edges(
 
     if last > 0 and p10_price > 0:
         p10_ret = p10_price / last - 1.0
+    elif last > 0:
+        # Invalid/missing p10 must not silently zero the left tail.
+        p10_ret = -1.0
     else:
         p10_ret = 0.0
     if last > 0 and p90_price > 0:
         p90_ret = p90_price / last - 1.0
+    elif last > 0:
+        p90_ret = 1.0
     else:
         p90_ret = 0.0
 
