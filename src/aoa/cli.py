@@ -1824,7 +1824,7 @@ def cmd_openquant_status(*, as_json: bool) -> int:
             "net_information_flow",
         ],
         "never_live": True,
-        "hint": "aoa openquant smoke — offline ERC / MI / TE check (no broker)",
+        "hint": "aoa openquant smoke | stress --scale smoke|million|billion|trillion",
     }
     if as_json:
         print(json.dumps(status, indent=2))
@@ -1896,6 +1896,10 @@ def cmd_openquant_stress(
         print(f"  inverse_vol:     {result.get('inverse_vol_checks')}")
         print(f"  erc_checks:      {result.get('erc_checks')}")
         print(f"  mi_checks:       {result.get('mi_checks')}")
+        print(f"  erc_corr:        {result.get('erc_corr_checks')}")
+        print(f"  inv_vol_3:       {result.get('inverse_vol_3_checks')}")
+        if result.get("elapsed_s") is not None:
+            print(f"  elapsed_s:       {result.get('elapsed_s')}")
         if not result.get("ok"):
             print(f"  failed_at:       {result.get('failed_at')}")
             print(f"  reason:          {result.get('reason')}")

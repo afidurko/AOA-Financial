@@ -54,4 +54,36 @@ def test_tasks_yaml_has_expected_loops():
     tasks = load_tasks()
     assert "tier1" in tasks
     assert "tier2-check" in tasks
+    assert "openquant-stress" in tasks
     assert "gate-triage" in tasks["tier1"].steps
+
+
+def test_openquant_stress_task_smoke_override(monkeypatch):
+    monkeypatch.setenv("AOA_OPENQUANT_STRESS_SCALE", "smoke")
+    monkeypatch.setenv("AOA_OPENQUANT_STRESS_ITERATIONS", "2500")
+    result = run_task("openquant-stress")
+    assert result.ok is True
+    assert "openquant-stress=smoke" in result.steps_run
+
+
+def test_openquant_stress_task_rejects_unknown_scale(monkeypatch):
+    monkeypatch.setenv("AOA_OPENQUANT_STRESS_SCALE", "nope")
+    result = run_task("openquant-stress")
+    assert result.ok is False
+    assert "Unknown scale" in result.message
+
+
+def test_openquant_stress_task_blocks_heavy_without_flag(monkeypatch):
+    monkeypatch.setenv("AOA_OPENQUANT_STRESS_SCALE", "trillion")
+    monkeypatch.delenv("AOA_OPENQUANT_STRESS_ALLOW_HEAVY", raising=False)
+    result = run_task("openquant-stress")
+    assert result.ok is False
+    assert "too heavy" in result.message
+
+
+def test_openquant_stress_task_rejects_bad_iterations(monkeypatch):
+    monkeypatch.setenv("AOA_OPENQUANT_STRESS_SCALE", "smoke")
+    monkeypatch.setenv("AOA_OPENQUANT_STRESS_ITERATIONS", "abc")
+    result = run_task("openquant-stress")
+    assert result.ok is False
+    assert "ITERATIONS" in result.message

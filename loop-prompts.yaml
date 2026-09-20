@@ -196,7 +196,7 @@ tasks:
     on_pause: exit
 
   openquant-stress:
-    title: Open-quant property stress (smoke scale, offline)
+    title: Open-quant property stress (smoke scale, offline; heavy scales need ALLOW_HEAVY)
     steps:
       - openquant-stress
     on_skip: log

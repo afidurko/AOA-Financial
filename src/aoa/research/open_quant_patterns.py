@@ -8,6 +8,8 @@ calls, and no live order path. AOA remains the only execution surface.
 from __future__ import annotations
 
 import math
+import sys
+import time
 from collections.abc import Sequence
 from dataclasses import dataclass
 
@@ -78,6 +80,10 @@ def _validate_cov(cov: Sequence[Sequence[float]]) -> list[list[float]]:
                 raise ValueError("covariance entries must be finite")
             if i == j and v < 0:
                 raise ValueError("diagonal variances must be non-negative")
+    for i in range(n):
+        for j in range(i + 1, n):
+            if abs(out[i][j] - out[j][i]) > 1e-9:
+                raise ValueError("covariance matrix must be symmetric")
     return out
 
 
@@ -149,6 +155,7 @@ def inverse_vol_weights(volatilities: Sequence[float]) -> tuple[float, ...]:
     if any(not math.isfinite(w) for w in weights):
         raise ValueError("inverse-vol weights must be finite")
     return tuple(weights)
+
 
 def _parse_budget(n: int, budget: Sequence[float] | None) -> list[float]:
     if budget is None:
@@ -568,10 +575,13 @@ def billion_stress(
     """
     if iterations < 1:
         raise ValueError("iterations must be >= 1")
+    started = time.perf_counter()
     state = (seed * 1103515245 + 12345) & 0x7FFFFFFF
     checked = 0
     erc_checked = 0
     mi_checked = 0
+    corr_checked = 0
+    triple_checked = 0
 
     def _next_unit() -> float:
         nonlocal state
@@ -635,9 +645,51 @@ def billion_stress(
                 }
             mi_checked += 1
 
+            # Correlated ERC must stay on the simplex (ρ=0.25 keeps Σ PD).
+            rho = 0.25
+            cov_c = [[v0 * v0, rho * v0 * v1], [rho * v0 * v1, v1 * v1]]
+            erc_c = equal_risk_contribution(cov_c)
+            if abs(sum(erc_c.weights) - 1.0) > 1e-8:
+                return {
+                    "ok": False,
+                    "iterations": iterations,
+                    "failed_at": i,
+                    "reason": "erc_corr_weight_sum",
+                    "erc_weights": list(erc_c.weights),
+                    "never_live": True,
+                }
+            if abs(sum(erc_c.risk_fractions) - 1.0) > 1e-8:
+                return {
+                    "ok": False,
+                    "iterations": iterations,
+                    "failed_at": i,
+                    "reason": "erc_corr_frac_sum",
+                    "risk_fractions": list(erc_c.risk_fractions),
+                    "never_live": True,
+                }
+            corr_checked += 1
+
+            v2 = _next_unit()
+            w3 = inverse_vol_weights((v0, v1, v2))
+            if abs(sum(w3) - 1.0) > 1e-9 or any(not math.isfinite(w) for w in w3):
+                return {
+                    "ok": False,
+                    "iterations": iterations,
+                    "failed_at": i,
+                    "reason": "inverse_vol_3_invariant",
+                    "weights": list(w3),
+                    "vols": [v0, v1, v2],
+                    "never_live": True,
+                }
+            triple_checked += 1
+
         if progress_every > 0 and i > 0 and i % progress_every == 0:
-            # Progress markers keep long runs observable without flooding.
-            pass
+            elapsed = time.perf_counter() - started
+            print(
+                f"openquant-stress {i}/{iterations} ({elapsed:.1f}s)",
+                file=sys.stderr,
+                flush=True,
+            )
 
     return {
         "ok": True,
@@ -645,6 +697,9 @@ def billion_stress(
         "inverse_vol_checks": checked,
         "erc_checks": erc_checked,
         "mi_checks": mi_checked,
+        "erc_corr_checks": corr_checked,
+        "inverse_vol_3_checks": triple_checked,
+        "elapsed_s": time.perf_counter() - started,
         "seed": seed,
         "never_live": True,
         "module": "aoa.research.open_quant_patterns",

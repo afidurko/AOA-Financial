@@ -36,7 +36,15 @@ class IssueKind(str, Enum):
 
 
 # Include packaging manifests — #86 left markers in pyproject.toml which src/tests scans missed.
-CONFLICT_MARKER_PATHS: tuple[str, ...] = ("src", "tests", "pyproject.toml")
+CONFLICT_MARKER_PATHS: tuple[str, ...] = (
+    "src",
+    "tests",
+    "scripts",
+    "docs",
+    "pyproject.toml",
+    "requirements.txt",
+    "loop-prompts.yaml",
+)
 _CONFLICT_MARKER_RG = ["rg", "-n", "^<<<<<<< |^=======|^>>>>>>> ", *CONFLICT_MARKER_PATHS]
 
 

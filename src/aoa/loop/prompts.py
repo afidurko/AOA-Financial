@@ -330,8 +330,42 @@ def run_task(
         if step == "openquant-stress":
             from aoa.research.open_quant_patterns import scale_stress
 
-            scale = (os.environ.get("AOA_OPENQUANT_STRESS_SCALE") or "smoke").strip()
-            result = scale_stress(scale, seed=7)
+            scale = (os.environ.get("AOA_OPENQUANT_STRESS_SCALE") or "smoke").strip().lower()
+            allow_heavy = (os.environ.get("AOA_OPENQUANT_STRESS_ALLOW_HEAVY") or "").strip().lower()
+            if scale in {"billion", "trillion"} and allow_heavy not in {"1", "true", "yes"}:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    message=(
+                        f"Scale {scale!r} is too heavy for the loop task. "
+                        "Use smoke|million, or set AOA_OPENQUANT_STRESS_ALLOW_HEAVY=1"
+                    ),
+                    exit_code=1,
+                )
+            raw_iters = (os.environ.get("AOA_OPENQUANT_STRESS_ITERATIONS") or "").strip()
+            iterations: int | None = None
+            if raw_iters:
+                try:
+                    iterations = int(raw_iters)
+                except ValueError:
+                    return TaskRunResult(
+                        task=spec.key,
+                        ok=False,
+                        steps_run=steps_run,
+                        message=f"AOA_OPENQUANT_STRESS_ITERATIONS must be an int, got {raw_iters!r}",
+                        exit_code=1,
+                    )
+            try:
+                result = scale_stress(scale, seed=7, iterations=iterations)
+            except ValueError as exc:
+                return TaskRunResult(
+                    task=spec.key,
+                    ok=False,
+                    steps_run=steps_run,
+                    message=str(exc),
+                    exit_code=1,
+                )
             steps_run.append(f"openquant-stress={result.get('scale')}")
             if not result.get("ok"):
                 return TaskRunResult(
