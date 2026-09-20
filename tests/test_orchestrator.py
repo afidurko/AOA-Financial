@@ -29,12 +29,14 @@ def test_full_cycle_submits_order(fake_broker, fake_llm, tmp_path):
 
     result = orch.run_cycle()
 
-    # PM proposed a $5,000 AAPL buy => 50 shares at mid 100; within caps => approved.
+    # PM proposed a $5,000 AAPL buy at mid 100; ROI edge scales the notional
+    # below the raw 50-share size, then risk approves within caps.
     assert len(result.blackboard.proposals) == 1
     prop = result.blackboard.proposals[0]
     assert prop.symbol == "AAPL"
     assert prop.side is Side.BUY
-    assert prop.qty == 50
+    assert 0 < prop.qty <= 50
+    assert prop.qty < 50  # forecast-cone ROI scale applied
     assert prop.approved is True
 
     # It was actually submitted to the (fake) broker.

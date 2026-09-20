@@ -9,9 +9,15 @@ from dataclasses import dataclass, field, replace
 from aoa.agents.base import Direction, Signal, TradeProposal, parse_side
 from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, OptionContract, Side
+from aoa.config import RiskLimits
 from aoa.data.market_data import PRIMARY_TIMEFRAME
 from aoa.execution.pricing import marketable_limit
 from aoa.plasticity.trust import notional_trust_multiplier
+from aoa.risk.roi import (
+    apply_cost_basis_sell_qty,
+    buy_notional_roi_scale,
+    unrealized_return,
+)
 from aoa.swarm.context import CycleContext
 from aoa.swarm.environment import MeshedView
 from aoa.swarm.pipeline import PipelineStage
@@ -252,7 +258,11 @@ class MaterializeStage(PipelineStage):
         if ctx.plasticity is not None:
             symbol_trust = dict(ctx.plasticity.memory.symbol_trust)
         bb.proposals = _materialize_proposals(
-            raw, bb, journal=ctx.journal, symbol_trust=symbol_trust
+            raw,
+            bb,
+            journal=ctx.journal,
+            symbol_trust=symbol_trust,
+            risk=ctx.config.risk,
         )
         return True
 
@@ -669,12 +679,15 @@ def _materialize_proposals(
     *,
     journal=None,
     symbol_trust: dict[str, float] | None = None,
+    risk: RiskLimits | None = None,
 ) -> list[TradeProposal]:
     proposals: list[TradeProposal] = []
     trust_map = symbol_trust or {}
-    pos_by_symbol = {p.symbol: p for p in bb.positions}
-    held_or_pending = {p.symbol for p in bb.positions if p.qty != 0}
-    held_or_pending |= {o.symbol for o in bb.open_orders}
+    limits = risk or RiskLimits()
+    cost_pct = float(limits.transaction_cost_pct) + float(limits.slippage_pct)
+    pos_by_symbol = {p.symbol.upper(): p for p in bb.positions}
+    held_or_pending = {p.symbol.upper() for p in bb.positions if p.qty != 0}
+    held_or_pending |= {o.symbol.upper() for o in bb.open_orders}
 
     for item in raw:
         symbol = item.get("symbol", "").upper()
@@ -727,15 +740,96 @@ def _materialize_proposals(
             if not price or price <= 0:
                 continue
             pos = pos_by_symbol.get(symbol)
+            conviction = float(item.get("conviction", 0.5))
+            horizon = _proposal_horizon(item, bb, symbol)
+            scale, roi_payload = buy_notional_roi_scale(
+                closes=_snapshot_closes(snap),
+                atr=_snapshot_atr(snap),
+                horizon=horizon,
+                conviction=conviction,
+                cost_pct=cost_pct,
+            )
             if side is Side.SELL:
                 held = pos.qty if pos else 0
-                qty = min(math.floor(target / price), held) if target > 0 else held
-                qty = int(max(0, qty))
+                req = min(math.floor(target / price), held) if target > 0 else held
+                avg_entry = float(pos.avg_entry_price) if pos else 0.0
+                unreal = unrealized_return(avg_entry, float(price))
+                qty = apply_cost_basis_sell_qty(
+                    held=held,
+                    requested_qty=req,
+                    unrealized=unreal,
+                    roi_quality=float(roi_payload.get("roi_quality", 1.0)),
+                    loss_buffer=limits.cost_basis_loss_buffer,
+                    profit_buffer=limits.cost_basis_profit_buffer,
+                    trim_pct=limits.cost_basis_trim_pct,
+                )
+                if journal is not None:
+                    journal.record(
+                        "proposal.cost_basis",
+                        {
+                            "symbol": symbol,
+                            "side": "sell",
+                            "avg_entry": avg_entry,
+                            "mark": float(price),
+                            "unrealized_return": unreal,
+                            "requested_qty": int(max(0, math.floor(req))),
+                            "qty": qty,
+                            "roi": {
+                                k: round(float(v), 6)
+                                for k, v in roi_payload.items()
+                                if isinstance(v, (int, float))
+                            },
+                        },
+                    )
                 if qty <= 0:
                     continue
             else:
-                qty = math.floor(target / price)
+                if scale <= 0:
+                    if journal is not None:
+                        journal.record(
+                            "proposal.skipped",
+                            {
+                                "symbol": symbol,
+                                "reason": "non_positive_roi_edge",
+                                "roi": {
+                                    k: round(float(v), 6)
+                                    for k, v in roi_payload.items()
+                                    if isinstance(v, (int, float))
+                                },
+                            },
+                        )
+                    continue
+                sized_target = target * scale
+                if journal is not None and scale < 1.0:
+                    journal.record(
+                        "proposal.roi_scale",
+                        {
+                            "symbol": symbol,
+                            "side": "buy",
+                            "target_notional": target,
+                            "scaled_notional": sized_target,
+                            "scale": round(scale, 6),
+                            "roi": {
+                                k: round(float(v), 6)
+                                for k, v in roi_payload.items()
+                                if isinstance(v, (int, float))
+                            },
+                        },
+                    )
+                qty = math.floor(sized_target / price)
                 if qty <= 0:
+                    if journal is not None:
+                        journal.record(
+                            "proposal.skipped",
+                            {
+                                "symbol": symbol,
+                                "reason": "roi_scaled_notional_below_one_share",
+                                "target_notional": target,
+                                "scaled_notional": sized_target,
+                                "scale": round(scale, 6),
+                                "price": float(price),
+                            },
+                        )
                     continue
             stop_price, take_profit = (None, None)
             if side is Side.BUY:
@@ -747,7 +841,7 @@ def _materialize_proposals(
                     side=side,
                     qty=qty,
                     strategy=item.get("strategy", "long_equity"),
-                    conviction=float(item.get("conviction", 0.5)),
+                    conviction=conviction,
                     rationale=item.get("rationale", ""),
                     est_price=price,
                     limit_price=marketable_limit(price, side),
@@ -756,6 +850,52 @@ def _materialize_proposals(
                 )
             )
     return proposals
+
+
+def _snapshot_closes(snap) -> list[float]:
+    bars = getattr(snap, "bars", None) or []
+    if not bars:
+        by_tf = getattr(snap, "bars_by_timeframe", None) or {}
+        bars = by_tf.get(PRIMARY_TIMEFRAME) or by_tf.get("1Day") or []
+    out = [float(b.close) for b in bars if getattr(b, "close", None)]
+    if out:
+        return out
+    last = snap.last_close() if hasattr(snap, "last_close") else None
+    if last:
+        return [float(last)]
+    ref = snap.reference_price() if hasattr(snap, "reference_price") else None
+    return [float(ref)] if ref else []
+
+
+def _snapshot_atr(snap) -> float | None:
+    tech = getattr(snap, "technicals", None) or {}
+    daily = tech.get(PRIMARY_TIMEFRAME) or tech.get("1Day") or {}
+    atr = daily.get("atr_14")
+    try:
+        val = float(atr) if atr is not None else 0.0
+    except (TypeError, ValueError):
+        return None
+    return val if val > 0 else None
+
+
+def _proposal_horizon(item: dict, bb, symbol: str) -> str:
+    raw = item.get("horizon")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    env = getattr(bb, "environment", None)
+    if env is not None:
+        views = getattr(env, "meshed_views", None) or {}
+        view = views.get(symbol)
+        if view is not None:
+            horizon = getattr(view, "effective_horizon", None)
+            if callable(horizon):
+                return str(horizon())
+            if horizon:
+                return str(horizon)
+            h = getattr(view, "horizon", None)
+            if h:
+                return str(h)
+    return "swing"
 
 
 def _protective_levels(

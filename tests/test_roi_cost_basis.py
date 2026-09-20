@@ -72,6 +72,20 @@ def test_decide_scales_weight_by_roi_quality():
     assert abs(weak.target_weight - base.target_weight * weak.roi_quality) < 1e-9
 
 
+def test_forecast_invalid_p10_is_total_loss_not_zero_tail():
+    roi = forecast_roi_edges(
+        {
+            "last_price": 100.0,
+            "expected_return": 0.05,
+            "p10": 0.0,
+            "p90": 120.0,
+        },
+        cost_pct=0.0,
+    )
+    assert abs(roi["p10_return"] - (-1.0)) < 1e-12
+    assert abs(roi["roi_edge_long"] - 0.05) < 1e-9
+
+
 def test_config_cost_defaults_are_zero():
     cfg = Config()
     assert cfg.transaction_cost_pct == 0.0
