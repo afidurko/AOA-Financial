@@ -10,12 +10,22 @@ import {
   DotLoading,
   ErrorBlock,
   Space,
+  PullToRefresh,
+  NoticeBar,
+  Empty,
+  SwipeAction,
+  Avatar,
+  Badge,
+  CapsuleTabs,
+  SafeArea,
 } from 'antd-mobile'
 import {
   AppOutline,
   UnorderedListOutline,
   PayCircleOutline,
   CheckShieldOutline,
+  PlayOutline,
+  CloseCircleOutline,
 } from 'antd-mobile-icons'
 import 'antd-mobile/es/global'
 import './styles.css'
@@ -45,63 +55,120 @@ function ModeBadge({ mode }) {
   return <span className={`badge ${cls}`}>{mode || '…'}</span>
 }
 
-function HomeTab({ status, config, busy, onAction }) {
+function initials(name) {
+  return (name || '?').slice(0, 1).toUpperCase()
+}
+
+function HomeTab({ status, config, last, brief, busy, onAction }) {
   const acct = status?.account || {}
   const loop = status?.loop || {}
+  const assistant = brief || last?.result?.assistant || null
+  const must = assistant?.must_do || []
+  const focus = assistant?.focus
+
   return (
-    <div>
-      <div className="muted">
-        Market: {status?.market_open ? 'OPEN' : 'CLOSED'} · {status?.broker || '—'} ·{' '}
-        <a className="desk" href="/">
-          Desktop
-        </a>
-      </div>
-      <div className="stat-grid">
-        <div className="stat">
-          <label>Equity</label>
-          <strong>{fmt(acct.equity)}</strong>
-        </div>
-        <div className="stat">
-          <label>Cash</label>
-          <strong>{fmt(acct.settled_cash)}</strong>
-        </div>
-        <div className="stat">
-          <label>Loop</label>
-          <strong>{loop.running ? 'Running' : 'Stopped'}</strong>
-          <div className="muted">{loop.last_cycle_at || loop.last_error || '—'}</div>
-        </div>
-        <div className="stat">
-          <label>Mode</label>
-          <strong>{status?.mode || '—'}</strong>
-        </div>
-      </div>
-      <div className="actions">
-        <Button color="primary" size="small" loading={busy} onClick={() => onAction('run')}>
+    <div className="pane pane-enter">
+      <NoticeBar
+        content={
+          (status?.market_open ? 'Market OPEN' : 'Market CLOSED') +
+          ' · ' +
+          (status?.broker || '—') +
+          ' · pull to refresh'
+        }
+        color={status?.market_open ? 'info' : 'default'}
+        closeable={false}
+        icon={null}
+      />
+
+      <section className="hero">
+        <p className="hero-brand">AOA Financial</p>
+        <p className="hero-label">Equity</p>
+        <p className="hero-value">{fmt(acct.equity)}</p>
+        <p className="hero-sub">
+          Cash {fmt(acct.settled_cash)}
+          <span className="dot">·</span>
+          Loop {loop.running ? 'running' : 'stopped'}
+          <span className="dot">·</span>
+          <ModeBadge mode={status?.mode} />
+        </p>
+        {loop.last_error ? <p className="hero-err">{loop.last_error}</p> : null}
+        {loop.last_cycle_at && !loop.last_error ? (
+          <p className="hero-meta">Last cycle {loop.last_cycle_at}</p>
+        ) : null}
+      </section>
+
+      <div className="cta-block">
+        <Button
+          block
+          color="primary"
+          size="large"
+          loading={busy}
+          onClick={() => onAction('run')}
+        >
           Run cycle
         </Button>
-        <Button fill="outline" size="small" disabled={busy} onClick={() => onAction('start')}>
-          Start loop
-        </Button>
-        <Button
-          color="danger"
-          fill="outline"
-          size="small"
-          disabled={busy}
-          onClick={() => onAction('stop')}
-        >
-          Stop loop
-        </Button>
-        <Button fill="outline" size="small" disabled={busy} onClick={() => onAction('refresh')}>
-          Refresh
-        </Button>
+        <div className="cta-row">
+          <Button
+            fill="outline"
+            size="middle"
+            disabled={busy || loop.running}
+            onClick={() => onAction('start')}
+          >
+            <Space>
+              <PlayOutline /> Start loop
+            </Space>
+          </Button>
+          <Button
+            color="danger"
+            fill="outline"
+            size="middle"
+            disabled={busy || !loop.running}
+            onClick={() => onAction('stop')}
+          >
+            <Space>
+              <CloseCircleOutline /> Stop
+            </Space>
+          </Button>
+        </div>
       </div>
-      {config?.antd_mobile_url ? (
-        <p className="muted">
-          <a className="desk" href={config.antd_mobile_url} target="_blank" rel="noopener noreferrer">
-            antd-mobile fork ↗
-          </a>
-        </p>
-      ) : null}
+
+      <section className="priorities">
+        <h2>Alex — priorities</h2>
+        {focus ? <p className="focus">Focus: {focus}</p> : null}
+        {must.length ? (
+          <List>
+            {must.slice(0, 5).map((item, i) => (
+              <List.Item key={i} description={item.detail || undefined}>
+                {item.title || item}
+              </List.Item>
+            ))}
+          </List>
+        ) : (
+          <Empty
+            description="Run a cycle for Alex priorities"
+            imageStyle={{ width: 64 }}
+          />
+        )}
+      </section>
+
+      <p className="footer-links">
+        <a className="desk" href="/">
+          Desktop dashboard
+        </a>
+        {config?.antd_mobile_url ? (
+          <>
+            <span className="dot">·</span>
+            <a
+              className="desk"
+              href={config.antd_mobile_url}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              UI kit ↗
+            </a>
+          </>
+        ) : null}
+      </p>
     </div>
   )
 }
@@ -109,113 +176,157 @@ function HomeTab({ status, config, busy, onAction }) {
 function TeamTab({ last }) {
   const r = last?.result || {}
   const roster = [
-    { name: 'Bob', role: 'Health', summary: r.health?.summary },
-    { name: 'Tom', role: 'Trends', summary: `${(r.trends || []).length} reports` },
-    { name: 'Julie', role: 'Algorithms', summary: `${(r.algorithms || []).length} reports` },
-    {
-      name: 'Morgan',
-      role: 'Volume & Options',
-      summary: `${(r.market_contexts || []).length} reports`,
-    },
-    { name: 'Hailey', role: 'Catalysts', summary: `${(r.catalysts || []).length} reports` },
-    { name: 'Alan', role: 'Decision', summary: r.decision?.summary },
-    { name: 'Andrea', role: 'Risk', summary: `${(r.risk_plans || []).length} plans` },
-    { name: 'Aaron', role: 'CEO', summary: r.ceo?.summary },
-    { name: 'Alex', role: 'Assistant', summary: r.assistant?.focus },
+    { name: 'Bob', role: 'Health', summary: r.health?.summary, ok: !!r.health },
+    { name: 'Tom', role: 'Trends', summary: `${(r.trends || []).length} reports`, ok: (r.trends || []).length > 0 },
+    { name: 'Julie', role: 'Algorithms', summary: `${(r.algorithms || []).length} reports`, ok: (r.algorithms || []).length > 0 },
+    { name: 'Morgan', role: 'Volume & Options', summary: `${(r.market_contexts || []).length} reports`, ok: (r.market_contexts || []).length > 0 },
+    { name: 'Hailey', role: 'Catalysts', summary: `${(r.catalysts || []).length} reports`, ok: (r.catalysts || []).length > 0 },
+    { name: 'Alan', role: 'Decision', summary: r.decision?.summary, ok: !!r.decision },
+    { name: 'Andrea', role: 'Risk', summary: `${(r.risk_plans || []).length} plans`, ok: (r.risk_plans || []).length > 0 },
+    { name: 'Aaron', role: 'CEO', summary: r.ceo?.summary, ok: !!r.ceo },
+    { name: 'Alex', role: 'Assistant', summary: r.assistant?.focus, ok: !!r.assistant },
   ]
+
   if (!last?.result) {
-    return <p className="muted">Run a cycle to populate the roster.</p>
+    return (
+      <div className="pane pane-enter">
+        <Empty description="Run a cycle to populate the roster" imageStyle={{ width: 72 }} />
+      </div>
+    )
   }
+
   return (
-    <List header="Team roster">
-      {roster.map((m) => (
-        <List.Item key={m.name} description={m.summary || '—'}>
-          {m.name} · {m.role}
-        </List.Item>
-      ))}
-    </List>
+    <div className="pane pane-enter">
+      <List header="Team roster">
+        {roster.map((m) => (
+          <List.Item
+            key={m.name}
+            prefix={
+              <Avatar
+                style={{
+                  '--size': '36px',
+                  '--border-radius': '10px',
+                  background: m.ok ? 'var(--green-soft)' : 'var(--amber-soft)',
+                  color: m.ok ? 'var(--green)' : 'var(--amber)',
+                }}
+              >
+                {initials(m.name)}
+              </Avatar>
+            }
+            description={m.summary || '—'}
+            extra={
+              <Tag color={m.ok ? 'success' : 'warning'} fill="outline">
+                {m.ok ? 'ready' : 'idle'}
+              </Tag>
+            }
+          >
+            {m.name}
+            <span className="role"> {m.role}</span>
+          </List.Item>
+        ))}
+      </List>
+    </div>
   )
 }
 
 function TradesTab({ status, last }) {
   const positions = status?.positions || []
   const proposals = last?.result?.proposals || []
+
   return (
-    <div>
-      <List header="Positions">
-        {positions.length ? (
-          positions.map((p) => (
-            <List.Item
-              key={p.symbol}
-              description={`Qty ${p.qty} · MV ${fmt(p.market_value)}`}
-              extra={
-                <span className={(p.unrealized_pl || 0) >= 0 ? 'row-ok' : 'row-block'}>
-                  {fmt(p.unrealized_pl)}
-                </span>
-              }
-            >
-              {p.symbol}
-            </List.Item>
-          ))
-        ) : (
-          <List.Item>No positions</List.Item>
-        )}
-      </List>
-      <List header="Proposals" style={{ marginTop: 12 }}>
-        {proposals.length ? (
-          proposals.map((p, i) => (
-            <List.Item
-              key={i}
-              description={`${p.strategy || ''} · ${fmt(p.est_notional)}`}
-              extra={<Tag color={p.approved ? 'success' : 'danger'}>{p.approved ? 'OK' : 'block'}</Tag>}
-            >
-              {(p.side || '') + ' ' + (p.symbol || '')}
-            </List.Item>
-          ))
-        ) : (
-          <List.Item>No proposals</List.Item>
-        )}
-      </List>
+    <div className="pane pane-enter">
+      <CapsuleTabs defaultActiveKey="positions">
+        <CapsuleTabs.Tab title={`Positions (${positions.length})`} key="positions">
+          {positions.length ? (
+            <List>
+              {positions.map((p) => (
+                <List.Item
+                  key={p.symbol}
+                  description={`Qty ${p.qty} · MV ${fmt(p.market_value)}`}
+                  extra={
+                    <span className={(p.unrealized_pl || 0) >= 0 ? 'row-ok' : 'row-block'}>
+                      {fmt(p.unrealized_pl)}
+                    </span>
+                  }
+                >
+                  {p.symbol}
+                </List.Item>
+              ))}
+            </List>
+          ) : (
+            <Empty description="No open positions" imageStyle={{ width: 64 }} />
+          )}
+        </CapsuleTabs.Tab>
+        <CapsuleTabs.Tab title={`Proposals (${proposals.length})`} key="proposals">
+          {proposals.length ? (
+            <List>
+              {proposals.map((p, i) => (
+                <List.Item
+                  key={i}
+                  description={`${p.strategy || ''} · ${fmt(p.est_notional)}`}
+                  extra={
+                    <Tag color={p.approved ? 'success' : 'danger'}>
+                      {p.approved ? 'OK' : 'block'}
+                    </Tag>
+                  }
+                >
+                  {(p.side || '') + ' ' + (p.symbol || '')}
+                </List.Item>
+              ))}
+            </List>
+          ) : (
+            <Empty description="No proposals yet" imageStyle={{ width: 64 }} />
+          )}
+        </CapsuleTabs.Tab>
+      </CapsuleTabs>
     </div>
   )
 }
 
 function ApprovalsTab({ items, busy, onResolve }) {
-  if (!items.length) {
-    return <p className="muted">Approval inbox is empty.</p>
+  const pending = items.filter((i) => !i.status || i.status === 'pending')
+
+  if (!pending.length) {
+    return (
+      <div className="pane pane-enter">
+        <Empty description="Approval inbox is empty" imageStyle={{ width: 72 }} />
+      </div>
+    )
   }
+
   return (
-    <List header="Approval inbox">
-      {items.map((item) => (
-        <List.Item
-          key={item.id || item.ts || JSON.stringify(item).slice(0, 40)}
-          description={item.summary || item.note || item.symbol || '—'}
-          extra={
-            <Space direction="vertical">
-              <Button
-                size="mini"
-                color="primary"
-                disabled={busy}
-                onClick={() => onResolve(item, 'approve')}
-              >
-                Approve
-              </Button>
-              <Button
-                size="mini"
-                color="danger"
-                fill="outline"
-                disabled={busy}
-                onClick={() => onResolve(item, 'reject')}
-              >
-                Reject
-              </Button>
-            </Space>
-          }
-        >
-          {item.title || item.action || item.id || 'Item'}
-        </List.Item>
-      ))}
-    </List>
+    <div className="pane pane-enter">
+      <List header={`${pending.length} pending`}>
+        {pending.map((item) => (
+          <SwipeAction
+            key={item.id || item.ts || JSON.stringify(item).slice(0, 40)}
+            rightActions={[
+              {
+                key: 'approve',
+                text: 'Approve',
+                color: 'primary',
+                onClick: () => onResolve(item, 'approve'),
+              },
+              {
+                key: 'reject',
+                text: 'Reject',
+                color: 'danger',
+                onClick: () => onResolve(item, 'reject'),
+              },
+            ]}
+          >
+            <List.Item
+              description={item.summary || item.note || item.symbol || '—'}
+              disabled={busy}
+              clickable={false}
+            >
+              {item.title || item.action || item.id || 'Item'}
+            </List.Item>
+          </SwipeAction>
+        ))}
+      </List>
+      <p className="muted swipe-hint">Swipe left to approve or reject</p>
+    </div>
   )
 }
 
@@ -224,6 +335,7 @@ function App() {
   const [status, setStatus] = useState(null)
   const [config, setConfig] = useState({})
   const [last, setLast] = useState({})
+  const [brief, setBrief] = useState(null)
   const [approvals, setApprovals] = useState([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -231,16 +343,18 @@ function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [st, cfg, lc, ap] = await Promise.all([
+      const [st, cfg, lc, ap, ab] = await Promise.all([
         api('/api/status'),
         api('/api/config').catch(() => ({})),
         api('/api/last-cycle').catch(() => ({})),
         api('/api/approvals').catch(() => ({ items: [] })),
+        api('/api/assistant/brief').catch(() => null),
       ])
       setStatus(st)
       setConfig(cfg)
       setLast(lc)
       setApprovals(ap.items || [])
+      setBrief(ab)
       setError(null)
     } catch (e) {
       setError(e.message || String(e))
@@ -251,7 +365,7 @@ function App() {
 
   useEffect(() => {
     refresh()
-    const t = setInterval(refresh, 15000)
+    const t = setInterval(refresh, 20000)
     return () => clearInterval(t)
   }, [refresh])
 
@@ -301,8 +415,19 @@ function App() {
     }
   }
 
+  const pendingCount = approvals.filter((i) => !i.status || i.status === 'pending').length
+
   const tabs = {
-    home: <HomeTab status={status} config={config} busy={busy} onAction={onAction} />,
+    home: (
+      <HomeTab
+        status={status}
+        config={config}
+        last={last}
+        brief={brief}
+        busy={busy}
+        onAction={onAction}
+      />
+    ),
     team: <TeamTab last={last} />,
     trades: <TradesTab status={status} last={last} />,
     approvals: <ApprovalsTab items={approvals} busy={busy} onResolve={onResolve} />,
@@ -310,26 +435,46 @@ function App() {
 
   return (
     <div className="app-shell">
-      <NavBar back={null}>
-        <span>AOA Mobile</span>
+      <SafeArea position="top" />
+      <NavBar back={null} className="top-nav">
+        <span className="nav-title">AOA</span>
         <ModeBadge mode={status?.mode} />
       </NavBar>
-      <div className="app-body">
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 40 }}>
-            <DotLoading color="primary" />
-          </div>
-        ) : error ? (
-          <ErrorBlock status="default" title="Cannot load status" description={error} />
-        ) : (
-          tabs[tab]
-        )}
-      </div>
-      <TabBar activeKey={tab} onChange={setTab} safeArea>
+      <PullToRefresh onRefresh={refresh}>
+        <div className="app-body">
+          {loading ? (
+            <div className="loading-wrap">
+              <DotLoading color="primary" />
+            </div>
+          ) : error ? (
+            <ErrorBlock
+              status="default"
+              title="Cannot load status"
+              description={error}
+              style={{ paddingTop: 48 }}
+            />
+          ) : (
+            tabs[tab]
+          )}
+        </div>
+      </PullToRefresh>
+      <TabBar activeKey={tab} onChange={setTab} safeArea className="bottom-nav">
         <TabBar.Item key="home" icon={<AppOutline />} title="Home" />
         <TabBar.Item key="team" icon={<UnorderedListOutline />} title="Team" />
         <TabBar.Item key="trades" icon={<PayCircleOutline />} title="Trades" />
-        <TabBar.Item key="approvals" icon={<CheckShieldOutline />} title="Inbox" />
+        <TabBar.Item
+          key="approvals"
+          icon={
+            pendingCount ? (
+              <Badge content={pendingCount}>
+                <CheckShieldOutline />
+              </Badge>
+            ) : (
+              <CheckShieldOutline />
+            )
+          }
+          title="Inbox"
+        />
       </TabBar>
     </div>
   )

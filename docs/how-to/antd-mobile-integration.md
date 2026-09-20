@@ -28,7 +28,8 @@ API as the desktop dashboard. It does **not** place live orders.
 ```
 
 - **AOA** — brokerage, risk guardrails, trading swarm, REST API.
-- **`/m`** — Vite-built mobile shell (NavBar / TabBar / Lists) for phone + Tailscale.
+- **`/m`** — Vite-built mobile shell (hero equity, PullToRefresh, CapsuleTabs,
+  swipe approvals, Alex priorities) for phone + Tailscale.
 - **Sibling fork** — customize themes or components; not required to open `/m`.
 
 ## Install sibling (optional)

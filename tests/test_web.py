@@ -64,12 +64,15 @@ def test_mobile_dashboard_html(client):
     assert r.status_code == 200
     assert "AOA Mobile" in r.text
     assert "/m/assets/" in r.text
-    # Built JS bundle must be reachable.
+    # Built JS bundle must be reachable and include reworked shell markers.
     asset = r.text.split('src="')[1].split('"')[0]
     assert asset.startswith("/m/assets/")
     js = client.get(asset)
     assert js.status_code == 200
-    assert "AOA Mobile" in js.text or "antd-mobile" in js.text or "createElement" in js.text or "jsx" in js.text
+    body = js.text
+    assert "AOA Financial" in body
+    assert "Run cycle" in body
+    assert "PullToRefresh" in body or "onRefresh" in body
 
 
 def test_api_status(client):
