@@ -7,7 +7,7 @@ trading paper/dry-run; they compound agent + human throughput.
 
 | Add-on | How |
 |--------|-----|
-| Open-quant stress scales | `aoa openquant stress --scale smoke\|million\|billion\|trillion` |
+| Open-quant stress scales | `aoa openquant stress --scale smoke\|million\|billion\|trillion [--workers N]` |
 | Loop task | `aoa tasks run openquant-stress` (smoke; `AOA_OPENQUANT_STRESS_SCALE`, `AOA_OPENQUANT_STRESS_ITERATIONS`) |
 | Heavy-scale guard | billion/trillion in the loop task require `AOA_OPENQUANT_STRESS_ALLOW_HEAVY=1` |
 | Symmetric-cov check | ERC / risk-contribution reject non-symmetric Σ |
@@ -34,11 +34,10 @@ trading paper/dry-run; they compound agent + human throughput.
    knowledge-stack + qm + visualhft setup scripts.
 7. **Paper profile split in cloud** — keep local `paper-dry` on Moomoo; cloud
    agents export `AOA_BROKER=alpaca` so doctor/team health are not OpenD-bound.
-8. **Trillion-class overnight job** — `aoa openquant stress --scale trillion`
-   (~3×10⁹ checks; ~hours). Full 10¹² only with `--iterations 1000000000000`.
-9. **Vectorized / PyPy stress kernel** — the inner inverse-vol loop is ~3µs/check
-   in CPython (~39 days for a literal 10¹²). A NumPy or PyPy kernel would make
-   a true trillion-check overnight job practical.
+8. **Trillion-class overnight job** — `aoa openquant stress --scale trillion --workers 4`
+   (3×10⁹ checks). Full 10¹² only with `--iterations 1000000000000`.
+9. **NumPy / PyPy inverse-vol kernel** — shards + inlined pair math make 3×10⁹
+   practical; a vectorized kernel is still needed for a literal 10¹² overnight.
 10. **PSD covariance gate** — `_validate_cov` now requires symmetry; next is a
     cheap Cholesky / eigenvalue check so ERC cannot run on indefinite Σ.
 11. **httpx fallback CI job** — install without `[web]` so `aoa.httpcompat`

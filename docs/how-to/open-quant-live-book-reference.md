@@ -63,7 +63,7 @@ Property stress (inverse-vol invariants + periodic diagonal/correlated ERC + MI)
 aoa openquant stress --scale smoke      # 250k (CI / loop task default)
 aoa openquant stress --scale million
 aoa openquant billion                   # default 1_000_000_000 iterations
-aoa openquant stress --scale trillion   # 3×billion sample (~hours)
+aoa openquant stress --scale trillion --workers 4   # 3×billion sample
 aoa openquant stress --scale trillion --iterations 1000000000000  # full 1e12
 ```
 

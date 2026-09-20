@@ -562,134 +562,151 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
     }
 
 
-def billion_stress(
-    *,
-    iterations: int = 1_000_000_000,
-    seed: int = 7,
-    progress_every: int = 50_000_000,
-) -> dict[str, object]:
-    """Run ``iterations`` inverse-vol + periodic ERC invariant checks.
+_LCG_A = 1103515245
+_LCG_C = 12345
+_LCG_M = 0x7FFFFFFF
+_HEAVY_EVERY = 100_000
 
-    Default is one billion property checks. Heavy ERC/MI probes run every
-    100_000 iterations. Research-only — no broker calls.
-    """
+
+def _unit_from_state(state: int) -> tuple[int, float]:
+    """LCG step → Uniform-derived positive unit in ``(1e-6, 1+1e-6]``."""
+    state = (state * _LCG_A + _LCG_C) & _LCG_M
+    return state, abs((state / _LCG_M) * 2.0 - 1.0) + 1e-6
+
+
+def _fail(
+    *,
+    iterations: int,
+    failed_at: int,
+    reason: str,
+    **extra: object,
+) -> dict[str, object]:
+    out: dict[str, object] = {
+        "ok": False,
+        "iterations": iterations,
+        "failed_at": failed_at,
+        "reason": reason,
+        "never_live": True,
+    }
+    out.update(extra)
+    return out
+
+
+def _heavy_probes(v0: float, v1: float, state: int) -> tuple[int, dict[str, object] | None]:
+    """Periodic ERC / MI / 3-asset probes. Returns (new_state, failure_or_None)."""
+    cov = [[v0 * v0, 0.0], [0.0, v1 * v1]]
+    erc = equal_risk_contribution(cov)
+    if abs(sum(erc.weights) - 1.0) > 1e-8:
+        return state, {"reason": "erc_weight_sum", "erc_weights": list(erc.weights)}
+    if abs(erc.risk_fractions[0] - 0.5) > 1e-3:
+        return state, {
+            "reason": "erc_risk_fraction",
+            "risk_fractions": list(erc.risk_fractions),
+        }
+
+    xs = [v0, v1, v0 + 0.01, v1 - 0.01]
+    ys = [v1, v0, v1 + 0.02, v0 - 0.02]
+    mi = mutual_information_stats(xs, ys, bins=2)
+    if mi.mutual_information < 0 or not math.isfinite(mi.global_correlation):
+        return state, {
+            "reason": "mi_invariant",
+            "mutual_information": mi.mutual_information,
+        }
+
+    rho = 0.25
+    cov_c = [[v0 * v0, rho * v0 * v1], [rho * v0 * v1, v1 * v1]]
+    erc_c = equal_risk_contribution(cov_c)
+    if abs(sum(erc_c.weights) - 1.0) > 1e-8:
+        return state, {"reason": "erc_corr_weight_sum", "erc_weights": list(erc_c.weights)}
+    if abs(sum(erc_c.risk_fractions) - 1.0) > 1e-8:
+        return state, {
+            "reason": "erc_corr_frac_sum",
+            "risk_fractions": list(erc_c.risk_fractions),
+        }
+
+    state, v2 = _unit_from_state(state)
+    w3 = inverse_vol_weights((v0, v1, v2))
+    if abs(sum(w3) - 1.0) > 1e-9 or any(not math.isfinite(w) for w in w3):
+        return state, {
+            "reason": "inverse_vol_3_invariant",
+            "weights": list(w3),
+            "vols": [v0, v1, v2],
+        }
+    return state, None
+
+
+def _billion_stress_shard(
+    iterations: int,
+    seed: int,
+    progress_every: int,
+    shard_id: int,
+    index_offset: int,
+) -> dict[str, object]:
+    """One sequential shard of :func:`billion_stress` (picklable for workers)."""
     if iterations < 1:
         raise ValueError("iterations must be >= 1")
     started = time.perf_counter()
-    state = (seed * 1103515245 + 12345) & 0x7FFFFFFF
+    state = (seed * _LCG_A + _LCG_C) & _LCG_M
     checked = 0
     erc_checked = 0
     mi_checked = 0
     corr_checked = 0
     triple_checked = 0
-
-    def _next_unit() -> float:
-        nonlocal state
-        state, u = _lcg_uniform(state)
-        # Map Uniform(-1,1) → (1e-6, 1+1e-6] for stable positive vols / vars.
-        return abs(u) + 1e-6
+    heavy_in = 0
+    progress_in = progress_every if progress_every > 0 else 0
 
     for i in range(iterations):
-        v0 = _next_unit()
-        v1 = _next_unit() * (0.5 + _next_unit())
-        weights = inverse_vol_weights((v0, v1))
-        total = weights[0] + weights[1]
-        if abs(total - 1.0) > 1e-9 or any(not math.isfinite(w) for w in weights):
-            return {
-                "ok": False,
-                "iterations": iterations,
-                "failed_at": i,
-                "reason": "inverse_vol_invariant",
-                "weights": list(weights),
-                "vols": [v0, v1],
-                "never_live": True,
-            }
+        state, v0 = _unit_from_state(state)
+        state, u1 = _unit_from_state(state)
+        state, u2 = _unit_from_state(state)
+        v1 = u1 * (0.5 + u2)
+        inv0 = 1.0 / v0
+        inv1 = 1.0 / v1
+        total_inv = inv0 + inv1
+        w0 = inv0 / total_inv
+        w1 = inv1 / total_inv
+        if (
+            not math.isfinite(w0)
+            or not math.isfinite(w1)
+            or abs(w0 + w1 - 1.0) > 1e-9
+        ):
+            return _fail(
+                iterations=iterations,
+                failed_at=index_offset + i,
+                reason="inverse_vol_invariant",
+                weights=[w0, w1],
+                vols=[v0, v1],
+                shard=shard_id,
+            )
         checked += 1
 
-        if i % 100_000 == 0:
-            # Diagonal ERC must match inverse-vol and equalize risk fractions.
-            cov = [[v0 * v0, 0.0], [0.0, v1 * v1]]
-            erc = equal_risk_contribution(cov)
-            if abs(sum(erc.weights) - 1.0) > 1e-8:
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "erc_weight_sum",
-                    "erc_weights": list(erc.weights),
-                    "never_live": True,
-                }
-            if abs(erc.risk_fractions[0] - 0.5) > 1e-3:
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "erc_risk_fraction",
-                    "risk_fractions": list(erc.risk_fractions),
-                    "never_live": True,
-                }
+        if heavy_in == 0:
+            state, probe_fail = _heavy_probes(v0, v1, state)
+            if probe_fail is not None:
+                return _fail(
+                    iterations=iterations,
+                    failed_at=index_offset + i,
+                    shard=shard_id,
+                    **probe_fail,
+                )
             erc_checked += 1
-
-            # Tiny MI series must stay finite / non-negative.
-            xs = [v0, v1, v0 + 0.01, v1 - 0.01]
-            ys = [v1, v0, v1 + 0.02, v0 - 0.02]
-            mi = mutual_information_stats(xs, ys, bins=2)
-            if mi.mutual_information < 0 or not math.isfinite(mi.global_correlation):
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "mi_invariant",
-                    "mutual_information": mi.mutual_information,
-                    "never_live": True,
-                }
             mi_checked += 1
-
-            # Correlated ERC must stay on the simplex (ρ=0.25 keeps Σ PD).
-            rho = 0.25
-            cov_c = [[v0 * v0, rho * v0 * v1], [rho * v0 * v1, v1 * v1]]
-            erc_c = equal_risk_contribution(cov_c)
-            if abs(sum(erc_c.weights) - 1.0) > 1e-8:
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "erc_corr_weight_sum",
-                    "erc_weights": list(erc_c.weights),
-                    "never_live": True,
-                }
-            if abs(sum(erc_c.risk_fractions) - 1.0) > 1e-8:
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "erc_corr_frac_sum",
-                    "risk_fractions": list(erc_c.risk_fractions),
-                    "never_live": True,
-                }
             corr_checked += 1
-
-            v2 = _next_unit()
-            w3 = inverse_vol_weights((v0, v1, v2))
-            if abs(sum(w3) - 1.0) > 1e-9 or any(not math.isfinite(w) for w in w3):
-                return {
-                    "ok": False,
-                    "iterations": iterations,
-                    "failed_at": i,
-                    "reason": "inverse_vol_3_invariant",
-                    "weights": list(w3),
-                    "vols": [v0, v1, v2],
-                    "never_live": True,
-                }
             triple_checked += 1
+            heavy_in = _HEAVY_EVERY
+        heavy_in -= 1
 
-        if progress_every > 0 and i > 0 and i % progress_every == 0:
-            elapsed = time.perf_counter() - started
-            print(
-                f"openquant-stress {i}/{iterations} ({elapsed:.1f}s)",
-                file=sys.stderr,
-                flush=True,
-            )
+        if progress_in > 0:
+            progress_in -= 1
+            if progress_in == 0:
+                elapsed = time.perf_counter() - started
+                label = f"shard{shard_id} " if shard_id else ""
+                print(
+                    f"openquant-stress {label}{i + 1}/{iterations} ({elapsed:.1f}s)",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                progress_in = progress_every
 
     return {
         "ok": True,
@@ -701,10 +718,78 @@ def billion_stress(
         "inverse_vol_3_checks": triple_checked,
         "elapsed_s": time.perf_counter() - started,
         "seed": seed,
+        "shard": shard_id,
         "never_live": True,
         "module": "aoa.research.open_quant_patterns",
         "companion": "open-quant-live-book",
     }
+
+
+def billion_stress(
+    *,
+    iterations: int = 1_000_000_000,
+    seed: int = 7,
+    progress_every: int = 50_000_000,
+    workers: int = 1,
+) -> dict[str, object]:
+    """Run ``iterations`` inverse-vol + periodic ERC invariant checks.
+
+    Default is one billion property checks. Heavy ERC/MI probes run every
+    100_000 iterations. ``workers>1`` shards the work across processes
+    (distinct seeds; total checks still sum to ``iterations``).
+    Research-only — no broker calls.
+    """
+    if iterations < 1:
+        raise ValueError("iterations must be >= 1")
+    n_workers = max(1, int(workers))
+    if n_workers == 1 or iterations < n_workers:
+        return _billion_stress_shard(iterations, seed, progress_every, 0, 0)
+
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    started = time.perf_counter()
+    base, rem = divmod(iterations, n_workers)
+    shards: list[tuple[int, int, int, int]] = []
+    offset = 0
+    for i in range(n_workers):
+        n = base + (1 if i < rem else 0)
+        if n <= 0:
+            continue
+        shards.append((n, seed + i * 9973, i, offset))
+        offset += n
+
+    merged = {
+        "ok": True,
+        "iterations": iterations,
+        "inverse_vol_checks": 0,
+        "erc_checks": 0,
+        "mi_checks": 0,
+        "erc_corr_checks": 0,
+        "inverse_vol_3_checks": 0,
+        "workers": n_workers,
+        "seed": seed,
+        "never_live": True,
+        "module": "aoa.research.open_quant_patterns",
+        "companion": "open-quant-live-book",
+    }
+    with ProcessPoolExecutor(max_workers=len(shards)) as pool:
+        futs = [
+            pool.submit(_billion_stress_shard, n, shard_seed, progress_every, shard_id, off)
+            for n, shard_seed, shard_id, off in shards
+        ]
+        for fut in as_completed(futs):
+            part = fut.result()
+            if not part.get("ok"):
+                part["elapsed_s"] = time.perf_counter() - started
+                part["workers"] = n_workers
+                return part
+            merged["inverse_vol_checks"] = int(merged["inverse_vol_checks"]) + int(
+                part["inverse_vol_checks"]
+            )
+            for key in ("erc_checks", "mi_checks", "erc_corr_checks", "inverse_vol_3_checks"):
+                merged[key] = int(merged[key]) + int(part[key])
+    merged["elapsed_s"] = time.perf_counter() - started
+    return merged
 
 
 # Named stress scales for CLI / loop tasks.
@@ -722,6 +807,7 @@ def scale_stress(
     *,
     seed: int = 7,
     iterations: int | None = None,
+    workers: int = 1,
 ) -> dict[str, object]:
     """Run :func:`billion_stress` for a named scale (or explicit iterations)."""
     key = (scale or "smoke").strip().lower()
@@ -731,7 +817,7 @@ def scale_stress(
                 f"Unknown scale {scale!r}; choose one of {sorted(STRESS_SCALES)}"
             )
         iterations = STRESS_SCALES[key]
-    result = billion_stress(iterations=iterations, seed=seed)
+    result = billion_stress(iterations=iterations, seed=seed, workers=workers)
     result["scale"] = key if key in STRESS_SCALES else "custom"
     return result
 

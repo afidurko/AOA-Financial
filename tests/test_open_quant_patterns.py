@@ -149,6 +149,16 @@ def test_billion_stress_small_ok() -> None:
     assert result["never_live"] is True
 
 
+def test_billion_stress_workers_sum_checks() -> None:
+    from aoa.research.open_quant_patterns import billion_stress
+
+    result = billion_stress(iterations=20_000, seed=3, workers=2)
+    assert result["ok"] is True
+    assert result["inverse_vol_checks"] == 20_000
+    assert result["workers"] == 2
+    assert result["erc_checks"] >= 2
+
+
 def test_scale_stress_smoke_and_unknown() -> None:
     from aoa.research.open_quant_patterns import STRESS_SCALES, scale_stress
 
