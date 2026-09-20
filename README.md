@@ -574,6 +574,8 @@ aoa team brief    # Tom→Julie→Alan analysis without trading
 aoa serve      # start the web dashboard + REST API (port 8080)
 aoa journal -n 30   # tail the decision/trade journal
 aoa report     # activity summary (from journal) + live P&L snapshot
+aoa analytics         # decision analytics: agent hit rates, stage latency, proposal funnel
+aoa analytics agents --json   # one view as JSON (summary | agents | stages | funnel)
 
 # Loop engineering (daily triage L1 — see LOOP.md):
 # Cursor Agent: loop-constraints → loop-budget → loop-triage; state in STATE.md
@@ -616,6 +618,34 @@ the broker isn't reachable, so the activity summary still works offline.
 
 Set `AOA_DRY_RUN=true` to compute and log decisions **without submitting any
 orders** — the recommended way to watch the swarm reason before letting it trade.
+
+### Decision analytics
+
+Every cycle is persisted to SQLite (`AOA_ANALYTICS_DB_PATH`, default
+`data/<env>/analytics.sqlite`), including the reference price each ticker was
+seen at. `aoa analytics` (and the dashboard's **Analytics** tab /
+`/api/analytics/summary`) turns that history into four views, all computed with
+a few indexed SQL statements and no pandas:
+
+| View | Question it answers |
+|------|---------------------|
+| **Agent scorecard** | Which agent is actually right? Signals, tickers, average conviction, long/short/neutral mix, and the **hit rate** of directional calls against the *next cycle's* realized move (plus mean signed return). |
+| **Stage latency** | What is slow? Per-stage avg / p50 / p95 / max duration across runs, slowest first. |
+| **Proposal funnel** | What gets approved? Proposal → approval rate by side and strategy, approved notional. |
+| **Throughput** | Cycles per day, wall time (avg / p95), halt rate. |
+
+Descriptive outputs (Julie's `validated`, Morgan's volume regime, Cindy's letter
+grades) are counted but never scored, so hit rates only reflect real directional calls.
+
+### Parallel team lanes
+
+Given one set of snapshots, Tom→Julie, Morgan, Hailey, Jim and Cindy are
+independent, so `TeamOrchestrator.analyze()` runs them as concurrent lanes
+(`AOA_TEAM_PARALLEL`, bounded by `AOA_PARALLEL_WORKERS`) and Alan aggregates
+once all return. Every fan-out in the system — per-symbol analysts, sub-team
+members, lead expansions, multi-timeframe bar fetches — goes through one
+primitive, `aoa.parallel.fan_out`, which preserves input order and skips the
+thread pool when it cannot help.
 
 ### Work loop
 
