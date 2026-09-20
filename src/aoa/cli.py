@@ -1822,7 +1822,15 @@ def cmd_openquant_status(*, as_json: bool) -> int:
             "tangency_weights",
             "hierarchical_risk_parity",
             "stylized_facts",
+            "stylized_regime_summary",
             "correlation_network",
+            "minimum_spanning_tree",
+            "planar_maximally_filtered_graph",
+            "partial_correlation_network",
+            "kde_mutual_information_stats",
+            "ledoit_wolf_cov",
+            "black_litterman_weights",
+            "cvar_risk_budget_weights",
             "mutual_information_stats",
             "linear_granger_causality",
             "net_information_flow",
@@ -1830,7 +1838,7 @@ def cmd_openquant_status(*, as_json: bool) -> int:
         ],
         "consumers": ["julie.refine", "andrea.plan"],
         "never_live": True,
-        "hint": "aoa openquant smoke|compare — offline research (no broker)",
+        "hint": "aoa openquant smoke|compare|trillion — offline research (no broker)",
     }
     if as_json:
         print(json.dumps(status, indent=2))
@@ -1941,8 +1949,14 @@ def cmd_openquant_compare(*, seed: int, as_json: bool) -> int:
         print(f"  inverse_vol:{result.get('inverse_vol')}")
         print(f"  erc:        {result.get('erc')}")
         print(f"  tangency:   {result.get('tangency')}")
+        print(f"  tang_shrunk:{result.get('tangency_shrunk')}")
         print(f"  hrp:        {result.get('hrp')}")
+        print(f"  cvar:       {result.get('cvar_budget')}")
+        print(f"  bl:         {result.get('black_litterman')}")
         print(f"  sharpe:     {result.get('tangency_sharpe')}")
+        print(f"  shrinkage:  {result.get('shrinkage')}")
+        print(f"  mst_edges:  {result.get('mst_edges')}")
+        print(f"  partial:    {result.get('partial_edges')}")
         print(f"  net_edges:  {result.get('network_edges')}")
         print(f"  never_live: {result.get('never_live', True)}")
     return 0

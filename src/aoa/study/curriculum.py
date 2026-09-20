@@ -689,6 +689,89 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         check_keywords=("kurtosis", "acf", "clustering", "network", "centrality"),
     ),
     KnowledgeCard(
+        id="bridge-oqlb-networks-filter",
+        field="bridge",
+        title="MST / PMFG / partial-correlation market graphs",
+        statement=(
+            "Correlation distance √((1−ρ)/2) yields an MST (n−1 edges); an approximate "
+            "PMFG keeps the strongest edges up to the planar bound 3(n−2); partial "
+            "correlations from Σ^{-1} isolate direct links after conditioning on the rest."
+        ),
+        proof_sketch=(
+            "1) MST: Kruskal on correlation distance.\n"
+            "2) PMFG-lite: sort |ρ| desc, keep ≤3(n−2) edges (edge-count planar ceiling).\n"
+            "3) Partial ρ_ij|rest = −Θ_ij/√(Θ_ii Θ_jj) with Θ=Σ^{-1}."
+        ),
+        applications=(
+            "Hub detection beyond raw threshold graphs",
+            "Offline universe structure for study cards",
+        ),
+        aoa_mesh=(
+            "aoa.research.open_quant_patterns.minimum_spanning_tree / "
+            "planar_maximally_filtered_graph / partial_correlation_network — research-only."
+        ),
+        bridges=("bridge-oqlb-stylized-network", "bridge-oqlb-risk-entropy"),
+        drill_prompt=(
+            "State the MST edge count and the planar PMFG edge bound for n assets."
+        ),
+        check_keywords=("mst", "pmfg", "partial", "precision", "network"),
+    ),
+    KnowledgeCard(
+        id="bridge-oqlb-shrink-bl-cvar",
+        field="bridge",
+        title="Ledoit–Wolf shrinkage ↔ Black–Litterman ↔ CVaR budgets",
+        statement=(
+            "LW shrinks sample Σ toward μI to stabilize tangency; Black–Litterman blends "
+            "equilibrium π=δΣw with views Pμ=Q; CVaR risk budgets equalize tail-loss "
+            "contributions instead of variance contributions."
+        ),
+        proof_sketch=(
+            "1) LW: Σ_shrunk=(1−ρ)S+ρ μI with analytic ρ∈[0,1].\n"
+            "2) BL posterior from (τΣ)^{-1} and P'Ω^{-1}P; then tangency on μ_BL.\n"
+            "3) Historical ES/CVaR tail average; damped multiplicative risk-budget updates."
+        ),
+        applications=(
+            "aoa openquant compare shrinkage / BL / CVaR columns",
+            "Andrea research overlays without live sizing",
+        ),
+        aoa_mesh=(
+            "ledoit_wolf_cov, black_litterman_weights, cvar_risk_budget_weights never "
+            "submit orders; research lane only."
+        ),
+        bridges=("bridge-oqlb-tangency-hrp", "bridge-oqlb-risk-entropy"),
+        drill_prompt=(
+            "Write the Black–Litterman equilibrium π=δΣw and name one reason to shrink Σ."
+        ),
+        check_keywords=("ledoit", "shrinkage", "litterman", "cvar", "tail"),
+    ),
+    KnowledgeCard(
+        id="bridge-oqlb-kde-regimes",
+        field="bridge",
+        title="KDE entropy ↔ rolling stylized regimes",
+        statement=(
+            "Silverman-bandwidth Gaussian KDE estimates differential entropy / MI without "
+            "histogram bins; rolling stylized facts label regimes (fat_tails / vol_cluster / "
+            "calm / mixed) for Julie snapshot context."
+        ),
+        proof_sketch=(
+            "1) h*=1.06 σ n^{-1/5}; f̂ via Gaussian kernel; H=−∫f̂ log f̂.\n"
+            "2) I(X;Y)=H(X)+H(Y)−H(X,Y) on a product grid.\n"
+            "3) Roll window stylized_facts; fraction of fat-tail / vol-cluster windows → regime."
+        ),
+        applications=(
+            "Julie snapshot_research_context regime fields",
+            "Offline MI when bins are unstable",
+        ),
+        aoa_mesh=(
+            "kde_mutual_information_stats / stylized_regime_summary are research diagnostics."
+        ),
+        bridges=("bridge-oqlb-stylized-network", "bridge-oqlb-risk-entropy"),
+        drill_prompt=(
+            "State Silverman's bandwidth formula and how a rolling regime label is chosen."
+        ),
+        check_keywords=("kde", "silverman", "entropy", "regime", "rolling"),
+    ),
+    KnowledgeCard(
         id="bridge-free-energy",
         field="bridge",
         title="Free energy ↔ certainty-equivalent utility",

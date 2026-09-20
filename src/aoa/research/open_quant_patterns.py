@@ -1,8 +1,9 @@
 """Pure-Python helpers from afidurko/open-quant-live-book (souzatharsis).
 
-Educational / research reference only. Ports ideas from the Risk Parity,
-Entropy, and Transfer Entropy chapters — no R/bookdown runtime, no broker
-calls, and no live order path. AOA remains the only execution surface.
+Educational / research reference only. Ports ideas from Risk Parity,
+Entropy, Transfer Entropy, Financial Networks, Statistical Methods, and
+Stylized Facts chapters — no R/bookdown runtime, no broker calls, and no
+live order path. AOA remains the only execution surface.
 """
 
 from __future__ import annotations
@@ -101,6 +102,54 @@ class CorrelationNetwork:
     edges: tuple[NetworkEdge, ...]
     degree: tuple[int, ...]
     degree_centrality: tuple[float, ...]
+    kind: str = "threshold"  # threshold | mst | pmfg | partial
+
+
+@dataclass(frozen=True)
+class BlackLittermanResult:
+    """Black–Litterman posterior means and tangency weights (research-only)."""
+
+    posterior_returns: tuple[float, ...]
+    weights: tuple[float, ...]
+    expected_return: float
+    volatility: float
+    sharpe: float
+    tau: float
+    risk_aversion: float
+
+
+@dataclass(frozen=True)
+class ShrinkageResult:
+    """Ledoit–Wolf-style shrunk covariance toward scaled identity."""
+
+    cov: tuple[tuple[float, ...], ...]
+    shrinkage: float
+    target_variance: float
+    n_obs: int
+
+
+@dataclass(frozen=True)
+class CVaRBudgetResult:
+    """Historical CVaR risk-budget weights (nested / equal CVaR contribution)."""
+
+    weights: tuple[float, ...]
+    cvar: float
+    contributions: tuple[float, ...]
+    fractions: tuple[float, ...]
+    alpha: float
+    budget: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class StylizedRegimeSummary:
+    """Rolling stylized-fact regime summary over a return series."""
+
+    window: int
+    n_windows: int
+    fat_tail_fraction: float
+    vol_cluster_fraction: float
+    latest: StylizedFacts
+    regime: str  # fat_tails | vol_cluster | calm | mixed
 
 
 def _normalize(values: Sequence[float]) -> list[float]:
@@ -874,33 +923,600 @@ def hierarchical_risk_parity(cov: Sequence[Sequence[float]]) -> RiskParityResult
     )
 
 
+def _network_from_edges(
+    n: int,
+    edges: list[NetworkEdge],
+    *,
+    threshold: float,
+    kind: str,
+) -> CorrelationNetwork:
+    degree = [0] * n
+    for e in edges:
+        degree[e.i] += 1
+        degree[e.j] += 1
+    denom = max(n - 1, 1)
+    return CorrelationNetwork(
+        n=n,
+        threshold=threshold,
+        edges=tuple(edges),
+        degree=tuple(degree),
+        degree_centrality=tuple(d / denom for d in degree),
+        kind=kind,
+    )
+
+
+def _validate_corr(corr: Sequence[Sequence[float]]) -> list[list[float]]:
+    n = len(corr)
+    if n < 1:
+        raise ValueError("correlation matrix must be non-empty")
+    out: list[list[float]] = []
+    for i, row in enumerate(corr):
+        if len(row) != n:
+            raise ValueError("correlation matrix must be square")
+        out.append([float(v) for v in row])
+        for v in out[i]:
+            if not math.isfinite(v):
+                raise ValueError("correlation entries must be finite")
+    return out
+
+
+def minimum_spanning_tree(corr: Sequence[Sequence[float]]) -> CorrelationNetwork:
+    """MST on correlation distance ``√((1−ρ)/2)`` (FinancialNetworks filtering)."""
+    rho = _validate_corr(corr)
+    n = len(rho)
+    if n == 1:
+        return _network_from_edges(1, [], threshold=0.0, kind="mst")
+    dist = _corr_distance(rho)
+    # Kruskal: sort ascending distance, union-find.
+    pairs = [(dist[i][j], i, j) for i in range(n) for j in range(i + 1, n)]
+    pairs.sort()
+    parent = list(range(n))
+
+    def find(x: int) -> int:
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    edges: list[NetworkEdge] = []
+    for _, i, j in pairs:
+        a, b = find(i), find(j)
+        if a == b:
+            continue
+        parent[a] = b
+        edges.append(NetworkEdge(i=i, j=j, correlation=float(rho[i][j])))
+        if len(edges) == n - 1:
+            break
+    return _network_from_edges(n, edges, threshold=0.0, kind="mst")
+
+
+def planar_maximally_filtered_graph(corr: Sequence[Sequence[float]]) -> CorrelationNetwork:
+    """Approximate PMFG: strongest edges until the planar bound ``3(n−2)``.
+
+    Educational filter from FinancialNetworks — uses the planar edge-count
+    ceiling rather than a full planarity test (exact PMFG needs a planar
+    embedding oracle). Research-only.
+    """
+    rho = _validate_corr(corr)
+    n = len(rho)
+    if n <= 2:
+        return minimum_spanning_tree(rho)
+    max_edges = 3 * (n - 2)
+    pairs = [
+        (abs(float(rho[i][j])), float(rho[i][j]), i, j)
+        for i in range(n)
+        for j in range(i + 1, n)
+    ]
+    pairs.sort(reverse=True)
+    edges: list[NetworkEdge] = []
+    for _, corr_ij, i, j in pairs:
+        edges.append(NetworkEdge(i=i, j=j, correlation=corr_ij))
+        if len(edges) >= max_edges:
+            break
+    return _network_from_edges(n, edges, threshold=0.0, kind="pmfg")
+
+
+def _invert_spd(matrix: Sequence[Sequence[float]]) -> list[list[float]]:
+    """Invert an SPD matrix by solving A x = e_j for each column."""
+    n = len(matrix)
+    cols = [_solve_spd(matrix, [1.0 if i == j else 0.0 for i in range(n)]) for j in range(n)]
+    return [[cols[j][i] for j in range(n)] for i in range(n)]
+
+
+def precision_matrix(cov: Sequence[Sequence[float]]) -> list[list[float]]:
+    """Precision (inverse covariance) matrix."""
+    return _invert_spd(_validate_cov(cov))
+
+
+def partial_corr_from_cov(cov: Sequence[Sequence[float]]) -> list[list[float]]:
+    """Partial correlations from the precision matrix ``Θ = Σ^{-1}``.
+
+    ``ρ_{ij|rest} = −Θ_ij / √(Θ_ii Θ_jj)``.
+    """
+    theta = precision_matrix(cov)
+    n = len(theta)
+    out = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if i == j:
+                out[i][j] = 1.0
+                continue
+            den = math.sqrt(max(theta[i][i], 0.0) * max(theta[j][j], 0.0))
+            out[i][j] = 0.0 if den <= 0 else -theta[i][j] / den
+    return out
+
+
+def partial_correlation_network(
+    cov: Sequence[Sequence[float]],
+    *,
+    threshold: float = 0.2,
+) -> CorrelationNetwork:
+    """Threshold graph on partial correlations (precision-matrix view)."""
+    if not (0.0 <= threshold <= 1.0):
+        raise ValueError("threshold must be in [0, 1]")
+    pcorr = partial_corr_from_cov(cov)
+    n = len(pcorr)
+    edges: list[NetworkEdge] = []
+    for i in range(n):
+        for j in range(i + 1, n):
+            rho = float(pcorr[i][j])
+            if abs(rho) >= threshold:
+                edges.append(NetworkEdge(i=i, j=j, correlation=rho))
+    return _network_from_edges(n, edges, threshold=threshold, kind="partial")
+
+
+def silverman_bandwidth(values: Sequence[float]) -> float:
+    """Silverman's rule-of-thumb bandwidth ``1.06 σ n^{-1/5}``."""
+    if len(values) < 2:
+        raise ValueError("need at least 2 values for bandwidth")
+    xs = [float(v) for v in values]
+    if any(not math.isfinite(x) for x in xs):
+        raise ValueError("values must be finite")
+    std = _sample_std(xs)
+    if std <= 0:
+        return 1.0
+    return 1.06 * std * (len(xs) ** (-0.2))
+
+
+def kde_entropy(values: Sequence[float], *, grid_size: int = 128) -> float:
+    """Differential Shannon entropy via Gaussian KDE (StatisticalMethods).
+
+    Estimates ``−∫ f̂ log f̂`` on a truncated grid using Silverman bandwidth.
+    """
+    if len(values) < 2:
+        raise ValueError("need at least 2 values")
+    xs = [float(v) for v in values]
+    if any(not math.isfinite(x) for x in xs):
+        raise ValueError("values must be finite")
+    n = len(xs)
+    h = silverman_bandwidth(xs)
+    lo, hi = min(xs), max(xs)
+    pad = max(4.0 * h, 1e-6)
+    lo -= pad
+    hi += pad
+    if hi <= lo:
+        return 0.0
+    if grid_size < 16:
+        raise ValueError("grid_size must be >= 16")
+    width = (hi - lo) / (grid_size - 1)
+    inv_h = 1.0 / h
+    dens = [0.0] * grid_size
+    norm = 1.0 / (n * h * math.sqrt(2.0 * math.pi))
+    for gi in range(grid_size):
+        x = lo + gi * width
+        s = 0.0
+        for v in xs:
+            z = (x - v) * inv_h
+            s += math.exp(-0.5 * z * z)
+        dens[gi] = norm * s
+    # Normalize discrete mass so Σ f Δx ≈ 1.
+    mass = sum(dens) * width
+    if mass <= 0:
+        return 0.0
+    dens = [d / mass for d in dens]
+    h_ent = 0.0
+    for d in dens:
+        if d > 0:
+            h_ent -= d * width * math.log(d)
+    return h_ent
+
+
+def kde_mutual_information_stats(
+    xs: Sequence[float],
+    ys: Sequence[float],
+    *,
+    grid_size: int = 48,
+) -> EntropyStats:
+    """KDE-based MI via ``I=H(X)+H(Y)−H(X,Y)`` on a product grid (research)."""
+    if len(xs) != len(ys):
+        raise ValueError("xs and ys must have the same length")
+    if len(xs) < 4:
+        raise ValueError("need at least 4 paired observations")
+    hx = kde_entropy(xs, grid_size=grid_size)
+    hy = kde_entropy(ys, grid_size=grid_size)
+    # 2D KDE on a coarse grid for joint entropy.
+    n = len(xs)
+    hx_bw = silverman_bandwidth(xs)
+    hy_bw = silverman_bandwidth(ys)
+    x_lo, x_hi = min(xs) - 4 * hx_bw, max(xs) + 4 * hx_bw
+    y_lo, y_hi = min(ys) - 4 * hy_bw, max(ys) + 4 * hy_bw
+    if x_hi <= x_lo or y_hi <= y_lo:
+        return EntropyStats(hx, hy, hx + hy, 0.0, 0.0, bins=0)
+    dx = (x_hi - x_lo) / (grid_size - 1)
+    dy = (y_hi - y_lo) / (grid_size - 1)
+    inv_hx = 1.0 / hx_bw
+    inv_hy = 1.0 / hy_bw
+    norm = 1.0 / (n * hx_bw * hy_bw * 2.0 * math.pi)
+    dens = [[0.0] * grid_size for _ in range(grid_size)]
+    for i in range(grid_size):
+        x = x_lo + i * dx
+        for j in range(grid_size):
+            y = y_lo + j * dy
+            s = 0.0
+            for a, b in zip(xs, ys, strict=True):
+                zx = (x - float(a)) * inv_hx
+                zy = (y - float(b)) * inv_hy
+                s += math.exp(-0.5 * (zx * zx + zy * zy))
+            dens[i][j] = norm * s
+    mass = sum(sum(row) for row in dens) * dx * dy
+    if mass <= 0:
+        return EntropyStats(hx, hy, hx + hy, 0.0, 0.0, bins=0)
+    hxy = 0.0
+    cell = dx * dy
+    for i in range(grid_size):
+        for j in range(grid_size):
+            p = dens[i][j] / mass
+            if p > 0:
+                hxy -= p * cell * math.log(p)
+    mi = max(0.0, hx + hy - hxy)
+    lam = math.sqrt(max(0.0, 1.0 - math.exp(-2.0 * mi)))
+    return EntropyStats(
+        entropy_x=hx,
+        entropy_y=hy,
+        joint_entropy=hxy,
+        mutual_information=mi,
+        global_correlation=lam,
+        bins=0,  # 0 ⇒ KDE path (not histogram bins)
+    )
+
+
+def ledoit_wolf_cov(
+    returns: Sequence[Sequence[float]],
+) -> ShrinkageResult:
+    """Ledoit–Wolf shrinkage of sample cov toward ``μ I`` (StatisticalMethods).
+
+    Intensity is the analytic LW estimate for the identity target (research
+    port — not the full constant-correlation variant).
+    """
+    sample = cov_from_returns(returns)
+    n = len(sample)
+    t = len(returns[0])
+    if t < 3:
+        raise ValueError("need at least 3 observations for Ledoit–Wolf")
+    mu = sum(sample[i][i] for i in range(n)) / n
+    # Prior F = μ I
+    # δ² = ||S − F||²_F / n² scaled; β̂² / δ̂² shrinkage (simplified LW).
+    diff_sq = 0.0
+    for i in range(n):
+        for j in range(n):
+            target = mu if i == j else 0.0
+            d = sample[i][j] - target
+            diff_sq += d * d
+    # Estimate π̂ (sum of asymptotic variances) via residual squares.
+    means = [_mean(row) for row in returns]
+    pi_hat = 0.0
+    for i in range(n):
+        for j in range(n):
+            acc = 0.0
+            for k in range(t):
+                x = (returns[i][k] - means[i]) * (returns[j][k] - means[j])
+                acc += (x - sample[i][j]) ** 2
+            pi_hat += acc / t
+    rho = 0.0 if diff_sq <= 0 else min(1.0, max(0.0, pi_hat / (t * diff_sq)))
+    shrunk = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            target = mu if i == j else 0.0
+            shrunk[i][j] = (1.0 - rho) * sample[i][j] + rho * target
+    return ShrinkageResult(
+        cov=tuple(tuple(row) for row in shrunk),
+        shrinkage=rho,
+        target_variance=mu,
+        n_obs=t,
+    )
+
+
+def black_litterman_posterior(
+    cov: Sequence[Sequence[float]],
+    market_weights: Sequence[float],
+    *,
+    views_p: Sequence[Sequence[float]],
+    views_q: Sequence[float],
+    tau: float = 0.05,
+    risk_aversion: float = 2.5,
+    omega: Sequence[Sequence[float]] | None = None,
+) -> list[float]:
+    """Black–Litterman posterior expected returns (research-only).
+
+    Equilibrium ``π = δ Σ w``; views ``P μ = Q + ε``, ``ε ~ N(0, Ω)``.
+    """
+    sigma = _validate_cov(cov)
+    n = len(sigma)
+    if len(market_weights) != n:
+        raise ValueError("market_weights length must match covariance dimension")
+    if tau <= 0 or risk_aversion <= 0:
+        raise ValueError("tau and risk_aversion must be positive")
+    k = len(views_q)
+    if k < 1:
+        raise ValueError("need at least one view")
+    if len(views_p) != k or any(len(row) != n for row in views_p):
+        raise ValueError("views_p must be k×n")
+    w_m = [float(x) for x in market_weights]
+    pi = _mat_vec(sigma, [risk_aversion * x for x in w_m])
+    # Ω default: diag(P (τ Σ) P')
+    tau_sigma = [[tau * sigma[i][j] for j in range(n)] for i in range(n)]
+    if omega is None:
+        mid = [[sum(views_p[a][t] * tau_sigma[t][j] for t in range(n)) for j in range(n)] for a in range(k)]
+        omega_m = [[0.0] * k for _ in range(k)]
+        for a in range(k):
+            for b in range(k):
+                omega_m[a][b] = sum(mid[a][j] * views_p[b][j] for j in range(n))
+            # Keep diagonal Ω for stability.
+            omega_m[a] = [omega_m[a][a] if a == b else 0.0 for b in range(k)]
+            if omega_m[a][a] <= 0:
+                omega_m[a][a] = 1e-8
+    else:
+        omega_m = _validate_cov(omega)
+        if len(omega_m) != k:
+            raise ValueError("omega must be k×k")
+    # μ = [(τΣ)^{-1} + P' Ω^{-1} P]^{-1} [(τΣ)^{-1} π + P' Ω^{-1} Q]
+    try:
+        inv_tau = _invert_spd(tau_sigma)
+        inv_omega = _invert_spd(omega_m)
+    except ValueError as exc:
+        raise ValueError("Black–Litterman matrices must be invertible") from exc
+    # P' Ω^{-1}
+    pt_oinv = [[0.0] * k for _ in range(n)]
+    for i in range(n):
+        for a in range(k):
+            pt_oinv[i][a] = sum(float(views_p[b][i]) * inv_omega[b][a] for b in range(k))
+    # left = (τΣ)^{-1} + P' Ω^{-1} P
+    left = [row[:] for row in inv_tau]
+    for i in range(n):
+        for j in range(n):
+            left[i][j] += sum(pt_oinv[i][a] * float(views_p[a][j]) for a in range(k))
+    # rhs = (τΣ)^{-1} π + P' Ω^{-1} Q
+    rhs = _mat_vec(inv_tau, pi)
+    for i in range(n):
+        rhs[i] += sum(pt_oinv[i][a] * float(views_q[a]) for a in range(k))
+    return _solve_spd(left, rhs)
+
+
+def black_litterman_weights(
+    cov: Sequence[Sequence[float]],
+    market_weights: Sequence[float],
+    *,
+    views_p: Sequence[Sequence[float]],
+    views_q: Sequence[float],
+    tau: float = 0.05,
+    risk_aversion: float = 2.5,
+    long_only: bool = True,
+    risk_free: float = 0.0,
+) -> BlackLittermanResult:
+    """BL posterior means → long-only (optional) tangency weights."""
+    sigma = _validate_cov(cov)
+    mu = black_litterman_posterior(
+        sigma,
+        market_weights,
+        views_p=views_p,
+        views_q=views_q,
+        tau=tau,
+        risk_aversion=risk_aversion,
+    )
+    tan = tangency_weights(mu, sigma, long_only=long_only, risk_free=risk_free)
+    return BlackLittermanResult(
+        posterior_returns=tuple(mu),
+        weights=tan.weights,
+        expected_return=tan.expected_return,
+        volatility=tan.volatility,
+        sharpe=tan.sharpe,
+        tau=tau,
+        risk_aversion=risk_aversion,
+    )
+
+
+def historical_cvar(returns: Sequence[float], *, alpha: float = 0.05) -> float:
+    """Historical CVaR (Expected Shortfall) at level ``alpha`` (loss = −return)."""
+    if not (0.0 < alpha < 1.0):
+        raise ValueError("alpha must be in (0, 1)")
+    if len(returns) < 5:
+        raise ValueError("need at least 5 returns for CVaR")
+    losses = sorted(-float(r) for r in returns)
+    if any(not math.isfinite(x) for x in losses):
+        raise ValueError("returns must be finite")
+    cutoff = max(1, int(math.ceil(alpha * len(losses))))
+    tail = losses[:cutoff]
+    return sum(tail) / len(tail)
+
+
+def cvar_risk_budget_weights(
+    returns: Sequence[Sequence[float]],
+    *,
+    budget: Sequence[float] | None = None,
+    alpha: float = 0.05,
+    max_iter: int = 200,
+    damp: float = 0.5,
+) -> CVaRBudgetResult:
+    """Equal (or budgeted) CVaR contribution weights via damped updates.
+
+    Component CVaR ≈ weight × average loss on the portfolio tail scenarios.
+    Research nested risk-budget sketch — not a production optimizer.
+    """
+    if not returns:
+        raise ValueError("returns must be non-empty")
+    n = len(returns)
+    t = len(returns[0])
+    if t < 10:
+        raise ValueError("need at least 10 observations for CVaR budgeting")
+    for row in returns:
+        if len(row) != t:
+            raise ValueError("all return series must share the same length")
+    b = _parse_budget(n, budget)
+    if not (0.0 < damp <= 1.0):
+        raise ValueError("damp must be in (0, 1]")
+    w = [1.0 / n] * n
+    contrib = [0.0] * n
+    port_cvar = 0.0
+    for _ in range(max_iter):
+        port = [sum(w[i] * returns[i][k] for i in range(n)) for k in range(t)]
+        losses = [-p for p in port]
+        order = sorted(range(t), key=lambda k: losses[k], reverse=True)
+        cutoff = max(1, int(math.ceil(alpha * t)))
+        tail = order[:cutoff]
+        port_cvar = sum(losses[k] for k in tail) / cutoff
+        if port_cvar <= 1e-18:
+            break
+        contrib = [
+            w[i] * (sum(-returns[i][k] for k in tail) / cutoff)
+            for i in range(n)
+        ]
+        # Multiplicative budget step toward b_i * CVaR.
+        cand = [
+            0.0 if contrib[i] <= 0 else w[i] * (b[i] * port_cvar / contrib[i])
+            for i in range(n)
+        ]
+        try:
+            cand = _normalize(cand)
+        except ValueError:
+            break
+        blended = [(1.0 - damp) * w[i] + damp * cand[i] for i in range(n)]
+        try:
+            new_w = _normalize(blended)
+        except ValueError:
+            break
+        delta = sum(abs(new_w[i] - w[i]) for i in range(n))
+        w = new_w
+        if delta < 1e-10:
+            break
+    frac = _risk_fractions(contrib)
+    return CVaRBudgetResult(
+        weights=tuple(w),
+        cvar=port_cvar,
+        contributions=tuple(contrib),
+        fractions=frac,
+        alpha=alpha,
+        budget=tuple(b),
+    )
+
+
+def rolling_stylized_facts(
+    returns: Sequence[float],
+    *,
+    window: int = 40,
+    step: int = 1,
+) -> tuple[StylizedFacts, ...]:
+    """Rolling-window stylized facts (regime path for study / Julie context)."""
+    if window < 4:
+        raise ValueError("window must be >= 4")
+    if step < 1:
+        raise ValueError("step must be >= 1")
+    xs = [float(r) for r in returns]
+    if len(xs) < window:
+        raise ValueError("returns shorter than window")
+    out: list[StylizedFacts] = []
+    for start in range(0, len(xs) - window + 1, step):
+        out.append(stylized_facts(xs[start : start + window]))
+    return tuple(out)
+
+
+def stylized_regime_summary(
+    returns: Sequence[float],
+    *,
+    window: int = 40,
+    step: int = 5,
+) -> StylizedRegimeSummary:
+    """Aggregate rolling stylized facts into a single regime label."""
+    rolls = rolling_stylized_facts(returns, window=window, step=step)
+    fat = sum(1 for r in rolls if r.fat_tails) / len(rolls)
+    volc = sum(1 for r in rolls if r.volatility_clustering) / len(rolls)
+    latest = rolls[-1]
+    if fat >= 0.5 and volc >= 0.5:
+        regime = "mixed"
+    elif fat >= 0.5:
+        regime = "fat_tails"
+    elif volc >= 0.5:
+        regime = "vol_cluster"
+    else:
+        regime = "calm"
+    return StylizedRegimeSummary(
+        window=window,
+        n_windows=len(rolls),
+        fat_tail_fraction=fat,
+        vol_cluster_fraction=volc,
+        latest=latest,
+        regime=regime,
+    )
+
+
 def compare_allocators(
     returns: Sequence[Sequence[float]],
 ) -> dict[str, object]:
-    """Side-by-side inverse-vol, ERC, tangency, and HRP on the same return panel."""
+    """Side-by-side inverse-vol, ERC, tangency, HRP, shrinkage, CVaR, BL."""
     cov = cov_from_returns(returns)
+    shrunk = ledoit_wolf_cov(returns)
     mu = mean_returns(returns)
     vols = [math.sqrt(max(cov[i][i], 1e-18)) for i in range(len(cov))]
     inv = inverse_vol_weights(vols)
     erc = equal_risk_contribution(cov)
     tan = tangency_weights(mu, cov, long_only=True)
+    tan_s = tangency_weights(mu, [list(r) for r in shrunk.cov], long_only=True)
     hrp = hierarchical_risk_parity(cov)
     net = correlation_network(corr_from_cov(cov), threshold=0.3)
+    mst = minimum_spanning_tree(corr_from_cov(cov))
+    partial = partial_correlation_network(cov, threshold=0.15)
+    cvar_w = cvar_risk_budget_weights(returns, alpha=0.1)
+    n = len(cov)
+    eq = [1.0 / n] * n
+    # Mild relative view: asset 0 outperforms equal-weight equilibrium by 1%.
+    views_p = [[1.0] + [-1.0 / (n - 1)] * (n - 1)] if n > 1 else [[1.0]]
+    views_q = [0.01]
+    try:
+        bl = black_litterman_weights(
+            [list(r) for r in shrunk.cov],
+            eq,
+            views_p=views_p,
+            views_q=views_q,
+            long_only=True,
+        )
+        bl_w = list(bl.weights)
+        bl_sharpe = bl.sharpe
+    except ValueError:
+        bl_w = list(tan_s.weights)
+        bl_sharpe = tan_s.sharpe
     return {
         "n_assets": len(cov),
         "n_obs": len(returns[0]),
         "inverse_vol": list(inv),
         "erc": list(erc.weights),
         "tangency": list(tan.weights),
+        "tangency_shrunk": list(tan_s.weights),
         "hrp": list(hrp.weights),
+        "cvar_budget": list(cvar_w.weights),
+        "black_litterman": bl_w,
         "tangency_sharpe": tan.sharpe,
+        "shrunk_tangency_sharpe": tan_s.sharpe,
+        "bl_sharpe": bl_sharpe,
+        "shrinkage": shrunk.shrinkage,
         "network_edges": len(net.edges),
+        "mst_edges": len(mst.edges),
+        "partial_edges": len(partial.edges),
+        "cvar": cvar_w.cvar,
         "never_live": True,
     }
 
 
 def snapshot_research_context(snap: object) -> dict[str, object]:
-    """Julie/Andrea helper: stylized facts from ``snap.bars`` closes (research-only)."""
+    """Julie/Andrea helper: stylized facts + rolling regimes from bars."""
     bars = getattr(snap, "bars", None) or []
     closes = [float(getattr(b, "close", 0.0) or 0.0) for b in bars]
     closes = [c for c in closes if c > 0]
@@ -915,7 +1531,7 @@ def snapshot_research_context(snap: object) -> dict[str, object]:
         facts = stylized_facts(rets)
     except ValueError as exc:
         return {"available": False, "note": str(exc), "never_live": True}
-    return {
+    out: dict[str, object] = {
         "available": True,
         "n_returns": facts.n,
         "mean": facts.mean,
@@ -934,6 +1550,18 @@ def snapshot_research_context(snap: object) -> dict[str, object]:
         "never_live": True,
         "module": "aoa.research.open_quant_patterns",
     }
+    if len(rets) >= 40:
+        try:
+            regime = stylized_regime_summary(rets, window=min(40, len(rets) // 2 or 4), step=5)
+            out["regime"] = regime.regime
+            out["fat_tail_fraction"] = regime.fat_tail_fraction
+            out["vol_cluster_fraction"] = regime.vol_cluster_fraction
+            out["regime_windows"] = regime.n_windows
+            if out["signal"] is None and regime.regime in ("fat_tails", "vol_cluster", "mixed"):
+                out["signal"] = f"stylized:regime:{regime.regime}"
+        except ValueError:
+            pass
+    return out
 
 
 def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
@@ -941,19 +1569,37 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
     x1, x2 = coupled_ar_series(200, seed=seed)
     flow = net_information_flow(x1, x2, lags=1)
     mi = mutual_information_stats(x1, x2, bins=8)
+    kde_mi = kde_mutual_information_stats(x1[::2], x2[::2], grid_size=32)
 
     vols = (0.20, 0.10)
     inv = inverse_vol_weights(vols)
     cov = [[0.04, 0.0], [0.0, 0.01]]
     erc = equal_risk_contribution(cov)
     tan = tangency_weights((0.12, 0.08), cov, long_only=True)
-    hrp = hierarchical_risk_parity([[0.04, 0.01, 0.0], [0.01, 0.03, 0.005], [0.0, 0.005, 0.02]])
+    hrp_cov = [[0.04, 0.01, 0.0], [0.01, 0.03, 0.005], [0.0, 0.005, 0.02]]
+    hrp = hierarchical_risk_parity(hrp_cov)
     facts = stylized_facts(x1[1:])
     net = correlation_network([[1.0, 0.8, 0.1], [0.8, 1.0, 0.05], [0.1, 0.05, 1.0]], threshold=0.5)
+    mst = minimum_spanning_tree([[1.0, 0.8, 0.1], [0.8, 1.0, 0.05], [0.1, 0.05, 1.0]])
+    pmfg = planar_maximally_filtered_graph(
+        [[1.0, 0.9, 0.5, 0.1], [0.9, 1.0, 0.4, 0.2], [0.5, 0.4, 1.0, 0.3], [0.1, 0.2, 0.3, 1.0]]
+    )
+    partial = partial_correlation_network(hrp_cov, threshold=0.05)
+    panel = [x1[1:121], x2[1:121], coupled_ar_series(120, seed=seed + 3)[0]]
+    shrunk = ledoit_wolf_cov(panel)
+    cvar_w = cvar_risk_budget_weights(panel, alpha=0.1)
+    bl = black_litterman_weights(
+        [list(r) for r in shrunk.cov],
+        [1 / 3, 1 / 3, 1 / 3],
+        views_p=[[1.0, -0.5, -0.5]],
+        views_q=[0.02],
+    )
+    regimes = stylized_regime_summary(x1[1:], window=40, step=10)
 
     ok = (
         flow.dominant == "x->y"
         and mi.mutual_information >= 0.0
+        and kde_mi.mutual_information >= 0.0
         and abs(sum(erc.weights) - 1.0) < 1e-8
         and abs(inv[0] - 1.0 / 3.0) < 1e-8
         and abs(erc.risk_fractions[0] - 0.5) < 1e-3
@@ -961,6 +1607,13 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
         and abs(sum(hrp.weights) - 1.0) < 1e-8
         and facts.n > 0
         and len(net.edges) >= 1
+        and len(mst.edges) == 2
+        and len(pmfg.edges) >= 3
+        and len(partial.edges) >= 0
+        and 0.0 <= shrunk.shrinkage <= 1.0
+        and abs(sum(cvar_w.weights) - 1.0) < 1e-8
+        and abs(sum(bl.weights) - 1.0) < 1e-8
+        and regimes.n_windows >= 1
     )
     return {
         "ok": ok,
@@ -971,13 +1624,21 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
             "dominant": flow.dominant,
         },
         "mutual_information": mi.mutual_information,
+        "kde_mutual_information": kde_mi.mutual_information,
         "global_correlation": mi.global_correlation,
         "inverse_vol_weights": list(inv),
         "erc_weights": list(erc.weights),
         "erc_risk_fractions": list(erc.risk_fractions),
         "tangency_weights": list(tan.weights),
         "hrp_weights": list(hrp.weights),
+        "cvar_weights": list(cvar_w.weights),
+        "bl_weights": list(bl.weights),
+        "shrinkage": shrunk.shrinkage,
+        "mst_edges": len(mst.edges),
+        "pmfg_edges": len(pmfg.edges),
+        "partial_edges": len(partial.edges),
         "stylized_fat_tails": facts.fat_tails,
+        "regime": regimes.regime,
         "network_edges": len(net.edges),
         "never_live": True,
         "module": "aoa.research.open_quant_patterns",
@@ -1248,32 +1909,51 @@ def _property_stress(
 
 
 __all__ = [
+    "BlackLittermanResult",
+    "CVaRBudgetResult",
     "CorrelationNetwork",
     "EntropyStats",
     "GrangerResult",
     "NetFlow",
     "NetworkEdge",
     "RiskParityResult",
+    "ShrinkageResult",
     "StylizedFacts",
+    "StylizedRegimeSummary",
     "TangencyResult",
     "billion_stress",
+    "black_litterman_posterior",
+    "black_litterman_weights",
     "compare_allocators",
     "corr_from_cov",
     "correlation_network",
     "coupled_ar_series",
     "cov_from_returns",
+    "cvar_risk_budget_weights",
     "equal_risk_contribution",
     "hierarchical_risk_parity",
+    "historical_cvar",
     "inverse_vol_weights",
+    "kde_entropy",
+    "kde_mutual_information_stats",
+    "ledoit_wolf_cov",
     "linear_granger_causality",
     "log_returns",
     "mean_returns",
+    "minimum_spanning_tree",
     "mutual_information_stats",
     "net_information_flow",
+    "partial_corr_from_cov",
+    "partial_correlation_network",
+    "planar_maximally_filtered_graph",
+    "precision_matrix",
     "risk_contributions",
+    "rolling_stylized_facts",
     "shannon_entropy",
+    "silverman_bandwidth",
     "snapshot_research_context",
     "stylized_facts",
+    "stylized_regime_summary",
     "synthetic_smoke",
     "tangency_weights",
     "trillion_stress",

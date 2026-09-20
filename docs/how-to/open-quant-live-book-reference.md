@@ -16,10 +16,12 @@ R/bookdown; AOA does not build or vendor it.
 |------------------|------|-------------|
 | `RiskParity/` | Equal risk contribution / risk-budget portfolios | `equal_risk_contribution`, `inverse_vol_weights`, `risk_contributions` (+ `risk_fractions`) |
 | `RiskParity/` (Markowitz) | Tangency / max-Sharpe vs ERC | `tangency_weights`, `compare_allocators` |
+| `RiskParity/` + stats | Ledoit–Wolf shrink, Black–Litterman, CVaR budgets | `ledoit_wolf_cov`, `black_litterman_weights`, `cvar_risk_budget_weights` |
 | `Entropy/` | Shannon entropy, mutual information, global correlation λ | `shannon_entropy`, `mutual_information_stats` |
+| `StatisticalMethods/` | KDE entropy (Silverman bandwidth) | `kde_entropy`, `kde_mutual_information_stats`, `silverman_bandwidth` |
 | `TransferEntropy/` | Linear Granger causality + Gaussian TE = GC/2; net flow | `linear_granger_causality`, `net_information_flow`, `coupled_ar_series` |
-| StylizedFacts (math) | Fat tails, vol clustering cues | `stylized_facts`, `log_returns`, `snapshot_research_context` |
-| FinancialNetworks (lite) | Threshold correlation graph | `correlation_network`, `corr_from_cov` |
+| StylizedFacts (math) | Fat tails, vol clustering, rolling regimes | `stylized_facts`, `rolling_stylized_facts`, `stylized_regime_summary`, `snapshot_research_context` |
+| FinancialNetworks | Threshold / MST / PMFG / partial-corr graphs | `correlation_network`, `minimum_spanning_tree`, `planar_maximally_filtered_graph`, `partial_correlation_network` |
 | ML / HRP idea | Hierarchical risk parity | `hierarchical_risk_parity` |
 | LimitOrder / full ML notebooks | Narrative / stubs | Stay in the sibling — **not** ported |
 
@@ -96,7 +98,7 @@ aoa openquant trillion --iterations 10000000000  # 10B local check
 
 - Mesh: `brain/mesh/repos.yaml` entry `open-quant-live-book`
 - Spine: `brain/spine/Algorithms.md`
-- Curriculum: `bridge-oqlb-risk-entropy`, `bridge-oqlb-tangency-hrp`, `bridge-oqlb-stylized-network`
+- Curriculum: `bridge-oqlb-risk-entropy`, `bridge-oqlb-tangency-hrp`, `bridge-oqlb-stylized-network`, `bridge-oqlb-networks-filter`, `bridge-oqlb-shrink-bl-cvar`, `bridge-oqlb-kde-regimes`
 - Catalog: [docs/help.md](../help.md)
 - Consumers: Julie `refine`, Andrea risk plans (research context only)
 

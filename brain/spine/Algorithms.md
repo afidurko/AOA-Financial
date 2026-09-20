@@ -62,7 +62,8 @@ documents risk parity, Shannon/mutual information, and transfer entropy
 (Granger / Gaussian TE). Distilled Python helpers live in
 `aoa.research.open_quant_patterns` (no broker calls). CLI `aoa openquant`.
 Study bridges: `bridge-oqlb-risk-entropy`, `bridge-oqlb-tangency-hrp`,
-`bridge-oqlb-stylized-network`. Setup:
+`bridge-oqlb-stylized-network`, `bridge-oqlb-networks-filter`,
+`bridge-oqlb-shrink-bl-cvar`, `bridge-oqlb-kde-regimes`. Setup:
 `./scripts/open-quant-live-book-setup.sh` ·
 [docs/how-to/open-quant-live-book-reference.md](../../docs/how-to/open-quant-live-book-reference.md).
 

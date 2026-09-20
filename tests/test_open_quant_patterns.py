@@ -230,6 +230,11 @@ def test_compare_allocators_and_snapshot_context() -> None:
     cmp = compare_allocators([x, y, z])
     assert cmp["n_assets"] == 3
     assert abs(sum(cmp["tangency"]) - 1.0) < 1e-8
+    assert abs(sum(cmp["cvar_budget"]) - 1.0) < 1e-8
+    assert abs(sum(cmp["black_litterman"]) - 1.0) < 1e-8
+    assert abs(sum(cmp["tangency_shrunk"]) - 1.0) < 1e-8
+    assert 0.0 <= float(cmp["shrinkage"]) <= 1.0
+    assert cmp["mst_edges"] == 2
     bars = [
         Bar(
             timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
@@ -239,11 +244,82 @@ def test_compare_allocators_and_snapshot_context() -> None:
             close=100 + i * 0.5,
             volume=1,
         )
-        for i in range(20)
+        for i in range(60)
     ]
     ctx = snapshot_research_context(SymbolSnapshot(symbol="X", quote=None, bars=bars))
     assert ctx["available"] is True
     assert ctx["never_live"] is True
+    assert "regime" in ctx
+
+
+def test_mst_pmfg_partial_and_kde() -> None:
+    from aoa.research.open_quant_patterns import (
+        historical_cvar,
+        kde_entropy,
+        kde_mutual_information_stats,
+        ledoit_wolf_cov,
+        minimum_spanning_tree,
+        partial_correlation_network,
+        planar_maximally_filtered_graph,
+        silverman_bandwidth,
+        stylized_regime_summary,
+    )
+
+    corr = [
+        [1.0, 0.9, 0.2, 0.1],
+        [0.9, 1.0, 0.3, 0.15],
+        [0.2, 0.3, 1.0, 0.8],
+        [0.1, 0.15, 0.8, 1.0],
+    ]
+    mst = minimum_spanning_tree(corr)
+    assert mst.kind == "mst"
+    assert len(mst.edges) == 3
+    pmfg = planar_maximally_filtered_graph(corr)
+    assert pmfg.kind == "pmfg"
+    assert len(pmfg.edges) == 3 * (4 - 2)
+    cov = [[0.04, 0.01, 0.0], [0.01, 0.03, 0.005], [0.0, 0.005, 0.02]]
+    partial = partial_correlation_network(cov, threshold=0.01)
+    assert partial.kind == "partial"
+    xs = [math.sin(i / 7) for i in range(80)]
+    ys = [math.sin(i / 7 + 0.2) for i in range(80)]
+    assert silverman_bandwidth(xs) > 0
+    assert math.isfinite(kde_entropy(xs, grid_size=64))
+    kde = kde_mutual_information_stats(xs, ys, grid_size=32)
+    assert kde.bins == 0
+    assert kde.mutual_information >= 0.0
+    panel = [xs, ys, [math.cos(i / 9) for i in range(80)]]
+    shrunk = ledoit_wolf_cov(panel)
+    assert 0.0 <= shrunk.shrinkage <= 1.0
+    assert len(shrunk.cov) == 3
+    assert historical_cvar(xs, alpha=0.1) == historical_cvar(xs, alpha=0.1)
+    regime = stylized_regime_summary(xs, window=40, step=10)
+    assert regime.n_windows >= 1
+    assert regime.regime in ("fat_tails", "vol_cluster", "calm", "mixed")
+
+
+def test_black_litterman_and_cvar_budget() -> None:
+    from aoa.research.open_quant_patterns import (
+        black_litterman_weights,
+        cvar_risk_budget_weights,
+    )
+
+    x, _ = coupled_ar_series(100, seed=2, ar_x=0.3, coupling=0.0)
+    y, _ = coupled_ar_series(100, seed=5, ar_x=0.2, coupling=0.0)
+    z, _ = coupled_ar_series(100, seed=9, ar_x=0.25, coupling=0.0)
+    panel = [x, y, z]
+    cov = cov_from_returns(panel)
+    bl = black_litterman_weights(
+        cov,
+        [1 / 3, 1 / 3, 1 / 3],
+        views_p=[[1.0, -0.5, -0.5]],
+        views_q=[0.01],
+        long_only=True,
+    )
+    assert abs(sum(bl.weights) - 1.0) < 1e-8
+    assert all(w >= -1e-12 for w in bl.weights)
+    cvar = cvar_risk_budget_weights(panel, alpha=0.1)
+    assert abs(sum(cvar.weights) - 1.0) < 1e-8
+    assert math.isfinite(cvar.cvar)
 
 
 def test_erc_weights_sum_and_positive_vol() -> None:
