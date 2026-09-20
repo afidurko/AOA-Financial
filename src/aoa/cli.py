@@ -1969,7 +1969,14 @@ def cmd_openquant_stress(
     """Named-scale property stress (smoke / million / billion / trillion)."""
     from aoa.research.open_quant_patterns import scale_stress
 
-    result = scale_stress(scale, seed=seed, iterations=iterations, workers=workers)
+    try:
+        result = scale_stress(scale, seed=seed, iterations=iterations, workers=workers)
+    except ValueError as exc:
+        if as_json:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+        else:
+            print(str(exc), file=sys.stderr)
+        return 1
     if as_json:
         print(json.dumps(result, indent=2))
     else:
@@ -2111,7 +2118,11 @@ def cmd_ship_status(*, as_json: bool = False) -> int:
 
 def cmd_ship_fixed(issue_id: str, *, note: str = "") -> int:
     agent = _ship_agent()
-    state = agent.mark_fixed(issue_id, note=note)
+    try:
+        state = agent.mark_fixed(issue_id, note=note)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     print(f"Marked fixed: {issue_id}")
     print(f"Open remaining: {len(state.open_issues())}")
     return 0
@@ -2119,7 +2130,11 @@ def cmd_ship_fixed(issue_id: str, *, note: str = "") -> int:
 
 def cmd_ship_attempt(issue_id: str, *, blocked: bool = False, detail: str = "") -> int:
     agent = _ship_agent()
-    state = agent.mark_attempt(issue_id, blocked=blocked, detail=detail)
+    try:
+        state = agent.mark_attempt(issue_id, blocked=blocked, detail=detail)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
     for issue in state.issues:
         if issue.id == issue_id:
             print(f"{issue_id}: attempts={issue.attempts} status={issue.status.value}")

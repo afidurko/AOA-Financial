@@ -13,6 +13,25 @@ from aoa.repair.store import RepairStore
 from aoa.repair.worktree import create_repair_worktree
 
 
+def _clip_detail(detail: str, limit: int = 240) -> str:
+    """Shorten triage detail without leaving a broken markdown link."""
+    text = (detail or "").strip()
+    if "](" in text and not text.rstrip().endswith(")"):
+        label, dest = text.rsplit("](", 1)
+        if "visualhft-po" in dest:
+            text = f"{label}](docs/how-to/visualhft-positions-orders.md)"
+        else:
+            text = label.rstrip(" —-[") + "…"
+    if len(text) <= limit:
+        return text
+    chunk = text[:limit]
+    if "](" in chunk and chunk.count("](") > chunk.count(")"):
+        chunk = chunk[: chunk.rfind("](")].rstrip(" —-")
+    else:
+        chunk = chunk.rsplit(" ", 1)[0]
+    return chunk.rstrip("([") + "…"
+
+
 @dataclass
 class RepairResult:
     run: RepairRun
@@ -105,7 +124,7 @@ def _sync_state_md(state_path: Path, items: list[RepairItem], run_id: str) -> No
     if high:
         for item in high:
             lines.append(
-                f"- **{item.title}** — {item.detail[:200]}"
+                f"- **{item.title}** — {_clip_detail(item.detail)}"
                 f"  \n  Source: `{item.source}` | Skill: `{item.suggested_skill}` | id: `{item.item_id}`"
             )
     else:
@@ -114,7 +133,7 @@ def _sync_state_md(state_path: Path, items: list[RepairItem], run_id: str) -> No
     lines.extend(["", "## Watch List", ""])
     if watch:
         for item in watch:
-            lines.append(f"- **{item.title}** — {item.detail[:200]}")
+            lines.append(f"- **{item.title}** — {_clip_detail(item.detail)}")
     else:
         lines.append("_(none)_")
 

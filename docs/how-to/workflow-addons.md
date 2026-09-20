@@ -51,6 +51,11 @@ trading paper/dry-run; they compound agent + human throughput.
     commit so leftover `<<<<<<<` never leave the laptop.
 14. **Doctor news wiring** — replace `NullNewsFeed` on paper-dry once OpenD
     headlines are confirmed, so doctor stops warning on every offline run.
+15. **Core httpx always** — keep `httpx` on core deps so notify/scholar import
+    without `[web]` (httpcompat still prefers httpx2 when present).
+16. **Fresh proofread after discover** — ship rediscover clears stale PASS;
+    Automation B should always `aoa ship proofread` before `aoa ship ready`.
+17. **STATE.md link-safe clip** — triage detail clip no longer slices markdown URLs.
 
 ## Human gates (unchanged)
 

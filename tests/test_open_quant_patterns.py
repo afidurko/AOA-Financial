@@ -130,6 +130,16 @@ def test_rejects_bad_inputs() -> None:
         equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], budget=(1.0,))
     with pytest.raises(ValueError):
         equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], damp=0.0)
+    with pytest.raises(ValueError, match="max_iter"):
+        equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]], max_iter=0)
+    with pytest.raises(ValueError, match="finite"):
+        shannon_entropy([1.0, float("nan")], bins=3)
+    with pytest.raises(ValueError, match="finite"):
+        mutual_information_stats([1.0, float("inf")], [0.5, 0.2], bins=2)
+    with pytest.raises(ValueError, match="finite"):
+        linear_granger_causality([1.0, float("nan"), 2.0, 3.0], [1.0, 2.0, 3.0, 4.0], lags=1)
+    with pytest.raises(ValueError, match="finite"):
+        cov_from_returns([[0.01, float("nan")], [0.0, 0.02]])
     with pytest.raises(ValueError):
         linear_granger_causality([1.0, 2.0], [1.0], lags=1)
     with pytest.raises(ValueError):
