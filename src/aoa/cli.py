@@ -27,6 +27,7 @@ Commands:
   aoa openquant  Open quant research lane (risk parity / entropy / TE / billion stress).
   aoa tasks      Loop prompt shortkeys and deterministic task runners.
   aoa attl       Agentic Task-Team Loop (auto-12, brain mesh, critical-only).
+  aoa mesh       Neural endpoint mesh — unified graph + persistent run memory.
   aoa burnin     Run N paper cycles and print a burn-in summary.
 """
 
@@ -2120,6 +2121,65 @@ def cmd_attl_report(cfg: Config, *, as_json: bool = False) -> int:
     return cmd_attl_run(cfg, dry_run=False, report=True, as_json=as_json)
 
 
+def _endpoint_mesh(cfg: Config):
+    from aoa.config import data_dir_for
+    from aoa.mesh.graph import NeuralEndpointMesh
+
+    return NeuralEndpointMesh.build(
+        repo_root=Path.cwd(),
+        cfg=cfg,
+        mesh_dir=data_dir_for(cfg.env) / "mesh",
+    )
+
+
+def cmd_mesh_status(cfg: Config, *, as_json: bool = False) -> int:
+    mesh = _endpoint_mesh(cfg)
+    stats = mesh.stats()
+    if as_json:
+        print(json.dumps(stats, indent=2, default=str))
+        return 0
+    print(f"Neural endpoint mesh — nodes={stats['nodes']} edges={stats['edges']}")
+    print(f"Kinds: {stats['kinds']}")
+    print(
+        f"Memory: runs={stats['runs_remembered']} learned_nodes={stats['learned_nodes']} "
+        f"health={stats['health']}"
+    )
+    for node_id, weight in stats["weakest"]:
+        print(f"  weak: {node_id} = {weight}")
+    print(f"Memory path: {stats['memory_path']}")
+    return 0
+
+
+def cmd_mesh_sync(cfg: Config, *, as_json: bool = False) -> int:
+    mesh = _endpoint_mesh(cfg)
+    mesh.save()
+    stats = mesh.stats()
+    if as_json:
+        print(json.dumps(stats, indent=2, default=str))
+    else:
+        print(
+            f"Mesh synced: {stats['nodes']} nodes, {stats['edges']} edges → "
+            f"{mesh.graph_path}"
+        )
+        print(f"Memory persisted: {stats['memory_path']}")
+    return 0
+
+
+def cmd_mesh_recall(cfg: Config, node: str, *, limit: int = 10, as_json: bool = False) -> int:
+    mesh = _endpoint_mesh(cfg)
+    runs = mesh.recall(node, limit=limit)
+    if as_json:
+        print(json.dumps({"node": node, "runs": runs}, indent=2, default=str))
+        return 0
+    if not runs:
+        print(f"No remembered runs touching {node!r}.")
+        return 0
+    print(f"Recall for {node} ({len(runs)} run(s)):")
+    for run in runs:
+        print(f"  {run.get('at')}  ok={run.get('ok')}  outcome={run.get('outcome')}")
+    return 0
+
+
 
 def cmd_tasks_list() -> int:
     from aoa.loop.prompts import format_prompt_list
@@ -2841,6 +2901,20 @@ def main(argv: list[str] | None = None) -> int:
     at_brain_sync = at_brain_sub.add_parser("sync", help="Nova: refresh mesh + capture.")
     at_brain_sync.add_argument("--json", action="store_true", help="Emit JSON.")
 
+    mesh = sub.add_parser(
+        "mesh",
+        help="Neural endpoint mesh — unified endpoint graph + persistent run memory.",
+    )
+    mesh_sub = mesh.add_subparsers(dest="mesh_command", required=True)
+    mesh_status = mesh_sub.add_parser("status", help="Show mesh graph, memory, and health.")
+    mesh_status.add_argument("--json", action="store_true", help="Emit JSON.")
+    mesh_sync = mesh_sub.add_parser("sync", help="Rebuild the graph and persist memory to disk.")
+    mesh_sync.add_argument("--json", action="store_true", help="Emit JSON.")
+    mesh_recall = mesh_sub.add_parser("recall", help="Recall remembered runs touching a node.")
+    mesh_recall.add_argument("node", help="Node id, e.g. member.reed or endpoint.broker.")
+    mesh_recall.add_argument("--limit", type=int, default=10, help="Max runs to show.")
+    mesh_recall.add_argument("--json", action="store_true", help="Emit JSON.")
+
     ship = sub.add_parser(
         "ship",
         help="Ship-ready task loop — discover issues, proofread, mark ready (no auto-merge).",
@@ -3140,6 +3214,18 @@ def main(argv: list[str] | None = None) -> int:
             if args.attl_command == "brain":
                 if args.brain_command == "sync":
                     return cmd_attl_brain_sync(cfg, as_json=getattr(args, "json", False))
+        if args.command == "mesh":
+            if args.mesh_command == "status":
+                return cmd_mesh_status(cfg, as_json=getattr(args, "json", False))
+            if args.mesh_command == "sync":
+                return cmd_mesh_sync(cfg, as_json=getattr(args, "json", False))
+            if args.mesh_command == "recall":
+                return cmd_mesh_recall(
+                    cfg,
+                    args.node,
+                    limit=getattr(args, "limit", 10),
+                    as_json=getattr(args, "json", False),
+                )
         if args.command == "ship":
             if args.ship_command == "discover":
                 return cmd_ship_discover(
