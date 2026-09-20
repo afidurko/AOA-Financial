@@ -73,3 +73,23 @@ ConvNet prototypes. AOA sentiment today is lexicon-based in
 `aoa_financial/analysis/sentiment.py`. Setup:
 `./scripts/deepstock-setup.sh` ·
 [docs/how-to/deepstock-reference.md](../../docs/how-to/deepstock-reference.md).
+
+## TradingView desk (Pine v6 presets · TradingView-semantics backtests)
+
+`aoa.tradingview` is Julie's desk for strategies the human runs **in
+TradingView**. Every preset (17: HFT 1s/5s/15s · scalp 1m/5m · intraday 15m ·
+swing 1h/4h/1D · position 1D/1W, crypto + equity) has a Python twin in
+`aoa.tradingview.rules` and a generated Pine Script v6 `strategy()` in
+`tradingview/*.pine`. Quinn's emulator replays bars with TradingView's fill
+model (next-bar-open entries, intrabar stop/target path, gap fills,
+percent-of-equity sizing, commission + slippage) and grades presets by
+walk-forward **out-of-sample** SQN / profit factor / drawdown. Mira stores the
+result as a Hebbian synapse `preset × symbol@timeframe` in
+`data/tradingview/memory.json`; Sol maps the evidence through the fly-brain
+connectome (KC sparse code → MBON valence with dopamine reinforcement → APL
+inhibition → central-complex steering → descending-neuron winner-take-all) to a
+**human-gated** `MotorCommand`. CLI `aoa tradingview` · webhook
+`/api/tradingview/webhook` · docs
+[docs/how-to/tradingview-desk.md](../../docs/how-to/tradingview-desk.md) ·
+design [docs/design/tradingview-desk.md](../../docs/design/tradingview-desk.md).
+Never live: no broker imports, proposals only.

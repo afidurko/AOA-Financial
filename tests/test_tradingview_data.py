@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -136,6 +136,26 @@ def test_resample_bars_aggregates_ohlcv() -> None:
     assert resample_bars([], 60) == []
 
 
+def test_resample_equity_intraday_anchors_to_session_open() -> None:
+    from zoneinfo import ZoneInfo
+
+    from aoa.tradingview.data import resample_bars
+
+    ny = ZoneInfo("America/New_York")
+    start = datetime(2024, 3, 4, 9, 30, tzinfo=ny)
+    hourly = [
+        Bar((start + timedelta(hours=i)).astimezone(timezone.utc), 100 + i, 101 + i, 99 + i, 100.5 + i, 10.0)
+        for i in range(7)  # 09:30 … 15:30
+    ]
+    bars = resample_bars(hourly, 4 * 3600, market="equity")
+    assert [b.timestamp.astimezone(ny).strftime("%H:%M") for b in bars] == ["09:30", "13:30"]
+    assert bars[0].open == 100 and bars[0].close == 103.5 and bars[0].volume == 40.0
+    assert bars[1].open == 104 and bars[1].close == 106.5 and bars[1].volume == 30.0
+    # crypto stays epoch aligned
+    crypto = resample_bars(hourly, 4 * 3600, market="crypto")
+    assert all(int(b.timestamp.timestamp()) % (4 * 3600) == 0 for b in crypto)
+
+
 def test_fetch_coinbase_resamples_when_granularity_missing(monkeypatch) -> None:
     calls: list[tuple[int, int]] = []
 
@@ -153,6 +173,38 @@ def test_fetch_coinbase_resamples_when_granularity_missing(monkeypatch) -> None:
     assert (bars[2].timestamp - bars[1].timestamp).total_seconds() == 4 * 3600
     assert bars[1].volume == pytest.approx(4.0)  # interior bucket = 4 hourly candles
     assert int(bars[1].timestamp.timestamp()) % (4 * 3600) == 0  # epoch-aligned
+
+
+def test_fetch_provider_resamples_yahoo_hourly_into_4h(monkeypatch) -> None:
+    seen: list[str] = []
+
+    def fake_yahoo(symbol, tf, *, range_=None):
+        seen.append(tf.key)
+        return synthetic_bars(symbol, tf, n=48, seed=1)
+
+    monkeypatch.setattr(tvdata, "fetch_yahoo", fake_yahoo)
+    bars = tvdata.fetch_provider("yahoo", "AAPL", get_timeframe("240"))
+    assert seen == ["60"] and len(bars) == 12
+    with pytest.raises(DataError):
+        tvdata.fetch_provider("yahoo", "AAPL", get_timeframe("1S"))
+    with pytest.raises(DataError):
+        tvdata.fetch_provider("nope", "AAPL", get_timeframe("1D"))
+
+
+def test_auto_order_prefers_deepest_crypto_source(monkeypatch, tmp_path) -> None:
+    calls: list[str] = []
+
+    def fake(src, symbol, tf, *, limit=None, market="crypto"):
+        calls.append(src)
+        return synthetic_bars(symbol, tf, n=30, seed=1)
+
+    monkeypatch.setattr(tvdata, "fetch_provider", fake)
+    _, src = fetch_bars("BTC-USD", "1D", cache_dir=tmp_path)
+    assert src == "yahoo"
+    _, src = fetch_bars("BTC-USD", "60", cache_dir=tmp_path)
+    assert src == "coinbase"
+    _, src = fetch_bars("AAPL", "1D", cache_dir=tmp_path)
+    assert src == "yahoo" and calls == ["yahoo", "coinbase", "yahoo"]
 
 
 def test_symbol_mapping_helpers() -> None:

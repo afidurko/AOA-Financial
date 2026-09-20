@@ -335,6 +335,16 @@ def test_walk_forward_folds_are_out_of_sample() -> None:
     assert d["preset"] == preset.name and len(d["folds"]) == 3
 
 
+def test_walk_forward_respects_fundamentals_gate() -> None:
+    preset = get_preset("position-equity-1d-fundamental")
+    bars = _flat([100.0 * (1.001**i) for i in range(900)])
+    open_gate = walk_forward(bars, preset, folds=2, min_trades=1, grid={"min_mom_pct": (0.0,)}, fundamentals_ok=True)
+    closed = walk_forward(bars, preset, folds=2, min_trades=1, grid={"min_mom_pct": (0.0,)}, fundamentals_ok=False)
+    assert open_gate.oos_metrics["total_trades"] > 0
+    assert closed.oos_metrics["total_trades"] == 0 and closed.oos_metrics["net_profit_pct"] == 0.0
+    assert all(f["is_score"] is None for f in closed.folds)  # nothing to fit on either
+
+
 def test_walk_forward_anchored_grows_in_sample() -> None:
     preset = get_preset("swing-equity-1d-trend")
     bars = synthetic_bars("MSFT", preset.tf, n=800, seed=4)

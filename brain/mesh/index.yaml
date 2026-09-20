@@ -80,6 +80,26 @@ algorithms:
     owner: julie
     module: aoa.research.open_quant_patterns
     companion: open-quant-live-book
+  - id: algo.tradingview_desk
+    owner: julie
+    module: aoa.tradingview
+    cli: aoa tradingview
+    memory: data/tradingview/memory.json
+    presets: 17
+    docs: docs/how-to/tradingview-desk.md
+    design: docs/design/tradingview-desk.md
+    decision: decisions/2026-09-20-tradingview-desk-outside-twelve.md
+    sub_team:
+      lead: julie
+      risk: andrea
+      review: kai
+      members:
+        - {id: dara, role: Data engineer (candles, universe, fundamentals)}
+        - {id: piper, role: Pine v6 engineer (generate, lint, export)}
+        - {id: quinn, role: Backtest quant (emulator, walk-forward, Monte-Carlo)}
+        - {id: mira, role: Memory curator (Hebbian synapses, lessons)}
+        - {id: sol, role: Connectome motor mapper (fly brain → proposals, human-gated)}
+    never_live: true
 
 spines:
   - path: spine/ATTL.md
@@ -115,3 +135,9 @@ loops:
   - id: moomoo-skills
     path: .cursor/skills/moomooapi
     feeds: [bob, julie, reed]
+  - id: tradingview-desk
+    module: aoa.tradingview.desk
+    cli: aoa tradingview desk run
+    webhook: /api/tradingview/webhook
+    feeds: [julie, andrea, kai, nova]
+    human_gate: required

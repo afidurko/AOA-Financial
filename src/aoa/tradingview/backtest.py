@@ -485,11 +485,14 @@ def sweep(
     objective: str = "sqn",
     min_trades: int = 5,
     start_index: int = 0,
+    fundamentals_ok: bool = True,
 ) -> list[dict[str, Any]]:
     """Grid-search ``preset.tunable`` (or ``grid``) and rank by ``objective``."""
     rows = []
     for params in param_grid(preset, grid):
-        res = run_backtest(bars, preset, symbol=symbol, cfg=cfg, params=params, start_index=start_index)
+        res = run_backtest(
+            bars, preset, symbol=symbol, cfg=cfg, params=params, start_index=start_index, fundamentals_ok=fundamentals_ok
+        )
         rows.append(
             {
                 "params": params,
@@ -536,6 +539,7 @@ def walk_forward(
     objective: str = "sqn",
     min_trades: int = 5,
     anchored: bool = False,
+    fundamentals_ok: bool = True,
 ) -> WalkForwardResult:
     """Anchored or rolling walk-forward optimisation with strict out-of-sample tests.
 
@@ -558,7 +562,10 @@ def walk_forward(
         is_end = k * seg
         oos_end = n if k == folds else (k + 1) * seg
         is_bars = bars[is_start:is_end]
-        ranked = sweep(is_bars, preset, symbol=symbol, grid=grid, cfg=cfg, objective=objective, min_trades=min_trades)
+        ranked = sweep(
+            is_bars, preset, symbol=symbol, grid=grid, cfg=cfg, objective=objective, min_trades=min_trades,
+            fundamentals_ok=fundamentals_ok,
+        )
         best = ranked[0] if ranked else {"params": {}, "metrics": {}, "score": -math.inf}
         # Warm the OOS run on in-sample history so indicators are live at the boundary.
         warm = build_strategy(preset.with_params(**best["params"])).warmup * 3
@@ -570,6 +577,7 @@ def walk_forward(
             cfg=cfg,
             params=best["params"],
             start_index=is_end - window_start,
+            fundamentals_ok=fundamentals_ok,
         )
         oos_curve = oos_res.equity_curve[is_end - window_start :]
         base = oos_curve[0] if oos_curve else cfg.initial_capital

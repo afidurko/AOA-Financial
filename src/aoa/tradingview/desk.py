@@ -180,7 +180,7 @@ def _evaluate(
     wf: dict[str, Any] | None = None
     if folds > 0 and len(bars) >= 20 * (folds + 1) and preset.tunable:
         try:
-            wf = walk_forward(bars, preset, symbol=symbol, folds=folds, cfg=cfg).to_dict()
+            wf = walk_forward(bars, preset, symbol=symbol, folds=folds, cfg=cfg, fundamentals_ok=fundamentals_ok).to_dict()
         except ValueError:
             wf = None
     mc = monte_carlo_trades(res.trades, seed=7, position_fraction=preset.risk.qty_pct_equity / 100.0) if monte_carlo else None

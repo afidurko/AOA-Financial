@@ -31,12 +31,14 @@ from collections.abc import Iterable
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from aoa.brokerage.models import Bar
-from aoa.tradingview.presets import Timeframe, get_timeframe
+from aoa.tradingview.presets import TIMEFRAMES, Timeframe, get_timeframe
 
 USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AOA-Financial/tradingview-desk"
 DEFAULT_CACHE_DIR = Path("data") / "tradingview" / "cache"
+NEW_YORK = ZoneInfo("America/New_York")
 SOURCES = ("auto", "yahoo", "kraken", "coinbase", "synthetic")
 
 
@@ -163,12 +165,26 @@ def fetch_kraken(pair: str, tf: Timeframe, *, since: int | None = None) -> list[
 _COINBASE_GRANULARITIES = (86400, 21600, 3600, 900, 300, 60)
 
 
-def resample_bars(bars: list[Bar], seconds: int) -> list[Bar]:
-    """Aggregate finer bars into ``seconds``-wide bars aligned to the epoch (UTC)."""
+def resample_bars(bars: list[Bar], seconds: int, *, market: str = "crypto") -> list[Bar]:
+    """Aggregate finer bars into ``seconds``-wide bars.
+
+    Crypto (24×7) buckets are aligned to the UTC epoch. Intraday equity buckets
+    are anchored to the 09:30 New York session open, like TradingView's own
+    intraday equity bars (a 4h chart shows 09:30 and 13:30 bars).
+    """
+    session_anchor = market == "equity" and seconds < 86400
     buckets: dict[int, list[Bar]] = {}
     for b in bars:
         ts = b.timestamp if b.timestamp.tzinfo else b.timestamp.replace(tzinfo=timezone.utc)
-        key = int(ts.timestamp()) // seconds * seconds
+        if session_anchor:
+            local = ts.astimezone(NEW_YORK)
+            open_local = local.replace(hour=9, minute=30, second=0, microsecond=0)
+            offset = int((local - open_local).total_seconds())
+            if offset < 0:  # pre-market rows fold into the first session bucket
+                offset = 0
+            key = int((open_local + timedelta(seconds=offset // seconds * seconds)).timestamp())
+        else:
+            key = int(ts.timestamp()) // seconds * seconds
         buckets.setdefault(key, []).append(b)
     out: list[Bar] = []
     for key in sorted(buckets):
@@ -212,6 +228,42 @@ def fetch_coinbase(product: str, tf: Timeframe, *, limit: int = 3000) -> list[Ba
         end = chunk[0].timestamp - timedelta(seconds=gran)
         time.sleep(0.25)
     return dedupe_bars(out)
+
+
+def _provider_has(src: str, tf: Timeframe) -> bool:
+    return bool({"yahoo": tf.yahoo, "kraken": tf.kraken, "coinbase": tf.coinbase}.get(src))
+
+
+def _finer_native(src: str, tf: Timeframe) -> Timeframe | None:
+    """Largest provider-native timeframe that evenly divides ``tf`` (for resampling)."""
+    candidates = [
+        t for t in TIMEFRAMES.values()
+        if t.seconds < tf.seconds and tf.seconds % t.seconds == 0 and _provider_has(src, t)
+    ]
+    return max(candidates, key=lambda t: t.seconds) if candidates else None
+
+
+def fetch_provider(
+    src: str, symbol: str, tf: Timeframe, *, limit: int | None = None, market: str = "crypto"
+) -> list[Bar]:
+    """Fetch from one named provider, resampling from a finer native interval if needed."""
+    if src not in ("yahoo", "kraken", "coinbase"):
+        raise DataError(f"unknown provider {src!r}")
+    target = tf
+    if not _provider_has(src, tf) and src != "coinbase":  # coinbase resamples internally
+        finer = _finer_native(src, tf)
+        if finer is None:
+            raise DataError(f"{src} has no {tf.label} interval and nothing finer to resample")
+        target = finer
+    if src == "yahoo":
+        bars = fetch_yahoo(symbol, target)
+    elif src == "kraken":
+        bars = fetch_kraken(to_kraken_pair(symbol), target)
+    else:
+        bars = fetch_coinbase(to_coinbase_product(symbol), tf, limit=limit or 3000)
+    if target is not tf:
+        bars = resample_bars(bars, tf.seconds, market=market)
+    return bars
 
 
 def synthetic_bars(
@@ -359,7 +411,12 @@ def fetch_bars(
 
     order: list[str]
     if source == "auto":
-        order = ["kraken", "coinbase", "yahoo"] if market == "crypto" else ["yahoo"]
+        if market == "crypto":
+            # Deepest history first: Yahoo has 10y+ of daily crypto, Coinbase pages back
+            # ~3000 candles, Kraken returns only the latest 720.
+            order = ["yahoo", "coinbase", "kraken"] if tf.seconds >= 86400 else ["coinbase", "kraken", "yahoo"]
+        else:
+            order = ["yahoo"]
     else:
         order = [source]
 
@@ -370,12 +427,7 @@ def fetch_bars(
         fresh: list[Bar] = []
         if refresh or not cached:
             try:
-                if src == "yahoo":
-                    fresh = fetch_yahoo(symbol, tf)
-                elif src == "kraken":
-                    fresh = fetch_kraken(to_kraken_pair(symbol), tf)
-                elif src == "coinbase":
-                    fresh = fetch_coinbase(to_coinbase_product(symbol), tf, limit=limit or 3000)
+                fresh = fetch_provider(src, symbol, tf, limit=limit, market=market)
             except DataError as exc:
                 errors.append(f"{src}: {exc}")
                 fresh = []
