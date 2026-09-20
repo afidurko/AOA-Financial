@@ -6,7 +6,7 @@ direction: bullish
 conviction: 0.72
 rationale: technical and fundamental aligned
 corroboration: strong
-last_cycle: 2026-09-20 04:12 UTC
+last_cycle: 2026-09-20 17:14 UTC
 ---
 # AAPL
 
