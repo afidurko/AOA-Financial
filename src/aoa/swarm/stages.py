@@ -685,9 +685,9 @@ def _materialize_proposals(
     trust_map = symbol_trust or {}
     limits = risk or RiskLimits()
     cost_pct = float(limits.transaction_cost_pct) + float(limits.slippage_pct)
-    pos_by_symbol = {p.symbol: p for p in bb.positions}
-    held_or_pending = {p.symbol for p in bb.positions if p.qty != 0}
-    held_or_pending |= {o.symbol for o in bb.open_orders}
+    pos_by_symbol = {p.symbol.upper(): p for p in bb.positions}
+    held_or_pending = {p.symbol.upper() for p in bb.positions if p.qty != 0}
+    held_or_pending |= {o.symbol.upper() for o in bb.open_orders}
 
     for item in raw:
         symbol = item.get("symbol", "").upper()

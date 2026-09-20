@@ -287,3 +287,65 @@ def test_materialize_sell_min_trim_when_profit_and_weak_roi():
     )
     assert len(props) == 1
     assert props[0].qty == 10
+
+
+def test_materialize_normalizes_symbol_case_for_reentry_and_sells():
+    from aoa.brokerage.models import Order
+
+    closes = [100.0 + i * 0.5 for i in range(40)]
+    bb = Blackboard()
+    bb.snapshots["AAPL"] = _snap("AAPL", closes, price=90.0)
+    bb.positions = [_pos("aapl", 40, avg=100.0, mark=90.0)]
+    assert (
+        _materialize_proposals(
+            [
+                {
+                    "symbol": "AAPL",
+                    "instrument": "equity",
+                    "side": "buy",
+                    "target_notional": 5000,
+                    "conviction": 0.8,
+                    "rationale": "add",
+                }
+            ],
+            bb,
+            risk=RiskLimits(),
+        )
+        == []
+    )
+    sells = _materialize_proposals(
+        [
+            {
+                "symbol": "AAPL",
+                "instrument": "equity",
+                "side": "sell",
+                "target_notional": 450,
+                "conviction": 0.5,
+                "rationale": "exit",
+            }
+        ],
+        bb,
+        risk=RiskLimits(cost_basis_loss_buffer=0.03),
+    )
+    assert len(sells) == 1 and sells[0].qty == 40
+
+    bb2 = Blackboard()
+    bb2.snapshots["AAPL"] = _snap("AAPL", closes, price=100.0)
+    bb2.open_orders = [Order(id="o1", symbol="aapl", qty=5, side=Side.BUY, status="new")]
+    assert (
+        _materialize_proposals(
+            [
+                {
+                    "symbol": "AAPL",
+                    "instrument": "equity",
+                    "side": "buy",
+                    "target_notional": 5000,
+                    "conviction": 0.8,
+                    "rationale": "pending",
+                }
+            ],
+            bb2,
+            risk=RiskLimits(),
+        )
+        == []
+    )
