@@ -34,6 +34,32 @@ trading paper/dry-run; they compound agent + human throughput.
 8. **Trillion-class overnight job** — `aoa openquant stress --scale trillion`
    (~3×10⁹ checks; ~hours). Full 10¹² only with `--iterations 1000000000000`.
 
+## Mesh & security add-ons (2026-09-20 loop run)
+
+Landed this run:
+
+| Add-on | How |
+|--------|-----|
+| Neural endpoint mesh | `aoa mesh status\|sync\|recall` — unified graph + persistent run memory (`docs/design/neural-endpoint-mesh.md`) |
+| ATTL memory feed | every `aoa attl run` reinforces mesh weights under `data/{env}/mesh/memory.json` |
+| Loopback-by-default dashboard | `AOA_WEB_HOST` now defaults to `127.0.0.1`; keep `0.0.0.0` in `.env` for tailnet |
+| Safe LoRA checkpoints | `torch.load(..., weights_only=True)` in `aoa.adapt.torch_lora` |
+| LLM URL scheme gate | `AOA_LLM_BASE_URL` must be `http(s)://` |
+
+Recommended next:
+
+1. **Mesh health on the dashboard** — surface `aoa mesh status --json`
+   (health, weakest nodes) as a web panel; alert via ntfy when health < 0.4.
+2. **Feed ship/repair outcomes into mesh memory** — today only ATTL records;
+   `ship proofread` and `repair gate` outcomes would sharpen node weights.
+3. **Live endpoint probes** — optional `aoa mesh probe` reachability checks
+   (OpenD, LLM, dashboard) recorded as mesh runs; keeps memory honest.
+4. **Security scan automation** — weekly `bandit -r src -ll` + `pip-audit` in
+   CI or a Cursor Automation; this run caught 4 fixable findings that way.
+5. **Environment CVE hygiene** — upgrade `pyjwt`, `urllib3`, `setuptools`,
+   `pip`, `wheel` in the cloud image (pip-audit flags known CVEs; none are
+   project-pinned deps).
+
 ## Human gates (unchanged)
 
 - Rotate exposed API keys; set real `ANTHROPIC_API_KEY` for LLM swarm.
