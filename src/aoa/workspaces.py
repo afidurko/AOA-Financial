@@ -1,8 +1,8 @@
 """Companion workspace mesh — sibling tools linked to AOA Financial.
 
-Surfaces optional workspaces (OpenStock, QM, VisualHFT, hftbacktest) for
-``aoa workspaces status`` and dashboard / doctor links. Never starts those
-processes and never places orders.
+Surfaces optional workspaces (OpenStock, QM, VisualHFT, hftbacktest,
+antd-mobile) for ``aoa workspaces status`` and dashboard / doctor links.
+Never starts those processes and never places orders.
 """
 
 from __future__ import annotations
@@ -18,6 +18,8 @@ from aoa.visualhft.probe import HOMEPAGE as VISUALHFT_HOME
 from aoa.visualhft.probe import probe_status as visualhft_probe
 
 HFTBACKTEST_URL = "https://github.com/afidurko/hftbacktest"
+ANTD_MOBILE_FORK = "https://github.com/afidurko/ant-design-mobile"
+ANTD_MOBILE_HOME = "https://mobile.ant.design"
 
 
 @dataclass(frozen=True)
@@ -92,6 +94,7 @@ def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
     qm_path, qm_ok = _sibling("qm", "QM_DIR")
     vh_path, vh_ok = _sibling("VisualHFT", "VISUALHFT_DIR")
     hft_path, hft_ok = _sibling("hftbacktest", "HFTBACKTEST_DIR")
+    adm_path, adm_ok = _sibling("ant-design-mobile", "ANTD_MOBILE_DIR")
 
     return [
         WorkspaceInfo(
@@ -157,6 +160,25 @@ def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
             offline_only=True,
             never_live=True,
             detail=hft,
+        ),
+        WorkspaceInfo(
+            id="antd-mobile",
+            title="ant-design-mobile",
+            role="Mobile UI kit + built-in /m phone shell",
+            linked=bool(cfg.antd_mobile_url),
+            url=cfg.antd_mobile_url,
+            local_path=adm_path,
+            present=adm_ok,
+            docs="docs/how-to/antd-mobile-integration.md",
+            setup="scripts/antd-mobile-setup.sh",
+            offline_only=False,
+            never_live=True,
+            detail={
+                "homepage": ANTD_MOBILE_HOME,
+                "fork": ANTD_MOBILE_FORK,
+                "mobile_path": "/m",
+                "hint": "aoa serve → open /m on phone (Tailscale or LAN)",
+            },
         ),
     ]
 
