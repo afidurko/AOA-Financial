@@ -86,6 +86,16 @@ when the static build is present.
 - Do **not** put API keys in the sibling fork or dashboard HTML.
 - Hard safety floor still applies (`docs/safety.md`).
 
+## Suggested add-ons (not in this PR)
+
+| Add-on | Why |
+|--------|-----|
+| PWA manifest + “Add to Home Screen” | One-tap launch on iPhone over Tailscale |
+| Subscribe to `/api/events/stream` | Replace 20s polling with live loop/status updates |
+| Deep-link approvals from iPhone push | Open `/m` Inbox on alert tap |
+| Offline last-status cache | Show stale equity when Mac/OpenD is briefly unreachable |
+| Optional PIN / Face ID gate | Soften “no login” risk on a shared tailnet |
+
 ## Upstream
 
 - Docs: [https://mobile.ant.design](https://mobile.ant.design)

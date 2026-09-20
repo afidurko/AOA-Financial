@@ -341,20 +341,29 @@ function App() {
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async ({ withBrief = false } = {}) => {
     try {
-      const [st, cfg, lc, ap, ab] = await Promise.all([
+      const reqs = [
         api('/api/status'),
         api('/api/config').catch(() => ({})),
         api('/api/last-cycle').catch(() => ({})),
         api('/api/approvals').catch(() => ({ items: [] })),
-        api('/api/assistant/brief').catch(() => null),
-      ])
+      ]
+      // Assistant brief can invoke the LLM — only on demand, never on the poll timer.
+      if (withBrief) {
+        reqs.push(api('/api/assistant/brief').catch(() => null))
+      }
+      const results = await Promise.all(reqs)
+      const [st, cfg, lc, ap] = results
       setStatus(st)
       setConfig(cfg)
       setLast(lc)
       setApprovals(ap.items || [])
-      setBrief(ab)
+      if (withBrief) {
+        setBrief(results[4] ?? null)
+      } else if (lc?.result?.assistant) {
+        setBrief(lc.result.assistant)
+      }
       setError(null)
     } catch (e) {
       setError(e.message || String(e))
@@ -364,8 +373,8 @@ function App() {
   }, [])
 
   useEffect(() => {
-    refresh()
-    const t = setInterval(refresh, 20000)
+    refresh({ withBrief: true })
+    const t = setInterval(() => refresh({ withBrief: false }), 20000)
     return () => clearInterval(t)
   }, [refresh])
 
@@ -375,14 +384,18 @@ function App() {
       if (kind === 'run') {
         await api('/api/run', { method: 'POST' })
         Toast.show({ icon: 'success', content: 'Cycle finished' })
+        await refresh({ withBrief: true })
       } else if (kind === 'start') {
         await api('/api/loop/start', { method: 'POST' })
         Toast.show({ content: 'Loop started' })
+        await refresh({ withBrief: false })
       } else if (kind === 'stop') {
         await api('/api/loop/stop', { method: 'POST' })
         Toast.show({ content: 'Loop stopped' })
+        await refresh({ withBrief: false })
+      } else {
+        await refresh({ withBrief: false })
       }
-      await refresh()
     } catch (e) {
       Toast.show({ icon: 'fail', content: e.message || String(e) })
     } finally {
@@ -407,7 +420,7 @@ function App() {
         icon: 'success',
         content: statusValue === 'approved' ? 'Approved' : 'Rejected',
       })
-      await refresh()
+      await refresh({ withBrief: false })
     } catch (e) {
       Toast.show({ icon: 'fail', content: e.message || String(e) })
     } finally {
@@ -440,7 +453,7 @@ function App() {
         <span className="nav-title">AOA</span>
         <ModeBadge mode={status?.mode} />
       </NavBar>
-      <PullToRefresh onRefresh={refresh}>
+      <PullToRefresh onRefresh={() => refresh({ withBrief: false })}>
         <div className="app-body">
           {loading ? (
             <div className="loading-wrap">
