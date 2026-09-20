@@ -48,8 +48,17 @@ Bob and Julie share `run_code_quality_audit()`:
 python3 -m aoa.cli team health
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
+python3 -m aoa.cli integrity roster
+python3 -m aoa.cli integrity run --dry-run
 python3 -m aoa.cli run
 ```
+
+## Integrity Ten
+
+Ten-member cohesive unit (excludes Tom & Morgan) continuously checks code,
+workspaces, neural memory (`brain/` + plasticity), and mesh cohesion.
+On issues: propose corrective action → notify user → implant only after
+`aoa integrity approve`. See `docs/design/integrity-ten.md`.
 
 ## Verification
 
