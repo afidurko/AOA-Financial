@@ -1869,13 +1869,29 @@ def cmd_openquant_billion(
     as_json: bool,
 ) -> int:
     """One-billion-scale property stress for open_quant_patterns (offline)."""
-    from aoa.research.open_quant_patterns import billion_stress
+    return cmd_openquant_stress(
+        scale="billion",
+        iterations=iterations,
+        seed=seed,
+        as_json=as_json,
+    )
 
-    result = billion_stress(iterations=iterations, seed=seed)
+
+def cmd_openquant_stress(
+    *,
+    scale: str,
+    iterations: int | None,
+    seed: int,
+    as_json: bool,
+) -> int:
+    """Named-scale property stress (smoke / million / billion / trillion)."""
+    from aoa.research.open_quant_patterns import scale_stress
+
+    result = scale_stress(scale, seed=seed, iterations=iterations)
     if as_json:
         print(json.dumps(result, indent=2))
     else:
-        print("=== open-quant one-billion stress ===")
+        print(f"=== open-quant stress ({result.get('scale')}) ===")
         print(f"  ok:              {result.get('ok')}")
         print(f"  iterations:      {result.get('iterations')}")
         print(f"  inverse_vol:     {result.get('inverse_vol_checks')}")
@@ -2839,6 +2855,24 @@ def main(argv: list[str] | None = None) -> int:
     )
     oq_billion.add_argument("--seed", type=int, default=7, help="LCG seed.")
     oq_billion.add_argument("--json", action="store_true", help="Emit JSON.")
+    oq_stress = oq_sub.add_parser(
+        "stress",
+        help="Named-scale property stress: smoke|million|billion|trillion.",
+    )
+    oq_stress.add_argument(
+        "--scale",
+        choices=["smoke", "million", "billion", "trillion"],
+        default="smoke",
+        help="Preset iteration count (trillion = 3×billion sample).",
+    )
+    oq_stress.add_argument(
+        "--iterations",
+        type=int,
+        default=None,
+        help="Override preset iteration count (e.g. full 1e12).",
+    )
+    oq_stress.add_argument("--seed", type=int, default=7, help="LCG seed.")
+    oq_stress.add_argument("--json", action="store_true", help="Emit JSON.")
 
     tk = sub.add_parser(
         "tasks",
@@ -2990,6 +3024,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.openquant_command == "billion":
             return cmd_openquant_billion(
                 iterations=getattr(args, "iterations", 1_000_000_000),
+                seed=getattr(args, "seed", 7),
+                as_json=getattr(args, "json", False),
+            )
+        if args.openquant_command == "stress":
+            return cmd_openquant_stress(
+                scale=getattr(args, "scale", "smoke"),
+                iterations=getattr(args, "iterations", None),
                 seed=getattr(args, "seed", 7),
                 as_json=getattr(args, "json", False),
             )
