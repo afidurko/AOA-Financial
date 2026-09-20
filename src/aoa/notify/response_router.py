@@ -70,14 +70,6 @@ def route_response(
     if notification is None:
         raise ResponseError(f"No notification with id {notification_id}.")
 
-    recorded = store.record_response(
-        notification_id, action=action, note=note, actor=actor
-    )
-    if not recorded:
-        raise ResponseError(
-            f"Notification {notification_id} was already responded to."
-        )
-
     payload = notification.get("payload") or {}
     approval_id = payload.get("approval_id")
     proposal_id = payload.get("proposal_id")
@@ -90,6 +82,7 @@ def route_response(
             proposal_ids.append(pid)
 
     # Integrity Ten — implant / dismiss via Needs Attention or alert reply.
+    # Apply before recording so a failed implant does not consume the alert.
     if action in ("approve", "reject") and proposal_ids:
         try:
             details: list[str] = []
@@ -109,6 +102,13 @@ def route_response(
                     errors.append(f"{pid}: {exc}")
             if not details and errors:
                 raise ResponseError("; ".join(errors))
+            recorded = store.record_response(
+                notification_id, action=action, note=note, actor=actor
+            )
+            if not recorded:
+                raise ResponseError(
+                    f"Notification {notification_id} was already responded to."
+                )
             if approval_id:
                 store.resolve_approval(
                     str(approval_id),
@@ -126,6 +126,14 @@ def route_response(
             raise
         except Exception as exc:  # noqa: BLE001
             raise ResponseError(f"Integrity action failed: {exc}") from exc
+
+    recorded = store.record_response(
+        notification_id, action=action, note=note, actor=actor
+    )
+    if not recorded:
+        raise ResponseError(
+            f"Notification {notification_id} was already responded to."
+        )
 
     if action in ("approve", "reject") and approval_id:
         status = "approved" if action == "approve" else "rejected"

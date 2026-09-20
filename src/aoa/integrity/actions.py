@@ -74,10 +74,12 @@ def load_queue(path: Path) -> list[CorrectiveProposal]:
         return []
     try:
         text = path.read_text(encoding="utf-8")
-    except OSError:
-        return []
+    except OSError as exc:
+        # Fail closed — unreadable existing file must not look like an empty queue
+        # (a later save would wipe real proposals).
+        raise QueueCorruptError(f"Unreadable integrity queue at {path}: {exc}") from exc
     if not text.strip():
-        return []
+        raise QueueCorruptError(f"Empty integrity queue at {path}")
     try:
         data = json.loads(text)
     except json.JSONDecodeError as exc:

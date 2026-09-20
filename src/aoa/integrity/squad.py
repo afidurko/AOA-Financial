@@ -225,12 +225,14 @@ class IntegritySquad:
         prop = get_proposal(self.queue_path, proposal_id)
         if prop is None:
             raise KeyError(f"No proposal with id {proposal_id}")
-        if prop.status != "pending":
+        # pending → implant; approved → finish legacy stuck state → applied.
+        if prop.status not in {"pending", "approved"}:
             raise ValueError(
-                f"Proposal {proposal_id} is {prop.status}; only pending can be implanted."
+                f"Proposal {proposal_id} is {prop.status}; "
+                "only pending (or legacy approved) can be implanted."
             )
         prop.note = note
-        # Apply first while still pending — avoid stuck "approved" on failure.
+        # Apply first while still pending/approved — avoid stuck "approved" on failure.
         applied = apply_safe_fixes(
             prop,
             repo_root=self.repo_root,
@@ -267,11 +269,24 @@ class IntegritySquad:
         except Exception:  # noqa: BLE001
             pass
         try:
+            from aoa.integrity.actions import load_queue
+
+            queue_by_id = {p.id: p for p in load_queue(self.queue_path)}
             for note in store.list_pending_responses(limit=100):
                 payload = note.get("payload") or {}
                 pids = [str(x) for x in (payload.get("proposal_ids") or [])]
                 single = str(payload.get("proposal_id") or "")
                 if proposal_id != single and proposal_id not in pids:
+                    continue
+                # Digest alerts list many ids — only clear when none remain pending.
+                tracked = pids or ([single] if single else [])
+                still_pending = [
+                    pid
+                    for pid in tracked
+                    if queue_by_id.get(pid) is not None
+                    and queue_by_id[pid].status == "pending"
+                ]
+                if still_pending:
                     continue
                 nid = note.get("id")
                 if nid is None:

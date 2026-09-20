@@ -57,6 +57,10 @@ def test_dashboard_html(client):
     assert r.status_code == 200
     assert "AOA Financial" in r.text
     assert "Needs Attention" in r.text
+    # Approvals tab must escape user-controlled fields (Integrity summaries).
+    assert "esc(a.title)" in r.text
+    assert "esc(a.summary" in r.text
+    assert "&#39;" in r.text
 
 
 def test_api_needs_attention(client):

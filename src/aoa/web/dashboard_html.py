@@ -160,7 +160,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div id="toast"></div>
   <script>
     const fmt = n => n==null?'—':'$'+Number(n).toLocaleString(undefined,{maximumFractionDigits:0});
-    const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const esc = s => String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     const toast = m => { const el=document.getElementById('toast'); el.textContent=m; el.style.display='block'; setTimeout(()=>el.style.display='none',4000); };
     document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
       document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
@@ -339,9 +339,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     function renderApprovals(items){
       document.getElementById('approvals-list').innerHTML=items.length?items.map(a=>`
         <div style="border:1px solid var(--border);border-radius:8px;padding:.75rem;margin-bottom:.5rem">
-          <strong>${a.title}</strong> <span style="color:var(--muted)">(${a.status})</span>
-          <p style="font-size:.85rem;margin:.35rem 0">${a.summary||''}</p>
-          ${a.status==='pending'?`<button class="ok" onclick="resolveApproval('${a.id}','approved')">Approve</button> <button class="danger" onclick="resolveApproval('${a.id}','rejected')">Reject</button>`:''}
+          <strong>${esc(a.title)}</strong> <span style="color:var(--muted)">(${esc(a.status)})</span>
+          <p style="font-size:.85rem;margin:.35rem 0">${esc(a.summary||'')}</p>
+          ${a.status==='pending'?`<button class="ok" onclick="resolveApproval('${esc(a.id)}','approved')">Approve</button> <button class="danger" onclick="resolveApproval('${esc(a.id)}','rejected')">Reject</button>`:''}
         </div>`).join(''):'<p class="stat-sm">No pending approvals</p>';
     }
     function renderAttention(feed){

@@ -273,6 +273,86 @@ def test_corrupt_queue_fails_closed(tmp_path: Path):
     assert queue.read_text(encoding="utf-8") == "{not-json"
 
 
+def test_empty_queue_file_fails_closed(tmp_path: Path):
+    from aoa.integrity.actions import QueueCorruptError, load_queue
+
+    queue = tmp_path / "corrective_queue.json"
+    queue.write_text("   \n", encoding="utf-8")
+    with pytest.raises(QueueCorruptError, match="Empty"):
+        load_queue(queue)
+
+
+def test_digest_sync_keeps_alert_until_all_resolved(tmp_path: Path):
+    from aoa.analytics.store import AnalyticsStore
+    from aoa.integrity.actions import CorrectiveProposal, save_queue
+
+    _seed_minimal_repo(tmp_path)
+    queue = tmp_path / "data" / "integrity" / "corrective_queue.json"
+    queue.parent.mkdir(parents=True, exist_ok=True)
+    a = CorrectiveProposal(
+        id="int-a", title="A", summary="a", status="pending", created_at="t"
+    )
+    b = CorrectiveProposal(
+        id="int-b", title="B", summary="b", status="pending", created_at="t"
+    )
+    save_queue(queue, [a, b])
+
+    store = AnalyticsStore(tmp_path / "analytics.sqlite")
+    nid = store.log_notification(
+        kind="approval",
+        title="digest",
+        message="approve?",
+        payload={"proposal_ids": ["int-a", "int-b"]},
+    )
+    store.mark_awaiting_response(nid)
+
+    squad = IntegritySquad(repo_root=tmp_path, data_dir=queue.parent)
+    squad.queue_path = queue
+    squad.analytics_store = store
+    squad.approve("int-a", note="one")
+    pending = store.list_pending_responses()
+    assert [p["id"] for p in pending] == [nid]
+    squad.approve("int-b", note="two")
+    assert store.list_pending_responses() == []
+    store.close()
+
+
+def test_legacy_approved_can_finish_implant(tmp_path: Path):
+    from aoa.integrity.actions import CorrectiveProposal, get_proposal, save_queue
+
+    _seed_minimal_repo(tmp_path)
+    queue = tmp_path / "data" / "integrity" / "corrective_queue.json"
+    queue.parent.mkdir(parents=True, exist_ok=True)
+    prop = CorrectiveProposal(
+        id="int-stuck",
+        title="stuck",
+        summary="legacy approved",
+        findings=[{"domain": "code", "status": "degraded"}],
+        status="approved",
+        created_at="t",
+    )
+    save_queue(queue, [prop])
+    squad = IntegritySquad(repo_root=tmp_path, data_dir=queue.parent)
+    squad.queue_path = queue
+    out = squad.approve("int-stuck", note="finish")
+    assert out["proposal"]["status"] == "applied"
+    assert get_proposal(queue, "int-stuck").status == "applied"
+
+
+def test_corrupt_plasticity_is_degraded(tmp_path: Path):
+    from aoa.integrity.checks import check_neural_memory
+
+    _seed_minimal_repo(tmp_path)
+    plastic = tmp_path / "data" / "paper-dry" / "journal" / "plasticity.json"
+    plastic.parent.mkdir(parents=True, exist_ok=True)
+    plastic.write_text("{not-json", encoding="utf-8")
+    report = check_neural_memory(tmp_path)
+    assert any(
+        f.status is IntegritySeverity.DEGRADED and "Corrupt plasticity" in f.detail
+        for f in report.findings
+    )
+
+
 def test_approve_refreshes_cursor_attention(tmp_path: Path):
     from aoa.integrity.actions import propose_from_reports
     from aoa.integrity.attention import cursor_mcp_payload

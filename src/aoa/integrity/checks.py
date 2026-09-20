@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
@@ -308,31 +309,63 @@ def check_neural_memory(repo_root: Path) -> DomainReport:
             )
         )
     # Plasticity lives under data/{env}/journal/plasticity.json (not plasticity/).
+    # Prefer repo_root-scoped paths so worktrees do not inherit host env files.
     from aoa.config import plasticity_path_for
 
-    plastic_candidates = [
-        plasticity_path_for("paper-dry"),
-        plasticity_path_for("paper"),
+    plastic_candidates: list[Path] = []
+    for candidate in (
         repo_root / "data" / "paper-dry" / "journal" / "plasticity.json",
         repo_root / "data" / "paper" / "journal" / "plasticity.json",
-    ]
+        plasticity_path_for("paper-dry"),
+        plasticity_path_for("paper"),
+    ):
+        if candidate not in plastic_candidates:
+            plastic_candidates.append(candidate)
     plastic_ok = False
     for path in plastic_candidates:
-        if path.is_file():
-            mem = load_memory(path)
-            plastic_ok = True
-            if mem.cycles_consolidated < 0:
-                findings.append(
-                    IntegrityFinding(
-                        domain="neural_memory",
-                        agent="Nova",
-                        status=IntegritySeverity.DEGRADED,
-                        detail=f"Invalid plasticity cycles at {path}.",
-                        automatable=True,
-                        fix_hint="Reset plasticity journal file",
-                    )
+        if not path.is_file():
+            continue
+        plastic_ok = True
+        try:
+            text = path.read_text(encoding="utf-8")
+            data = json.loads(text) if text.strip() else None
+        except (json.JSONDecodeError, OSError, UnicodeDecodeError):
+            findings.append(
+                IntegrityFinding(
+                    domain="neural_memory",
+                    agent="Nova",
+                    status=IntegritySeverity.DEGRADED,
+                    detail=f"Corrupt plasticity memory at {path}.",
+                    automatable=True,
+                    fix_hint="Reset plasticity journal file",
                 )
+            )
             break
+        if not isinstance(data, dict):
+            findings.append(
+                IntegrityFinding(
+                    domain="neural_memory",
+                    agent="Nova",
+                    status=IntegritySeverity.DEGRADED,
+                    detail=f"Invalid plasticity shape at {path}.",
+                    automatable=True,
+                    fix_hint="Reset plasticity journal file",
+                )
+            )
+            break
+        mem = load_memory(path)
+        if mem.cycles_consolidated < 0:
+            findings.append(
+                IntegrityFinding(
+                    domain="neural_memory",
+                    agent="Nova",
+                    status=IntegritySeverity.DEGRADED,
+                    detail=f"Invalid plasticity cycles at {path}.",
+                    automatable=True,
+                    fix_hint="Reset plasticity journal file",
+                )
+            )
+        break
     if not plastic_ok:
         findings.append(
             IntegrityFinding(

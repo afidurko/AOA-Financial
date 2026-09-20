@@ -175,3 +175,25 @@ def test_route_response_double_reply_rejected(tmp_path):
     with pytest.raises(ResponseError):
         route_response(store, notification_id=nid, action="ack")
     store.close()
+
+
+def test_route_response_keeps_alert_when_integrity_fails(tmp_path):
+    store = _store(tmp_path)
+    nid = store.log_notification(
+        kind="approval",
+        title="missing",
+        message="approve?",
+        payload={"proposal_id": "int-missing", "proposal_ids": ["int-missing"]},
+    )
+    store.mark_awaiting_response(nid)
+    with pytest.raises(ResponseError):
+        route_response(
+            store,
+            notification_id=nid,
+            action="approve",
+            repo_root=tmp_path,
+            integrity_queue_path=tmp_path / "no-queue.json",
+        )
+    # Alert must remain awaiting so the user can retry after fixing the queue.
+    assert [p["id"] for p in store.list_pending_responses()] == [nid]
+    store.close()
