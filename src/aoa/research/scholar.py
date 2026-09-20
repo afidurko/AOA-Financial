@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-import httpx
+from aoa.httpcompat import httpx
 
 _SCHOLAR_API = "https://api.semanticscholar.org/graph/v1/paper/search"
 

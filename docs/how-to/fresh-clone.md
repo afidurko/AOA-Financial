@@ -236,3 +236,32 @@ aoa microstructure status
 ```
 
 See [avellaneda-stoikov.md](avellaneda-stoikov.md) · [microstructure-lanes.md](microstructure-lanes.md).
+
+## 17. open-quant-live-book (optional)
+
+Clone the open quant finance book sibling for risk-parity / entropy / transfer-entropy
+reading ([open-quant-live-book](https://github.com/afidurko/open-quant-live-book)).
+AOA does not build the bookdown PDF:
+
+```bash
+./scripts/open-quant-live-book-setup.sh
+aoa openquant status
+aoa openquant smoke
+```
+
+See [open-quant-live-book-reference.md](open-quant-live-book-reference.md). Python idea ports:
+`aoa.research.open_quant_patterns`.
+
+## 18. deepstock (optional)
+
+Clone the legacy deep-learning experiment sibling for archival Text CNN / ConvNet
+context ([deepstock](https://github.com/afidurko/deepstock)). AOA does not run
+TF1 training from loops:
+
+```bash
+./scripts/deepstock-setup.sh
+./scripts/write-aoa-workspace.sh
+```
+
+See [deepstock-reference.md](deepstock-reference.md). Current AOA sentiment:
+`aoa_financial/analysis/sentiment.py`.

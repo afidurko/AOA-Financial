@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from aoa.ship.loop import (
+    CONFLICT_MARKER_PATHS,
     IssueStatus,
     ShipIssue,
     ShipLoopAgent,
@@ -12,6 +13,12 @@ from aoa.ship.loop import (
     load_state,
     save_state,
 )
+
+
+def test_conflict_marker_scan_includes_pyproject():
+    assert "pyproject.toml" in CONFLICT_MARKER_PATHS
+    assert "src" in CONFLICT_MARKER_PATHS
+    assert "tests" in CONFLICT_MARKER_PATHS
 
 
 def test_ship_state_roundtrip(tmp_path: Path):

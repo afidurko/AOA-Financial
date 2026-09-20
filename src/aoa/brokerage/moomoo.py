@@ -254,7 +254,7 @@ class MoomooBroker(Broker):
         self._market = market.upper()
         self._host = host
         self._port = int(port)
-        probe_opend(self._host, self._port, timeout=connect_timeout)
+        self._connect_timeout = float(connect_timeout)
         self._acc_id = int(acc_id)
         self._acc_index = int(acc_index)
         self._unlock_password = unlock_password.strip()
@@ -263,13 +263,10 @@ class MoomooBroker(Broker):
             sdk.SecurityFirm, security_firm.upper(), sdk.SecurityFirm.FUTUINC
         )
         self._trd_market = getattr(sdk.TrdMarket, self._market, sdk.TrdMarket.US)
-        self._quote_ctx = sdk.OpenQuoteContext(host=self._host, port=self._port)
-        self._trade_ctx = sdk.OpenSecTradeContext(
-            filter_trdmarket=self._trd_market,
-            host=self._host,
-            port=self._port,
-            security_firm=self._security_firm,
-        )
+        # Lazy OpenD connect — construct without TCP so team health / doctor
+        # can report unreachable brokers instead of crashing at build time.
+        self._quote_ctx = None
+        self._trade_ctx = None
         self._unlocked = False
 
     @classmethod
@@ -287,7 +284,25 @@ class MoomooBroker(Broker):
             connect_timeout=cfg.moomoo_connect_timeout,
         )
 
+    def _ensure_connected(self) -> None:
+        # Already connected, or a unit-test double injected contexts.
+        if (
+            getattr(self, "_quote_ctx", None) is not None
+            or getattr(self, "_trade_ctx", None) is not None
+        ):
+            return
+        sdk = _require_sdk()
+        probe_opend(self._host, self._port, timeout=self._connect_timeout)
+        self._quote_ctx = sdk.OpenQuoteContext(host=self._host, port=self._port)
+        self._trade_ctx = sdk.OpenSecTradeContext(
+            filter_trdmarket=self._trd_market,
+            host=self._host,
+            port=self._port,
+            security_firm=self._security_firm,
+        )
+
     def _ensure_unlocked(self) -> None:
+        self._ensure_connected()
         if not self.is_live or self._unlocked or not self._unlock_password:
             return
         _require_sdk()
@@ -297,9 +312,14 @@ class MoomooBroker(Broker):
 
     def close(self) -> None:
         for ctx in (self._quote_ctx, self._trade_ctx):
+            if ctx is None:
+                continue
             close = getattr(ctx, "close", None)
             if callable(close):
                 close()
+        self._quote_ctx = None
+        self._trade_ctx = None
+        self._unlocked = False
 
     def __enter__(self) -> MoomooBroker:
         return self
@@ -368,6 +388,7 @@ class MoomooBroker(Broker):
         return self.get_quotes_many([symbol]).get(symbol.upper(), Quote(symbol=symbol, bid=0, ask=0))
 
     def get_quotes_many(self, symbols: list[str]) -> dict[str, Quote]:
+        self._ensure_connected()
         codes = [to_moomoo_code(s, market=self._market) for s in symbols if s]
         if not codes:
             return {}
@@ -408,6 +429,7 @@ class MoomooBroker(Broker):
         timeframe: str = "1Day",
         limit: int = 120,
     ) -> dict[str, list[Bar]]:
+        self._ensure_connected()
         sdk = _require_sdk()
         ktype = getattr(sdk.KLType, _TIMEFRAME_MAP.get(timeframe, "K_DAY"), sdk.KLType.K_DAY)
         out: dict[str, list[Bar]] = {}
@@ -452,6 +474,7 @@ class MoomooBroker(Broker):
 
     def get_most_active(self, limit: int = 25) -> list[str]:
         """Prefer RTH top-movers (moomooapi skill), then pre-market rank, then snapshot."""
+        self._ensure_connected()
         sdk = _require_sdk()
         count = max(1, limit)
         market = getattr(sdk.Market, self._market, sdk.Market.US)
@@ -484,6 +507,7 @@ class MoomooBroker(Broker):
         expiration: str | None = None,
         option_type: str | None = None,
     ) -> list[OptionContract]:
+        self._ensure_connected()
         sdk = _require_sdk()
         code = to_moomoo_code(underlying, market=self._market)
         kwargs: dict[str, Any] = {"code": code}
@@ -702,6 +726,7 @@ class MoomooBroker(Broker):
 
     def is_market_open(self) -> bool:
         """True during US RTH sessions (MORNING / AFTERNOON), not extended hours."""
+        self._ensure_connected()
         sdk = _require_sdk()
         open_states = {"MORNING", "AFTERNOON", "TRADE_AT_LAST"}
         code = to_moomoo_code("SPY", market=self._market)

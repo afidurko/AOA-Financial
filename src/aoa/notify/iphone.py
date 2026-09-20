@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-import httpx
-
+from aoa.httpcompat import httpx
 from aoa.notify.custom_app import send_custom_app_webhook, send_structured_webhook
 from aoa.notify.types import StructuredNotification
 
