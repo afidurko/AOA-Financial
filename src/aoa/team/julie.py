@@ -7,6 +7,7 @@ import json
 from aoa.agents.base import Agent, clamp_conviction
 from aoa.data.market_data import SymbolSnapshot
 from aoa.research.hftish_patterns import snapshot_book_context
+from aoa.research.open_quant_patterns import snapshot_research_context
 from aoa.team.code_engineering import CodeQualityReport, run_code_quality_audit
 from aoa.team.models import AlgorithmReport, TrendReport
 
@@ -60,6 +61,7 @@ class JulieAgent(Agent):
                 method_notes="Insufficient data for algorithmic validation.",
             )
         book = snapshot_book_context(snap)
+        oqlb = snapshot_research_context(snap)
         prompt = (
             f"Tom's trend report:\n{json.dumps(trend.to_context())}\n\n"
             f"Symbol: {snap.symbol}\n"
@@ -72,6 +74,11 @@ class JulieAgent(Agent):
             prompt += (
                 f"Computed book-imbalance hints (example-hftish / research-only):\n"
                 f"{json.dumps(book, default=str)}\n"
+            )
+        if oqlb.get("available"):
+            prompt += (
+                f"Open-quant stylized facts (research-only):\n"
+                f"{json.dumps(oqlb, default=str)}\n"
             )
         if code_quality is not None:
             prompt += (
@@ -93,6 +100,9 @@ class JulieAgent(Agent):
         signal = book.get("signal")
         if signal and signal not in signals:
             signals.append(str(signal))
+        oqlb_signal = oqlb.get("signal")
+        if oqlb_signal and oqlb_signal not in signals:
+            signals.append(str(oqlb_signal))
         return AlgorithmReport(
             symbol=trend.symbol,
             validated=bool(r.get("validated")),

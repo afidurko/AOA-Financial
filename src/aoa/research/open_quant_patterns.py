@@ -57,6 +57,52 @@ class NetFlow:
     dominant: str  # "x->y" | "y->x" | "none"
 
 
+@dataclass(frozen=True)
+class TangencyResult:
+    """Mean-variance tangency (max Sharpe) portfolio weights."""
+
+    weights: tuple[float, ...]
+    expected_return: float
+    volatility: float
+    sharpe: float
+    long_only: bool
+
+
+@dataclass(frozen=True)
+class StylizedFacts:
+    """Classic return stylized-fact diagnostics (book StylizedFacts stubs → math)."""
+
+    n: int
+    mean: float
+    std: float
+    skewness: float
+    excess_kurtosis: float
+    acf1: float
+    abs_acf1: float
+    fat_tails: bool
+    volatility_clustering: bool
+
+
+@dataclass(frozen=True)
+class NetworkEdge:
+    """Undirected correlation edge above a threshold."""
+
+    i: int
+    j: int
+    correlation: float
+
+
+@dataclass(frozen=True)
+class CorrelationNetwork:
+    """Thresholded correlation graph + degree centrality."""
+
+    n: int
+    threshold: float
+    edges: tuple[NetworkEdge, ...]
+    degree: tuple[int, ...]
+    degree_centrality: tuple[float, ...]
+
+
 def _normalize(values: Sequence[float]) -> list[float]:
     total = sum(values)
     if total <= 0:
@@ -519,6 +565,354 @@ def coupled_ar_series(
     return x, y
 
 
+def log_returns(closes: Sequence[float]) -> list[float]:
+    """Simple log returns ``log(p_t / p_{t-1})``; skips non-positive prices."""
+    if len(closes) < 2:
+        raise ValueError("need at least 2 closes")
+    out: list[float] = []
+    for i in range(1, len(closes)):
+        a = float(closes[i - 1])
+        b = float(closes[i])
+        if a <= 0 or b <= 0 or not math.isfinite(a) or not math.isfinite(b):
+            continue
+        out.append(math.log(b / a))
+    if len(out) < 2:
+        raise ValueError("insufficient valid log returns")
+    return out
+
+
+def _mean(xs: Sequence[float]) -> float:
+    return sum(xs) / len(xs)
+
+
+def _sample_std(xs: Sequence[float], mean: float | None = None) -> float:
+    if len(xs) < 2:
+        return 0.0
+    m = _mean(xs) if mean is None else mean
+    var = sum((x - m) ** 2 for x in xs) / (len(xs) - 1)
+    return math.sqrt(max(var, 0.0))
+
+
+def _acf_lag1(xs: Sequence[float]) -> float:
+    if len(xs) < 3:
+        return 0.0
+    m = _mean(xs)
+    num = sum((xs[i] - m) * (xs[i - 1] - m) for i in range(1, len(xs)))
+    den = sum((x - m) ** 2 for x in xs)
+    if den <= 0:
+        return 0.0
+    return num / den
+
+
+def stylized_facts(returns: Sequence[float]) -> StylizedFacts:
+    """Skew, excess kurtosis, return ACF vs |r| ACF (fat tails / clustering cues)."""
+    if len(returns) < 4:
+        raise ValueError("need at least 4 returns")
+    xs = [float(r) for r in returns]
+    if any(not math.isfinite(x) for x in xs):
+        raise ValueError("returns must be finite")
+    n = len(xs)
+    m = _mean(xs)
+    std = _sample_std(xs, m)
+    if std <= 0:
+        skew = 0.0
+        ex_kurt = -3.0
+    else:
+        z = [(x - m) / std for x in xs]
+        skew = sum(v**3 for v in z) / n
+        ex_kurt = sum(v**4 for v in z) / n - 3.0
+    acf1 = _acf_lag1(xs)
+    abs_acf1 = _acf_lag1([abs(x) for x in xs])
+    return StylizedFacts(
+        n=n,
+        mean=m,
+        std=std,
+        skewness=skew,
+        excess_kurtosis=ex_kurt,
+        acf1=acf1,
+        abs_acf1=abs_acf1,
+        fat_tails=ex_kurt > 1.0,
+        volatility_clustering=abs_acf1 > abs(acf1) + 0.05,
+    )
+
+
+def corr_from_cov(cov: Sequence[Sequence[float]]) -> list[list[float]]:
+    """Correlation matrix from a covariance matrix."""
+    sigma = _validate_cov(cov)
+    n = len(sigma)
+    vols = [math.sqrt(max(sigma[i][i], 0.0)) for i in range(n)]
+    out = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            if vols[i] <= 0 or vols[j] <= 0:
+                out[i][j] = 1.0 if i == j else 0.0
+            else:
+                out[i][j] = sigma[i][j] / (vols[i] * vols[j])
+    return out
+
+
+def _solve_spd(a: Sequence[Sequence[float]], b: Sequence[float]) -> list[float]:
+    """Solve A x = b via Gaussian elimination with partial pivoting."""
+    n = len(b)
+    aug = [list(a[i]) + [float(b[i])] for i in range(n)]
+    for col in range(n):
+        pivot = max(range(col, n), key=lambda r: abs(aug[r][col]))
+        aug[col], aug[pivot] = aug[pivot], aug[col]
+        diag = aug[col][col]
+        if abs(diag) < 1e-15:
+            raise ValueError("covariance matrix is singular")
+        for j in range(col, n + 1):
+            aug[col][j] /= diag
+        for r in range(n):
+            if r == col:
+                continue
+            factor = aug[r][col]
+            for j in range(col, n + 1):
+                aug[r][j] -= factor * aug[col][j]
+    return [aug[i][n] for i in range(n)]
+
+
+def mean_returns(returns: Sequence[Sequence[float]]) -> list[float]:
+    """Per-asset sample means (rows = assets)."""
+    if not returns:
+        raise ValueError("returns must be non-empty")
+    return [_mean(row) for row in returns]
+
+
+def tangency_weights(
+    mu: Sequence[float],
+    cov: Sequence[Sequence[float]],
+    *,
+    long_only: bool = True,
+    risk_free: float = 0.0,
+) -> TangencyResult:
+    """Tangency portfolio maximizing Sharpe (book RiskParity vs Markowitz).
+
+    Unconstrained solution ``w ∝ Σ^{-1}(μ − r_f)``; optional long-only clip +
+    renormalize. Falls back to equal weights if Σ is singular. Research-only.
+    """
+    sigma = _validate_cov(cov)
+    n = len(sigma)
+    if len(mu) != n:
+        raise ValueError("mu length must match covariance dimension")
+    excess = [float(mu[i]) - risk_free for i in range(n)]
+    if all(abs(x) < 1e-18 for x in excess):
+        w = [1.0 / n] * n
+    else:
+        try:
+            raw = _solve_spd(sigma, excess)
+        except ValueError:
+            # Singular / near-singular Σ — equal-weight research fallback.
+            raw = [1.0 / n] * n
+        if long_only:
+            raw = [max(0.0, x) for x in raw]
+            if sum(raw) <= 0:
+                raw = [1.0 / n] * n
+        w = _normalize(raw)
+    er = sum(w[i] * float(mu[i]) for i in range(n))
+    vol = _portfolio_vol(sigma, w)
+    sharpe = (er - risk_free) / vol if vol > 0 else 0.0
+    return TangencyResult(
+        weights=tuple(w),
+        expected_return=er,
+        volatility=vol,
+        sharpe=sharpe,
+        long_only=long_only,
+    )
+
+
+def correlation_network(
+    corr: Sequence[Sequence[float]],
+    *,
+    threshold: float = 0.5,
+) -> CorrelationNetwork:
+    """Edges where ``|ρ_ij| ≥ threshold``; degree centrality for FinancialNetworks."""
+    n = len(corr)
+    if n < 1:
+        raise ValueError("correlation matrix must be non-empty")
+    if not (0.0 <= threshold <= 1.0):
+        raise ValueError("threshold must be in [0, 1]")
+    edges: list[NetworkEdge] = []
+    degree = [0] * n
+    for i in range(n):
+        if len(corr[i]) != n:
+            raise ValueError("correlation matrix must be square")
+        for j in range(i + 1, n):
+            rho = float(corr[i][j])
+            if not math.isfinite(rho):
+                raise ValueError("correlation entries must be finite")
+            if abs(rho) >= threshold:
+                edges.append(NetworkEdge(i=i, j=j, correlation=rho))
+                degree[i] += 1
+                degree[j] += 1
+    denom = max(n - 1, 1)
+    return CorrelationNetwork(
+        n=n,
+        threshold=threshold,
+        edges=tuple(edges),
+        degree=tuple(degree),
+        degree_centrality=tuple(d / denom for d in degree),
+    )
+
+
+def _corr_distance(corr: Sequence[Sequence[float]]) -> list[list[float]]:
+    n = len(corr)
+    dist = [[0.0] * n for _ in range(n)]
+    for i in range(n):
+        for j in range(n):
+            rho = max(-1.0, min(1.0, float(corr[i][j])))
+            dist[i][j] = math.sqrt(max(0.0, 0.5 * (1.0 - rho)))
+    return dist
+
+
+def _single_linkage_order(dist: Sequence[Sequence[float]]) -> list[int]:
+    """Leaf order from agglomerative single-linkage (n small; research helper)."""
+    n = len(dist)
+    if n == 1:
+        return [0]
+    clusters: list[list[int]] = [[i] for i in range(n)]
+    # Pairwise cluster distance = min linkage
+    while len(clusters) > 1:
+        best = (1e100, 0, 1)
+        for a in range(len(clusters)):
+            for b in range(a + 1, len(clusters)):
+                d = min(dist[i][j] for i in clusters[a] for j in clusters[b])
+                if d < best[0]:
+                    best = (d, a, b)
+        _, a, b = best
+        merged = clusters[a] + clusters[b]
+        clusters = [c for k, c in enumerate(clusters) if k not in (a, b)]
+        clusters.append(merged)
+    return clusters[0]
+
+
+def _cluster_variance(cov: Sequence[Sequence[float]], members: Sequence[int]) -> float:
+    """Variance of an equal-weight sub-portfolio on ``members``."""
+    m = len(members)
+    if m == 0:
+        return 0.0
+    w = 1.0 / m
+    var = 0.0
+    for i in members:
+        for j in members:
+            var += w * w * float(cov[i][j])
+    return max(var, 0.0)
+
+
+def hierarchical_risk_parity(cov: Sequence[Sequence[float]]) -> RiskParityResult:
+    """Hierarchical risk parity via single-linkage order + recursive bisection.
+
+    Educational port of the book ML / HRP idea — pure Python, no sklearn.
+    """
+    sigma = _validate_cov(cov)
+    n = len(sigma)
+    if n == 1:
+        return RiskParityResult(
+            weights=(1.0,),
+            risk_contributions=(float(sigma[0][0]),),
+            risk_fractions=(1.0,),
+            volatility=math.sqrt(max(sigma[0][0], 0.0)),
+            budget=(1.0,),
+        )
+    corr = corr_from_cov(sigma)
+    order = _single_linkage_order(_corr_distance(corr))
+    weights = [0.0] * n
+
+    def _bisect(members: list[int], budget: float) -> None:
+        if len(members) == 1:
+            weights[members[0]] = budget
+            return
+        if len(members) == 2:
+            v0 = max(float(sigma[members[0]][members[0]]), 1e-18)
+            v1 = max(float(sigma[members[1]][members[1]]), 1e-18)
+            inv0, inv1 = 1.0 / v0, 1.0 / v1
+            s = inv0 + inv1
+            weights[members[0]] = budget * inv0 / s
+            weights[members[1]] = budget * inv1 / s
+            return
+        mid = len(members) // 2
+        left, right = members[:mid], members[mid:]
+        vl = _cluster_variance(sigma, left)
+        vr = _cluster_variance(sigma, right)
+        # Allocate more budget to the lower-variance cluster (HRP).
+        alpha = 1.0 - vl / (vl + vr) if (vl + vr) > 0 else 0.5
+        _bisect(left, budget * alpha)
+        _bisect(right, budget * (1.0 - alpha))
+
+    _bisect(list(order), 1.0)
+    w = _normalize(weights)
+    rc = _risk_contributions_raw(sigma, w)
+    return RiskParityResult(
+        weights=tuple(w),
+        risk_contributions=rc,
+        risk_fractions=_risk_fractions(rc),
+        volatility=_portfolio_vol(sigma, w),
+        budget=tuple(1.0 / n for _ in range(n)),
+    )
+
+
+def compare_allocators(
+    returns: Sequence[Sequence[float]],
+) -> dict[str, object]:
+    """Side-by-side inverse-vol, ERC, tangency, and HRP on the same return panel."""
+    cov = cov_from_returns(returns)
+    mu = mean_returns(returns)
+    vols = [math.sqrt(max(cov[i][i], 1e-18)) for i in range(len(cov))]
+    inv = inverse_vol_weights(vols)
+    erc = equal_risk_contribution(cov)
+    tan = tangency_weights(mu, cov, long_only=True)
+    hrp = hierarchical_risk_parity(cov)
+    net = correlation_network(corr_from_cov(cov), threshold=0.3)
+    return {
+        "n_assets": len(cov),
+        "n_obs": len(returns[0]),
+        "inverse_vol": list(inv),
+        "erc": list(erc.weights),
+        "tangency": list(tan.weights),
+        "hrp": list(hrp.weights),
+        "tangency_sharpe": tan.sharpe,
+        "network_edges": len(net.edges),
+        "never_live": True,
+    }
+
+
+def snapshot_research_context(snap: object) -> dict[str, object]:
+    """Julie/Andrea helper: stylized facts from ``snap.bars`` closes (research-only)."""
+    bars = getattr(snap, "bars", None) or []
+    closes = [float(getattr(b, "close", 0.0) or 0.0) for b in bars]
+    closes = [c for c in closes if c > 0]
+    if len(closes) < 5:
+        return {
+            "available": False,
+            "note": "Need ≥5 closes for open-quant stylized facts.",
+            "never_live": True,
+        }
+    try:
+        rets = log_returns(closes)
+        facts = stylized_facts(rets)
+    except ValueError as exc:
+        return {"available": False, "note": str(exc), "never_live": True}
+    return {
+        "available": True,
+        "n_returns": facts.n,
+        "mean": facts.mean,
+        "std": facts.std,
+        "skewness": facts.skewness,
+        "excess_kurtosis": facts.excess_kurtosis,
+        "acf1": facts.acf1,
+        "abs_acf1": facts.abs_acf1,
+        "fat_tails": facts.fat_tails,
+        "volatility_clustering": facts.volatility_clustering,
+        "signal": (
+            "stylized:fat_tails"
+            if facts.fat_tails
+            else ("stylized:vol_cluster" if facts.volatility_clustering else None)
+        ),
+        "never_live": True,
+        "module": "aoa.research.open_quant_patterns",
+    }
+
+
 def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
     """Offline smoke for ``aoa openquant smoke`` — no broker, no orders."""
     x1, x2 = coupled_ar_series(200, seed=seed)
@@ -527,7 +921,12 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
 
     vols = (0.20, 0.10)
     inv = inverse_vol_weights(vols)
-    erc = equal_risk_contribution([[0.04, 0.0], [0.0, 0.01]])
+    cov = [[0.04, 0.0], [0.0, 0.01]]
+    erc = equal_risk_contribution(cov)
+    tan = tangency_weights((0.12, 0.08), cov, long_only=True)
+    hrp = hierarchical_risk_parity([[0.04, 0.01, 0.0], [0.01, 0.03, 0.005], [0.0, 0.005, 0.02]])
+    facts = stylized_facts(x1[1:])
+    net = correlation_network([[1.0, 0.8, 0.1], [0.8, 1.0, 0.05], [0.1, 0.05, 1.0]], threshold=0.5)
 
     ok = (
         flow.dominant == "x->y"
@@ -535,6 +934,10 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
         and abs(sum(erc.weights) - 1.0) < 1e-8
         and abs(inv[0] - 1.0 / 3.0) < 1e-8
         and abs(erc.risk_fractions[0] - 0.5) < 1e-3
+        and abs(sum(tan.weights) - 1.0) < 1e-8
+        and abs(sum(hrp.weights) - 1.0) < 1e-8
+        and facts.n > 0
+        and len(net.edges) >= 1
     )
     return {
         "ok": ok,
@@ -549,6 +952,10 @@ def synthetic_smoke(*, seed: int = 7) -> dict[str, object]:
         "inverse_vol_weights": list(inv),
         "erc_weights": list(erc.weights),
         "erc_risk_fractions": list(erc.risk_fractions),
+        "tangency_weights": list(tan.weights),
+        "hrp_weights": list(hrp.weights),
+        "stylized_fat_tails": facts.fat_tails,
+        "network_edges": len(net.edges),
         "never_live": True,
         "module": "aoa.research.open_quant_patterns",
         "companion": "open-quant-live-book",
@@ -653,19 +1060,32 @@ def billion_stress(
 
 
 __all__ = [
+    "CorrelationNetwork",
     "EntropyStats",
     "GrangerResult",
     "NetFlow",
+    "NetworkEdge",
     "RiskParityResult",
+    "StylizedFacts",
+    "TangencyResult",
     "billion_stress",
+    "compare_allocators",
+    "corr_from_cov",
+    "correlation_network",
     "coupled_ar_series",
     "cov_from_returns",
     "equal_risk_contribution",
+    "hierarchical_risk_parity",
     "inverse_vol_weights",
     "linear_granger_causality",
+    "log_returns",
+    "mean_returns",
     "mutual_information_stats",
     "net_information_flow",
     "risk_contributions",
     "shannon_entropy",
+    "snapshot_research_context",
+    "stylized_facts",
     "synthetic_smoke",
+    "tangency_weights",
 ]

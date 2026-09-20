@@ -144,6 +144,75 @@ def test_billion_stress_small_ok() -> None:
     assert result["never_live"] is True
 
 
+def test_tangency_and_hrp_sum_to_one() -> None:
+    from aoa.research.open_quant_patterns import (
+        hierarchical_risk_parity,
+        tangency_weights,
+    )
+
+    cov = [[0.04, 0.01], [0.01, 0.02]]
+    tan = tangency_weights((0.1, 0.08), cov, long_only=True)
+    hrp = hierarchical_risk_parity(cov)
+    assert abs(sum(tan.weights) - 1.0) < 1e-8
+    assert abs(sum(hrp.weights) - 1.0) < 1e-8
+    assert tan.volatility > 0
+    assert hrp.volatility > 0
+
+
+def test_stylized_facts_and_network() -> None:
+    from aoa.research.open_quant_patterns import (
+        correlation_network,
+        log_returns,
+        stylized_facts,
+    )
+
+    closes = [100.0]
+    for i in range(40):
+        closes.append(closes[-1] * (1.01 if i % 3 else 0.99))
+    facts = stylized_facts(log_returns(closes))
+    assert facts.n >= 30
+    assert math.isfinite(facts.excess_kurtosis)
+    net = correlation_network(
+        [[1.0, 0.9, 0.0], [0.9, 1.0, 0.1], [0.0, 0.1, 1.0]],
+        threshold=0.5,
+    )
+    assert len(net.edges) == 1
+    assert net.degree[0] == 1
+
+
+def test_compare_allocators_and_snapshot_context() -> None:
+    from datetime import datetime, timezone
+
+    from aoa.brokerage.models import Bar
+    from aoa.data.market_data import SymbolSnapshot
+    from aoa.research.open_quant_patterns import (
+        compare_allocators,
+        coupled_ar_series,
+        snapshot_research_context,
+    )
+
+    x, _ = coupled_ar_series(80, seed=1, ar_x=0.4, coupling=0.0)
+    y, _ = coupled_ar_series(80, seed=18, ar_x=0.3, coupling=0.0)
+    z, _ = coupled_ar_series(80, seed=100, ar_x=0.25, coupling=0.0)
+    cmp = compare_allocators([x, y, z])
+    assert cmp["n_assets"] == 3
+    assert abs(sum(cmp["tangency"]) - 1.0) < 1e-8
+    bars = [
+        Bar(
+            timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            open=100 + i,
+            high=101 + i,
+            low=99 + i,
+            close=100 + i * 0.5,
+            volume=1,
+        )
+        for i in range(20)
+    ]
+    ctx = snapshot_research_context(SymbolSnapshot(symbol="X", quote=None, bars=bars))
+    assert ctx["available"] is True
+    assert ctx["never_live"] is True
+
+
 def test_erc_weights_sum_and_positive_vol() -> None:
     cov = [[0.09, 0.01, 0.0], [0.01, 0.04, 0.0], [0.0, 0.0, 0.01]]
     res = equal_risk_contribution(cov)

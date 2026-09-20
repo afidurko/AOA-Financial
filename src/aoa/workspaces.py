@@ -92,6 +92,7 @@ def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
     qm_path, qm_ok = _sibling("qm", "QM_DIR")
     vh_path, vh_ok = _sibling("VisualHFT", "VISUALHFT_DIR")
     hft_path, hft_ok = _sibling("hftbacktest", "HFTBACKTEST_DIR")
+    oqlb_path, oqlb_ok = _sibling("open-quant-live-book", "OQLB_DIR")
 
     return [
         WorkspaceInfo(
@@ -157,6 +158,24 @@ def probe_workspaces(cfg: Config | None = None) -> list[WorkspaceInfo]:
             offline_only=True,
             never_live=True,
             detail=hft,
+        ),
+        WorkspaceInfo(
+            id="open-quant-live-book",
+            title="open-quant-live-book",
+            role="Quant finance book — ERC / tangency / TE / HRP research patterns",
+            linked=True,
+            url="https://github.com/afidurko/open-quant-live-book",
+            local_path=oqlb_path,
+            present=oqlb_ok,
+            docs="docs/how-to/open-quant-live-book-reference.md",
+            setup="scripts/open-quant-live-book-setup.sh",
+            offline_only=True,
+            never_live=True,
+            detail={
+                "module": "aoa.research.open_quant_patterns",
+                "cli": "aoa openquant status|smoke|compare|billion",
+                "study_card": "bridge-oqlb-risk-entropy",
+            },
         ),
     ]
 

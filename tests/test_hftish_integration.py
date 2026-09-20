@@ -81,6 +81,51 @@ def test_julie_appends_book_imbalance_signal(fake_llm):
     assert "rsi_neutral" in report.signals
 
 
+def test_julie_includes_openquant_stylized_facts(fake_llm):
+    from datetime import datetime, timezone
+
+    from aoa.brokerage.models import Bar
+
+    bars = [
+        Bar(
+            timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
+            open=100.0 + i,
+            high=101.0 + i,
+            low=99.0 + i,
+            close=100.0 + i * 0.4,
+            volume=1000,
+        )
+        for i in range(25)
+    ]
+    snap = SymbolSnapshot(
+        symbol="OQLB",
+        quote=Quote(symbol="OQLB", bid=110.0, ask=110.1, bid_size=1, ask_size=1),
+        bars=bars,
+        technicals={"1Day": {"last_close": 110.0}},
+    )
+    captured: list[str] = []
+
+    def respond(system, prompt, schema, **kwargs):
+        captured.append(prompt)
+        return {
+            "validated": True,
+            "adjusted_strength": 0.5,
+            "method_notes": "ok",
+            "signals": [],
+        }
+
+    fake_llm.structured = respond
+    trend = TrendReport(
+        symbol="OQLB",
+        direction=TrendDirection.SIDEWAYS,
+        strength=0.4,
+        timeframe="1Day",
+        rationale="flat",
+    )
+    JulieAgent(fake_llm).refine(trend, snap)
+    assert captured and "Open-quant stylized facts" in captured[0]
+
+
 def test_morgan_prompt_includes_book_hints(fake_llm):
     snap = _snap_with_sizes(bid_size=100, ask_size=500)
     assert snapshot_book_context(snap)["side"] == "sell"

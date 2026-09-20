@@ -10,6 +10,7 @@ from aoa.agents.base import Agent, TradeProposal
 from aoa.brokerage.base import BrokerError
 from aoa.brokerage.models import AssetClass, Side
 from aoa.data.market_data import SymbolSnapshot
+from aoa.research.open_quant_patterns import snapshot_research_context
 from aoa.risk.options_quant import build_andrea_quant_context
 from aoa.team.models import (
     AlgorithmReport,
@@ -117,6 +118,7 @@ class AndreaAgent(Agent):
                 options_ideas.get(sym),
                 account.options_level,
             )
+            oqlb_ctx = snapshot_research_context(snap) if snap is not None else None
             ctx = _build_symbol_context(
                 sym,
                 prop=prop,
@@ -126,6 +128,7 @@ class AndreaAgent(Agent):
                 catalyst=catalyst_by.get(sym),
                 options_idea=options_ideas.get(sym),
                 quant_context=quant_ctx,
+                openquant_context=oqlb_ctx,
                 account=account.to_context(),
                 max_position_pct=self.config.risk.max_position_pct,
             )
@@ -204,6 +207,7 @@ def _build_symbol_context(
     catalyst: CatalystReport | None,
     options_idea: dict | None,
     quant_context: dict | None,
+    openquant_context: dict | None = None,
     account: dict,
     max_position_pct: float,
 ) -> str:
@@ -226,6 +230,11 @@ def _build_symbol_context(
         chunks.append(f"Options idea: {json.dumps(options_idea, default=str)}")
     if quant_context:
         chunks.append(f"FinancePy quant context: {json.dumps(quant_context, default=str)}")
+    if openquant_context and openquant_context.get("available"):
+        chunks.append(
+            "Open-quant stylized facts (research-only): "
+            f"{json.dumps(openquant_context, default=str)}"
+        )
     return "\n".join(chunks)
 
 

@@ -606,6 +606,7 @@ aoa hft book-smoke                      # vendored HFT-Orderbook LOB smoke
 # Companion map: docs/how-to/hft-research-lane.md
 aoa openquant status
 aoa openquant smoke
+aoa openquant compare
 ```
 
 `aoa report` combines journal-derived **activity** (cycles, candidates, orders,

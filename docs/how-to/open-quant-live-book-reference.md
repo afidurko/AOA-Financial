@@ -15,9 +15,13 @@ R/bookdown; AOA does not build or vendor it.
 | Upstream chapter | Idea | AOA landing |
 |------------------|------|-------------|
 | `RiskParity/` | Equal risk contribution / risk-budget portfolios | `equal_risk_contribution`, `inverse_vol_weights`, `risk_contributions` (+ `risk_fractions`) |
+| `RiskParity/` (Markowitz) | Tangency / max-Sharpe vs ERC | `tangency_weights`, `compare_allocators` |
 | `Entropy/` | Shannon entropy, mutual information, global correlation λ | `shannon_entropy`, `mutual_information_stats` |
 | `TransferEntropy/` | Linear Granger causality + Gaussian TE = GC/2; net flow | `linear_granger_causality`, `net_information_flow`, `coupled_ar_series` |
-| StylizedFacts / LimitOrder / ML parts | Mostly stubs or narrative | Stay in the sibling — **not** ported |
+| StylizedFacts (math) | Fat tails, vol clustering cues | `stylized_facts`, `log_returns`, `snapshot_research_context` |
+| FinancialNetworks (lite) | Threshold correlation graph | `correlation_network`, `corr_from_cov` |
+| ML / HRP idea | Hierarchical risk parity | `hierarchical_risk_parity` |
+| LimitOrder / full ML notebooks | Narrative / stubs | Stay in the sibling — **not** ported |
 
 AOA stays bar-based (Alpaca / Moomoo equities & cash options). There is no
 bookdown/R runtime in this repo and no automatic rebalance from these helpers
@@ -55,21 +59,39 @@ mi = mutual_information_stats([0.1, -0.2, 0.05, 0.0], [0.08, -0.1, 0.02, 0.01])
 flow = net_information_flow(list(range(50)), [0.5 * i for i in range(50)], lags=1)
 ```
 
-CLI: `aoa openquant status|smoke|billion`. Smoke: `python3 examples/open_quant_smoke.py`.
+CLI: `aoa openquant status|smoke|compare|billion`. Smoke: `python3 examples/open_quant_smoke.py`.
+
+```python
+from aoa.research.open_quant_patterns import (
+    compare_allocators,
+    hierarchical_risk_parity,
+    snapshot_research_context,
+    stylized_facts,
+    tangency_weights,
+)
+
+tan = tangency_weights((0.12, 0.08), [[0.04, 0.0], [0.0, 0.01]])
+hrp = hierarchical_risk_parity([[0.04, 0.01], [0.01, 0.02]])
+```
+
+Julie/Andrea inject `snapshot_research_context(snap)` (stylized facts from bars).
+Workspace mesh: `aoa workspaces status` → `open-quant-live-book`.
 
 One-billion property stress (inverse-vol invariants + periodic ERC/MI):
 
 ```bash
 aoa openquant billion                 # default 1_000_000_000 iterations
 aoa openquant billion --iterations 1000000  # shorter local check
+aoa openquant compare                 # inverse-vol / ERC / tangency / HRP
 ```
 
 ## Map to Julie / study cortex
 
 - Mesh: `brain/mesh/repos.yaml` entry `open-quant-live-book`
 - Spine: `brain/spine/Algorithms.md`
-- Curriculum: `bridge-oqlb-risk-entropy`
+- Curriculum: `bridge-oqlb-risk-entropy`, `bridge-oqlb-tangency-hrp`, `bridge-oqlb-stylized-network`
 - Catalog: [docs/help.md](../help.md)
+- Consumers: Julie `refine`, Andrea risk plans (research context only)
 
 ## Upstream layout (cheat sheet)
 

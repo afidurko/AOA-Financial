@@ -631,6 +631,64 @@ _CARDS: tuple[KnowledgeCard, ...] = (
         check_keywords=("risk", "parity", "entropy", "granger", "transfer", "budget"),
     ),
     KnowledgeCard(
+        id="bridge-oqlb-tangency-hrp",
+        field="bridge",
+        title="Tangency Sharpe ↔ hierarchical risk parity",
+        statement=(
+            "The tangency portfolio maximizes (μ−r_f)/σ via w∝Σ^{-1}(μ−r_f), while "
+            "HRP allocates along a correlation-distance dendrogram so low-variance "
+            "clusters receive more budget — both are research allocators, not AOA "
+            "execution stages."
+        ),
+        proof_sketch=(
+            "1) Unconstrained tangency: solve Σw=μ−r_f then normalize (long-only clip).\n"
+            "2) HRP: distance √((1−ρ)/2), single-linkage leaf order, recursive bisection.\n"
+            "3) ERC equalizes risk contributions; HRP softens estimation error via hierarchy."
+        ),
+        applications=(
+            "Offline allocator comparison (aoa openquant compare)",
+            "Andrea/Julie portfolio-research context",
+        ),
+        aoa_mesh=(
+            "aoa.research.open_quant_patterns.tangency_weights / hierarchical_risk_parity "
+            "never call a broker; sibling open-quant-live-book is reference-only."
+        ),
+        bridges=("bridge-oqlb-risk-entropy", "bridge-sdf-martingale"),
+        drill_prompt=(
+            "Write the unconstrained tangency solution and state how HRP uses "
+            "cluster variance in recursive bisection."
+        ),
+        check_keywords=("tangency", "sharpe", "hrp", "hierarchy", "correlation"),
+    ),
+    KnowledgeCard(
+        id="bridge-oqlb-stylized-network",
+        field="bridge",
+        title="Stylized facts ↔ correlation networks",
+        statement=(
+            "Fat tails (excess kurtosis) and volatility clustering (|r| ACF ≫ r ACF) "
+            "are classical stylized facts; thresholding |ρ| builds a market graph whose "
+            "degree centrality flags hub names."
+        ),
+        proof_sketch=(
+            "1) Sample skew/kurtosis on log returns; ACF(1) on r vs |r|.\n"
+            "2) Correlation network: edge (i,j) iff |ρ_ij|≥θ; centrality = deg/(n−1).\n"
+            "3) Research diagnostics only — not an AOA order trigger."
+        ),
+        applications=(
+            "Julie stylized-fact signals from daily bars",
+            "Universe hub detection for study cards",
+        ),
+        aoa_mesh=(
+            "Julie/Andrea may cite snapshot_research_context; never an order path."
+        ),
+        bridges=("bridge-oqlb-risk-entropy", "phys-diffusion"),
+        drill_prompt=(
+            "Define excess kurtosis and explain why |r| ACF detecting clustering "
+            "differs from raw return ACF."
+        ),
+        check_keywords=("kurtosis", "acf", "clustering", "network", "centrality"),
+    ),
+    KnowledgeCard(
         id="bridge-free-energy",
         field="bridge",
         title="Free energy ↔ certainty-equivalent utility",
