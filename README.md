@@ -622,7 +622,7 @@ orders** — the recommended way to watch the swarm reason before letting it tra
 ### Decision analytics
 
 Every cycle is persisted to SQLite (`AOA_ANALYTICS_DB_PATH`, default
-`data/<env>/analytics.sqlite`), including the reference price each ticker was
+`data/<env>/analytics/aoa.sqlite`), including the reference price each ticker was
 seen at. `aoa analytics` (and the dashboard's **Analytics** tab /
 `/api/analytics/summary`) turns that history into four views, all computed with
 a few indexed SQL statements and no pandas:
