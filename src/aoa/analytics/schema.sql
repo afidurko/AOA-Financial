@@ -83,7 +83,20 @@ CREATE TABLE IF NOT EXISTS research_proposals (
     created_at      TEXT NOT NULL
 );
 
+-- Reference price per ticker per run: lets signals be scored against the next
+-- cycle's realized move (agent hit rates) without a separate price history.
+CREATE TABLE IF NOT EXISTS cycle_prices (
+    run_id      TEXT NOT NULL,
+    ticker      TEXT NOT NULL,
+    price       REAL NOT NULL,
+    PRIMARY KEY (run_id, ticker)
+);
+
 CREATE INDEX IF NOT EXISTS idx_cycle_runs_started ON cycle_runs(started_at);
+CREATE INDEX IF NOT EXISTS idx_cycle_signals_agent ON cycle_signals(agent);
+CREATE INDEX IF NOT EXISTS idx_cycle_signals_ticker ON cycle_signals(ticker);
+CREATE INDEX IF NOT EXISTS idx_cycle_proposals_approved ON cycle_proposals(approved);
+CREATE INDEX IF NOT EXISTS idx_stage_metrics_stage ON stage_metrics(stage);
 CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_inbox(status);
 CREATE INDEX IF NOT EXISTS idx_research_status ON research_proposals(status);
 

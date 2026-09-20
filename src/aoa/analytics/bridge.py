@@ -63,6 +63,10 @@ class CycleAnalyticsBridge:
         if proposals:
             self.store.insert_proposals(run_id, proposals)
 
+        prices = _extract_prices(result)
+        if prices:
+            self.store.insert_prices(run_id, prices)
+
         return run_id
 
     def record_stage(self, stage: str, duration_ms: float, *, skipped: bool = False) -> None:
@@ -203,3 +207,15 @@ def _extract_proposals(result: TeamCycleResult) -> list[dict[str, Any]]:
     if not result.cycle:
         return []
     return [p.to_context() for p in result.cycle.blackboard.proposals]
+
+
+def _extract_prices(result: TeamCycleResult) -> dict[str, float]:
+    """Reference price per ticker this cycle — the basis for next-cycle hit rates."""
+    if not result.cycle:
+        return {}
+    out: dict[str, float] = {}
+    for symbol, snap in result.cycle.blackboard.snapshots.items():
+        price = snap.reference_price()
+        if price:
+            out[symbol.upper()] = float(price)
+    return out
