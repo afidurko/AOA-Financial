@@ -138,6 +138,30 @@ aoa tv fundamentals NVDA --preset position-equity-1d-fundamental
   synthetic microstructure generator here (`source=synthetic` in reports) and
   on TradingView's own tester with Bar Magnifier.
 
+### Why the 1s/5s presets often show `trades=0`
+
+HFT and scalp presets carry `min_edge_cost_mult` (2.0 for HFT, 1.5 for
+scalp). Before every entry the emulator — and the generated Pine
+(`minEdgeMult`) — checks that the ATR-scaled target clears that multiple of
+the **round-trip** cost (commission both sides + slippage both sides). On 1s
+BTC bars the target is a few basis points while a taker fee schedule
+(0.04 % + 1 tick per side) costs ~10 bp round trip, so the gate refuses every
+signal. The report says so instead of pretending:
+
+```
++0.000  hft-crypto-1s-momentum  BTC-USD  1S  trades=0 ... cost-gated=50 (edge/cost≈0.36, need 2.00)
+note: 4 row(s) took no trades because the ATR edge never cleared fees ...
+```
+
+`entries_blocked_by_edge`, `median_edge_cost_ratio` and
+`required_edge_cost_ratio` are in the row metrics. To make a seconds preset
+tradeable you must change the *economics*, not the gate: model a maker /
+rebate fee (`--param` is not enough — edit `CostModel` on the preset and set
+`commission_value` in the Pine header to match), widen `target_atr`, or move
+to the 15s / 1m presets which do clear costs on volatile pairs. Turning the
+gate off (`min_edge_cost_mult=0`) reproduces the classic "100 % losing scalper"
+result that fees guarantee.
+
 ## Neural memory
 
 `DeskMemory` (`data/tradingview/memory.json`, override with

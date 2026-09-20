@@ -199,6 +199,19 @@ def test_desk_never_proposes_from_synthetic_standin_bars(desk_env: Path, monkeyp
     assert runner2.run(["BTC-USD"], presets=["position-crypto-1d-trend"], capture=False).proposals
 
 
+def test_desk_explains_cost_gated_hft_rows(desk_env: Path) -> None:
+    # 1-second synthetic BTC bars: the ATR target is a few bp, round-trip fees ~10 bp,
+    # so the min_edge_cost_mult gate must refuse every entry and the report must say why.
+    runner = DeskRunner(source="synthetic", report_dir=desk_env / "reports", folds=0, monte_carlo=False, use_fundamentals=False)
+    report = runner.run(["BTC-USD"], presets=["hft-crypto-1s-momentum"], capture=False)
+    row = report.rows[0]
+    assert row.metrics["total_trades"] == 0
+    assert row.metrics["entries_blocked_by_edge"] > 0
+    assert row.metrics["median_edge_cost_ratio"] < row.metrics["required_edge_cost_ratio"]
+    assert any("never cleared fees" in n for n in report.notes)
+    assert any("cost-gated=" in line for line in report.summary_lines())
+
+
 def test_desk_fundamentals_gate_zeroes_reward(desk_env: Path, monkeypatch) -> None:
     from aoa.tradingview.fundamentals import FundamentalSnapshot
 

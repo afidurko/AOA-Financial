@@ -259,8 +259,12 @@ def run_backtest(
             ts = ts.replace(tzinfo=timezone.utc)
         return ts.date()
 
+    edge_blocked = 0
+    edge_ratios: list[float] = []  # expected edge ÷ round-trip cost at each candidate entry
+
     def _edge_ok(atr: float | None, price: float) -> bool:
         """HFT/scalp guard: expected edge must clear ``min_edge_cost_mult`` × round-trip cost."""
+        nonlocal edge_blocked
         if risk.min_edge_cost_mult <= 0 or not atr or price <= 0:
             return True
         edge_atr = risk.target_atr or risk.trail_atr or risk.stop_atr
@@ -268,7 +272,14 @@ def run_backtest(
             return True
         slip = (cfg.tick_size * costs.slippage_ticks / price) if cfg.tick_size else costs.slippage_pct / 100.0
         round_trip = 2.0 * (costs.commission_pct / 100.0 + slip)
-        return edge_atr * atr / price >= risk.min_edge_cost_mult * round_trip
+        if round_trip <= 0:
+            return True
+        ratio = edge_atr * atr / price / round_trip
+        edge_ratios.append(ratio)
+        if ratio >= risk.min_edge_cost_mult:
+            return True
+        edge_blocked += 1
+        return False
 
     for i, bar in enumerate(bars):
         ts = bar.timestamp
@@ -356,6 +367,12 @@ def run_backtest(
         equity_curve=equity_curve,
     )
     result.metrics = compute_metrics(result, preset, cfg, bars, start_index=first_trade_index)
+    if risk.min_edge_cost_mult > 0:
+        # Explain zero-trade HFT rows: how many signals the cost gate refused and how far
+        # the typical edge sat from the bar (ratio < 1 means fees exceed the ATR target).
+        result.metrics["entries_blocked_by_edge"] = edge_blocked
+        result.metrics["median_edge_cost_ratio"] = round(statistics.median(edge_ratios), 3) if edge_ratios else None
+        result.metrics["required_edge_cost_ratio"] = risk.min_edge_cost_mult
     return result
 
 

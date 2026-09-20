@@ -239,14 +239,21 @@ def test_min_edge_cost_gate_blocks_sub_cost_entries(scripted) -> None:
     # target 1.5 ATR with ATR = 0.02 → edge 0.03% < 2 × 0.10% → no trade
     scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.02)
     gated = Preset(**{**base.__dict__, "risk": RiskModel(stop_atr=1.0, target_atr=1.5, min_edge_cost_mult=2.0)})
-    assert run_backtest(bars, gated).trades == []
+    res = run_backtest(bars, gated)
+    assert res.trades == []
+    # the zero-trade row explains itself: every signal was refused and the edge sat at 0.3× cost
+    assert res.metrics["entries_blocked_by_edge"] == 6
+    assert res.metrics["median_edge_cost_ratio"] == pytest.approx(0.3, abs=1e-3)
+    assert res.metrics["required_edge_cost_ratio"] == 2.0
     # same setup with ATR = 0.5 → edge 0.75% ≥ 0.20% → trades
     scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.5)
-    assert run_backtest(bars, gated).trades
-    # gate off → trades even when sub-cost
+    res = run_backtest(bars, gated)
+    assert res.trades and res.metrics["entries_blocked_by_edge"] == 0
+    # gate off → trades even when sub-cost, and no gate diagnostics are emitted
     scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.02)
     off = Preset(**{**base.__dict__, "risk": RiskModel(stop_atr=1.0, target_atr=1.5, min_edge_cost_mult=0.0)})
-    assert run_backtest(bars, off).trades
+    res = run_backtest(bars, off)
+    assert res.trades and "entries_blocked_by_edge" not in res.metrics
     # tick-size slippage path
     scripted({i: Signal(long_entry=True) for i in range(6)}, atr=0.02)
     assert run_backtest(bars, gated, cfg=EmulatorConfig(tick_size=0.01)).trades == []

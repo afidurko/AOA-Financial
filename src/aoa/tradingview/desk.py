@@ -144,6 +144,12 @@ class DeskReport:
                 f"trades={m.get('total_trades', 0):<4} pf={_fmt(m.get('profit_factor'))} "
                 f"sqn={_fmt(m.get('sqn'))} net={_fmt(m.get('net_profit_pct'))}% "
                 f"dd={_fmt(m.get('max_drawdown_pct'))}% oos_net={_fmt(wf.get('net_profit_pct'))}%"
+                + (
+                    f" cost-gated={m['entries_blocked_by_edge']} (edge/cost≈{_fmt(m.get('median_edge_cost_ratio'))}"
+                    f", need {_fmt(m.get('required_edge_cost_ratio'))})"
+                    if m.get("entries_blocked_by_edge")
+                    else ""
+                )
             )
         for p in self.proposals[:5]:
             lines.append(f"  motor→ {p['symbol']:<9} {p['action']:<11} size={p['size_pct']:>5}% conf={p['confidence']:.2f} (human approval required)")
@@ -361,6 +367,19 @@ class DeskRunner:
                 )
             )
         self.memory.touch_agent("Mira", "Memory curator", f"{len(results)} synapses updated")
+        cost_gated = [
+            r for r in report.rows
+            if not r.error and r.metrics.get("entries_blocked_by_edge") and r.metrics.get("total_trades", 0) == 0
+        ]
+        if cost_gated:
+            worst = min(cost_gated, key=lambda r: r.metrics.get("median_edge_cost_ratio") or 0.0)
+            report.notes.append(
+                f"{len(cost_gated)} row(s) took no trades because the ATR edge never cleared fees "
+                f"(e.g. {worst.preset} on {worst.symbol}@{worst.timeframe}: edge/cost≈"
+                f"{_fmt(worst.metrics.get('median_edge_cost_ratio'))}, need "
+                f"{_fmt(worst.metrics.get('required_edge_cost_ratio'))}). "
+                "Sub-minute presets need maker-fee execution or a wider target; the gate is doing its job."
+            )
 
         # --- Sol: connectome proposals (one per symbol, best-trusted preset) ---
         best_by_symbol: dict[str, tuple[float, dict[str, Any], dict[str, Any]]] = {}
