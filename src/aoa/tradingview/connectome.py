@@ -10,9 +10,9 @@ ventral nerve cord, while **ascending neurons (ANs)** copy motor state back up.
 
 We use the *same wiring diagram* as the control loop of the desk:
 
-====================  =====================================================
+--------------------  -----------------------------------------------------
 Fly circuit           Trading role
-====================  =====================================================
+--------------------  -----------------------------------------------------
 optic / antennal lobe ``MarketSense`` — normalised bar features
 Kenyon cells          sparse k-winners code of the sense vector (random
                       projection, seeded → reproducible)
@@ -25,7 +25,7 @@ descending neurons    5 channels: enter_long · enter_short · hold · reduce ·
                       exit; lateral inhibition → winner-take-all
 motor neurons (VNC)   :class:`MotorCommand` proposal — **never** an order
 ascending neurons     fills / PnL feed back into ``reinforce``
-====================  =====================================================
+--------------------  -----------------------------------------------------
 
 The human is the final gate: every :class:`MotorCommand` has
 ``requires_human=True`` and the desk only records proposals. The existing

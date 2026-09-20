@@ -3,15 +3,15 @@
 Lead: **Julie** (algorithm specialist, twelve). Risk sign-off: **Andrea**.
 Critical-only review: **Kai**. Desk members (deterministic, no LLM required):
 
-=========  ==========================  ==================================================
+---------  --------------------------  --------------------------------------------------
 Member     Role                        Owns
-=========  ==========================  ==================================================
+---------  --------------------------  --------------------------------------------------
 Dara       Data engineer               candles, universe, fundamentals snapshots, caches
 Piper      Pine engineer               Pine v6 generation + lint + export
 Quinn      Backtest quant              emulator runs, walk-forward, sweeps, Monte-Carlo
 Mira       Memory curator              DeskMemory learning / consolidation / brain capture
 Sol        Connectome motor mapper     FlyConnectome proposals (human-gated)
-=========  ==========================  ==================================================
+---------  --------------------------  --------------------------------------------------
 
 ``DeskRunner.run()`` executes one full desk cycle:
 
