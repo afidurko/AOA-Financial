@@ -33,3 +33,4 @@
 | 2026-08-15 21:05 | fable-repair | L2 | fixed+workspaces | upg-009 pipeline + upg-001 alpaca paper + httpx2; knowledge-stack verify OK; env.json + VS Code tasks. 430 tests. tokens_estimate=12000 |
 | 2026-08-15 22:05 | ship-loop | L2 | proofread | Simplified Moomoo helpers; merge-base catch-up; 466+ tests pass; Moomoo kept as paper default. tokens_estimate=15000 |
 | 2026-09-20 03:44 | attl | L2 | dry-run | attl mesh selected=upg-001 kai=skip |
+| 2026-09-20 03:53 | attl | L2 | dry-run | attl mesh selected=upg-001 kai=skip |
