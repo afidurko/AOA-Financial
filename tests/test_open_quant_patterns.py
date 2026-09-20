@@ -144,6 +144,20 @@ def test_billion_stress_small_ok() -> None:
     assert result["never_live"] is True
 
 
+def test_scale_stress_smoke_and_unknown() -> None:
+    from aoa.research.open_quant_patterns import STRESS_SCALES, scale_stress
+
+    result = scale_stress("smoke", seed=3)
+    assert result["ok"] is True
+    assert result["scale"] == "smoke"
+    assert result["iterations"] == STRESS_SCALES["smoke"]
+    custom = scale_stress("custom", iterations=10_000, seed=1)
+    assert custom["ok"] is True
+    assert custom["scale"] == "custom"
+    with pytest.raises(ValueError, match="Unknown scale"):
+        scale_stress("nope")
+
+
 def test_erc_weights_sum_and_positive_vol() -> None:
     cov = [[0.09, 0.01, 0.0], [0.01, 0.04, 0.0], [0.0, 0.0, 0.01]]
     res = equal_risk_contribution(cov)
