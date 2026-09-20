@@ -1219,9 +1219,17 @@ def _property_stress(
         "label": label,
         "iterations": iterations,
         "inverse_vol_checks": checked,
+        "property_checks": checked * 3
+        + erc_checked
+        + mi_checked
+        + tan_checked
+        + hrp_checked
+        + stylized_checked
+        + network_checked,
         "erc_checks": erc_checked,
         "mi_checks": mi_checked,
         "seed": seed,
+        "heavy_every": heavy_every,
         "never_live": True,
         "module": "aoa.research.open_quant_patterns",
         "companion": "open-quant-live-book",
