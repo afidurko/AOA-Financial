@@ -49,18 +49,21 @@ all = ["aoa-financial[dev,web,tradingagents,torch,financepy,alpaca,anthropic,hft
 aoa = "aoa.cli:main"
 
 [tool.setuptools.package-dir]
-"" = "src"
-"aoa_financial" = "aoa_financial"
+aoa = "src/aoa"
+aoa_financial = "aoa_financial"
 
 [tool.setuptools.packages.find]
 where = ["src", "."]
 include = ["aoa*", "aoa_financial*"]
+namespaces = false
 
 [tool.setuptools.package-data]
 aoa = ["web/static/mobile/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Include repo root so legacy `aoa_financial` imports work under PYTHONSAFEPATH /
+# isolated CI runners that do not put cwd on sys.path.
 pythonpath = ["src", "."]
 addopts = "--ignore=tests/test_core.py"
 filterwarnings = [
