@@ -42,6 +42,16 @@ def _bull_tape(n: int = 500) -> list[DailyCandle]:
     return _tape(date(2016, 1, 1), closes)
 
 
+class _AlwaysBuy:
+    """Minimal strategy stub: always long, never learns."""
+
+    def decide(self, feats):
+        return "buy", 1.0
+
+    def learn(self, feats, next_ret, candle=None):
+        pass
+
+
 def _crash_tape(n_up: int = 200, n_down: int = 120) -> list[DailyCandle]:
     closes = []
     price = 100.0
@@ -84,12 +94,11 @@ class TestBacktester:
     def test_every_trade_respects_the_bracket(self, tmp_path):
         result = self._run(_crash_tape(), model_dir=tmp_path)
         for trade in result.trades:
+            # Gap-through fills can be beyond the trigger, never inside it.
             if trade.exit_reason == "take-profit":
-                assert trade.return_pct == pytest.approx(32.0, abs=0.5)
+                assert trade.return_pct >= 31.5
             elif trade.exit_reason == "stop-loss":
-                assert trade.return_pct == pytest.approx(-26.0, abs=0.5)
-            # signal/end-of-data exits happen before the bracket is touched:
-            assert -26.5 <= trade.return_pct <= 32.5
+                assert trade.return_pct <= -25.5
 
     def test_bull_tape_generates_take_profit_exits(self, tmp_path):
         result = self._run(_bull_tape(), model_dir=tmp_path)
@@ -119,7 +128,52 @@ class TestBacktester:
         assert result.policy.take_profit_pct == 0.10
         for trade in result.trades:
             if trade.exit_reason == "take-profit":
-                assert trade.return_pct == pytest.approx(10.0, abs=0.3)
+                assert trade.return_pct >= 9.7
+
+    def test_gap_down_through_stop_fills_at_the_worse_open(self):
+        """A −40% overnight gap must fill at the open, not the stop price."""
+        asset = get_asset("BTC")
+        tape = _tape(date(2020, 1, 1), [100.0] * 40, span=0.001)
+        gap_open = 55.0  # far below the −26% stop (≈74) of a ~100 entry
+        tape.append(
+            DailyCandle(
+                day=date(2020, 2, 10),
+                open=gap_open,
+                high=gap_open * 1.02,
+                low=gap_open * 0.98,
+                close=gap_open,
+                volume=1.0,
+            )
+        )
+        tape.extend(_tape(date(2020, 2, 11), [55.0] * 10, span=0.001))
+        bt = CryptoBacktester(asset, warmup_days=2)
+        result = bt.run(tape, _AlwaysBuy(), start=tape[0].day)
+        stops = [t for t in result.trades if t.exit_reason == "stop-loss"]
+        assert stops, "expected the gap to trigger the stop"
+        assert stops[0].exit_price == pytest.approx(gap_open)
+        assert stops[0].return_pct < -40.0  # honestly worse than −26%
+
+    def test_gap_up_through_target_fills_at_the_better_open(self):
+        asset = get_asset("BTC")
+        tape = _tape(date(2020, 1, 1), [100.0] * 40, span=0.001)
+        gap_open = 150.0  # far above the +32% target (≈132)
+        tape.append(
+            DailyCandle(
+                day=date(2020, 2, 10),
+                open=gap_open,
+                high=gap_open * 1.02,
+                low=gap_open * 0.98,
+                close=gap_open,
+                volume=1.0,
+            )
+        )
+        tape.extend(_tape(date(2020, 2, 11), [150.0] * 10, span=0.001))
+        bt = CryptoBacktester(asset, warmup_days=2)
+        result = bt.run(tape, _AlwaysBuy(), start=tape[0].day)
+        targets = [t for t in result.trades if t.exit_reason == "take-profit"]
+        assert targets, "expected the gap to hit the target"
+        assert targets[0].exit_price == pytest.approx(gap_open)
+        assert targets[0].return_pct > 45.0  # honestly better than +32%
 
     def test_entry_execution_requires_valid_bracket(self):
         asset = get_asset("BTC")

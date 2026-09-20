@@ -220,19 +220,20 @@ class CryptoBacktester:
             pending_action = None
 
             # --- bracket exits, stop first (conservative) ------------------------
+            # Gap realism: when the bar *opens* beyond a trigger, the fill is
+            # the open (worse than the stop on a gap-down, better than the
+            # target on a gap-up) — stops do not guarantee their price.
             if position is not None:
                 br = position.bracket
                 if candle.low <= br.stop_loss:
-                    cash, fee = self._close(
-                        position, br.stop_loss, candle.day, "stop-loss", trades
-                    )
+                    fill = min(br.stop_loss, candle.open)
+                    cash, fee = self._close(position, fill, candle.day, "stop-loss", trades)
                     fees += fee
                     sl_exits += 1
                     position = None
                 elif candle.high >= br.take_profit:
-                    cash, fee = self._close(
-                        position, br.take_profit, candle.day, "take-profit", trades
-                    )
+                    fill = max(br.take_profit, candle.open)
+                    cash, fee = self._close(position, fill, candle.day, "take-profit", trades)
                     fees += fee
                     tp_exits += 1
                     position = None
