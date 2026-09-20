@@ -182,7 +182,6 @@ def test_cmd_team_code_skips_broker_and_runs_attl(monkeypatch, capsys):
     from aoa.cli import cmd_team_code
     from aoa.constraints import ConstraintSet
     from aoa.team.code_engineering import CodeQualityReport
-    from aoa.team.models import HealthStatus
 
     cfg = Config(anthropic_api_key="sk-test", env="test")
 
@@ -213,8 +212,6 @@ def test_cmd_team_code_skips_broker_and_runs_attl(monkeypatch, capsys):
             return self
 
     monkeypatch.setattr("aoa.attl.orchestrator.AttlOrchestrator", lambda: _Snap())
-    # HealthStatus is unused except to keep import honest if audit uses it
-    assert HealthStatus.OK
     code = cmd_team_code(cfg, dry_run=True)
     out = capsys.readouterr().out
     assert code == 0
