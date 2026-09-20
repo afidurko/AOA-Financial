@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 
 from aoa.agents.base import Direction, Signal, TradeProposal, parse_side
@@ -12,6 +11,7 @@ from aoa.brokerage.models import AssetClass, OptionContract, Side
 from aoa.config import RiskLimits
 from aoa.data.market_data import PRIMARY_TIMEFRAME
 from aoa.execution.pricing import marketable_limit
+from aoa.parallel import fan_out
 from aoa.plasticity.trust import notional_trust_multiplier
 from aoa.risk.roi import (
     apply_cost_basis_sell_qty,
@@ -156,31 +156,21 @@ class AnalyzeStage(PipelineStage):
         else:
             ctx.news_by_symbol = {}
 
-        workers = max(1, ctx.config.parallel_workers)
         prior_pending = dict(ctx.adapt_pending)
         new_pending: dict[str, dict] = {}
         n_learned = 0
         n_adapted = 0
 
-        if workers == 1 or len(candidates) <= 1:
-            for cand in candidates:
-                result = _compute_analysis(ctx, cand, prior_pending)
-                _apply_analysis(ctx, result)
-                n_learned += result.n_learned
-                n_adapted += result.n_adapted
-                new_pending.update(result.pending)
-        else:
-            with ThreadPoolExecutor(max_workers=workers) as pool:
-                futures = [
-                    pool.submit(_compute_analysis, ctx, cand, prior_pending)
-                    for cand in candidates
-                ]
-                results = [fut.result() for fut in as_completed(futures)]
-            for result in sorted(results, key=lambda r: r.symbol):
-                _apply_analysis(ctx, result)
-                n_learned += result.n_learned
-                n_adapted += result.n_adapted
-                new_pending.update(result.pending)
+        results = fan_out(
+            lambda cand: _compute_analysis(ctx, cand, prior_pending),
+            candidates,
+            workers=ctx.config.parallel_workers,
+        )
+        for result in sorted(results, key=lambda r: r.symbol):
+            _apply_analysis(ctx, result)
+            n_learned += result.n_learned
+            n_adapted += result.n_adapted
+            new_pending.update(result.pending)
 
         if ctx.signal_adapter is not None:
             ctx.adapt_pending.clear()
@@ -460,17 +450,18 @@ def _compute_analysis(
     n_learned = 0
     n_adapted = 0
 
+    workers = ctx.config.parallel_workers
     if ctx.config.trading_agents_enabled:
-        workers = min(4, max(1, ctx.config.parallel_workers))
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
-            fund_fut = pool.submit(ctx.agents.fundamental.analyze, snap, headlines=None)
-            news_fut = pool.submit(ctx.agents.news.analyze, snap, headlines=headlines)
-            sent_fut = pool.submit(ctx.agents.sentiment.analyze, snap, headlines=headlines)
-            tech = tech_fut.result()
-            fund = fund_fut.result()
-            news = news_fut.result()
-            sentiment = sent_fut.result()
+        tech, fund, news, sentiment = fan_out(
+            lambda call: call(),
+            [
+                lambda: ctx.agents.technical.analyze(snap),
+                lambda: ctx.agents.fundamental.analyze(snap, headlines=None),
+                lambda: ctx.agents.news.analyze(snap, headlines=headlines),
+                lambda: ctx.agents.sentiment.analyze(snap, headlines=headlines),
+            ],
+            workers=min(4, workers),
+        )
 
         price = snap.reference_price() if snap else None
         adapted, n_learned, n_adapted, pending_update = _adapt_analyst_signals(
@@ -509,17 +500,14 @@ def _compute_analysis(
         analyst_reports = None
         research_debate = None
 
-        if ctx.config.parallel_workers > 1:
-            with ThreadPoolExecutor(max_workers=2) as pool:
-                tech_fut = pool.submit(ctx.agents.technical.analyze, snap)
-                fund_fut = pool.submit(
-                    ctx.agents.fundamental.analyze, snap, headlines=headlines
-                )
-                tech = tech_fut.result()
-                fund = fund_fut.result()
-        else:
-            tech = ctx.agents.technical.analyze(snap)
-            fund = ctx.agents.fundamental.analyze(snap, headlines=headlines)
+        tech, fund = fan_out(
+            lambda call: call(),
+            [
+                lambda: ctx.agents.technical.analyze(snap),
+                lambda: ctx.agents.fundamental.analyze(snap, headlines=headlines),
+            ],
+            workers=min(2, workers),
+        )
 
         price = snap.reference_price() if snap else None
         adapted, n_learned, n_adapted, pending_update = _adapt_analyst_signals(

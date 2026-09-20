@@ -153,6 +153,27 @@ class AnalyticsStore:
                     ),
                 )
 
+    def insert_prices(self, run_id: str, prices: dict[str, float]) -> None:
+        """Record the reference price seen for each ticker during ``run_id``."""
+        rows = [
+            (run_id, str(ticker).upper(), float(price))
+            for ticker, price in prices.items()
+            if ticker and price is not None and float(price) > 0
+        ]
+        if not rows:
+            return
+        with self.transaction() as c:
+            c.executemany(
+                """INSERT INTO cycle_prices(run_id,ticker,price) VALUES(?,?,?)
+                   ON CONFLICT(run_id,ticker) DO UPDATE SET price=excluded.price""",
+                rows,
+            )
+
+    def rows(self, sql: str, args: tuple | list = ()) -> list[dict[str, Any]]:
+        """Run a read-only query under the store lock; JSON columns are decoded."""
+        with self._lock:
+            return [_row_to_dict(r) for r in self._conn.execute(sql, tuple(args)).fetchall()]
+
     def insert_stage_metric(
         self, run_id: str, stage: str, duration_ms: float, *, skipped: bool = False
     ) -> None:

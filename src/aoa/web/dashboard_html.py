@@ -83,6 +83,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <div class="tab" data-tab="catalysts">Catalysts</div>
       <div class="tab" data-tab="overlay">Jim &amp; Cindy</div>
       <div class="tab" data-tab="risk">Risk plans</div>
+      <div class="tab" data-tab="analytics">Analytics</div>
       <div class="tab" data-tab="journal">Journal</div>
     </div>
     <div id="panel-attention" class="panel active card">
@@ -154,6 +155,20 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       <h2>Andrea — pre-execution risk &amp; trade plans</h2>
       <div id="risk-plans-list"></div>
     </div>
+    <div id="panel-analytics" class="panel card">
+      <h2>Decision analytics — who is right, what is slow, what gets approved</h2>
+      <div class="stat-sm" id="analytics-throughput" style="margin-bottom:.75rem">—</div>
+      <h2 style="margin-top:.5rem">Agent scorecard (hit rate vs next-cycle move)</h2>
+      <table><thead><tr><th>Agent</th><th>Signals</th><th>Avg conv</th><th>Long / short / neutral</th><th>Scored</th><th>Hit rate</th><th>Avg signed return</th></tr></thead>
+      <tbody id="analytics-agents"><tr><td colspan="7">No signals yet</td></tr></tbody></table>
+      <h2 style="margin-top:1rem">Stage latency</h2>
+      <table><thead><tr><th>Stage</th><th>Runs</th><th>Skipped</th><th>Avg ms</th><th>p50 ms</th><th>p95 ms</th><th>Max ms</th></tr></thead>
+      <tbody id="analytics-stages"><tr><td colspan="7">No stage metrics yet</td></tr></tbody></table>
+      <h2 style="margin-top:1rem">Proposal funnel</h2>
+      <div class="stat-sm" id="analytics-funnel-head">—</div>
+      <table style="margin-top:.5rem"><thead><tr><th>Strategy</th><th>Proposals</th><th>Approved</th><th>Rate</th></tr></thead>
+      <tbody id="analytics-funnel"><tr><td colspan="4">No proposals yet</td></tr></tbody></table>
+    </div>
     <div id="panel-journal" class="panel card">
       <h2>Journal tail</h2>
       <div id="journal"></div>
@@ -172,7 +187,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     });
     function toggleMember(el){ el.classList.toggle('open'); }
     async function refresh(){
-      const [status,config,last,journal,roi,approvals,research,promotions,attention] = await Promise.all([
+      const [status,config,last,journal,roi,approvals,research,promotions,attention,analytics] = await Promise.all([
         fetch('/api/status').then(r=>r.json()),
         fetch('/api/config').then(r=>r.json()).catch(()=>({})),
         fetch('/api/last-cycle').then(r=>r.json()),
@@ -182,7 +197,9 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         fetch('/api/research/proposals').then(r=>r.json()).catch(()=>({items:[]})),
         fetch('/api/team/expansions').then(r=>r.json()).catch(()=>({items:[]})),
         fetch('/api/needs-attention').then(r=>r.json()).catch(()=>({count:0,items:[]})),
+        fetch('/api/analytics/summary').then(r=>r.ok?r.json():null).catch(()=>null),
       ]);
+      renderAnalytics(analytics);
       const osLink=document.getElementById('openstock-link');
       if(config.openstock_url){
         osLink.href=config.openstock_url;
@@ -461,6 +478,31 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     function levelPct(stats, price){
       if(!stats||!price||!stats.bar_high||stats.bar_high<=stats.bar_low) return 50;
       return ((price-stats.bar_low)/(stats.bar_high-stats.bar_low)*100).toFixed(1);
+    }
+    const pct = v => v==null?'—':(v*100).toFixed(0)+'%';
+    function renderAnalytics(a){
+      const tp=(a&&a.throughput)||{};
+      document.getElementById('analytics-throughput').textContent=tp.cycles
+        ? `${tp.cycles} cycles · ${tp.cycles_per_day}/day · halt ${pct(tp.halt_rate)} · wall avg ${(tp.avg_wall_ms/1000).toFixed(1)}s · p95 ${(tp.p95_wall_ms/1000).toFixed(1)}s`
+        : (a? 'No cycles recorded yet' : 'Analytics disabled');
+      const agents=(a&&a.agents)||[];
+      document.getElementById('analytics-agents').innerHTML=agents.length?agents.map(r=>{
+        const hit=r.hit_rate; const cls=hit==null?'':hit>=0.5?'approved':'blocked';
+        const ret=r.avg_signed_return_pct;
+        return `<tr><td><strong>${r.agent}</strong></td><td>${r.signals}</td><td>${r.avg_conviction??'—'}</td><td>${r.long} / ${r.short} / ${r.neutral}</td><td>${r.scored}</td><td class="${cls}">${pct(hit)}</td><td>${ret==null?'—':(ret>0?'+':'')+ret.toFixed(2)+'%'}</td></tr>`;
+      }).join(''):'<tr><td colspan="7">No signals yet</td></tr>';
+      const stages=(a&&a.stages)||[];
+      document.getElementById('analytics-stages').innerHTML=stages.length?stages.map(s=>
+        `<tr><td>${s.stage}</td><td>${s.runs}</td><td>${s.skipped}</td><td>${s.avg_ms.toFixed(0)}</td><td>${s.p50_ms.toFixed(0)}</td><td>${s.p95_ms.toFixed(0)}</td><td>${s.max_ms.toFixed(0)}</td></tr>`
+      ).join(''):'<tr><td colspan="7">No stage metrics yet</td></tr>';
+      const f=(a&&a.funnel)||{};
+      document.getElementById('analytics-funnel-head').textContent=f.proposals
+        ? `${f.proposals} proposals → ${f.approved} approved (${pct(f.approval_rate)}) · approved notional ${fmt(f.approved_notional)}`
+        : 'No proposals yet';
+      const strat=f.by_strategy||[];
+      document.getElementById('analytics-funnel').innerHTML=strat.length?strat.map(g=>
+        `<tr><td>${g.strategy}</td><td>${g.proposals}</td><td>${g.approved}</td><td>${pct(g.approval_rate)}</td></tr>`
+      ).join(''):'<tr><td colspan="4">No proposals yet</td></tr>';
     }
     function renderRiskPlans(items){
       document.getElementById('risk-plans-list').innerHTML=items.length?items.map(r=>{

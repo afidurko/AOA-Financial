@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from aoa.llm.client import LLMClient
+from aoa.parallel import fan_out
 from aoa.team.models import SubTeamMember, TeamExpansionProposal
 
 if TYPE_CHECKING:
@@ -122,9 +122,6 @@ class TeamExpansionService:
 
     def propose_all(self, *, replace_pending: bool = True) -> list[TeamExpansionProposal]:
         """Each lead drafts a sub-team proposal; stored for user approval."""
-        created: list[TeamExpansionProposal] = []
-        workers = min(4, len(LEAD_PROFILES))
-
         def _one(profile: dict[str, str]) -> TeamExpansionProposal:
             proposal = self._propose_for_lead(profile)
             pid = self.store.upsert_team_expansion(
@@ -146,10 +143,7 @@ class TeamExpansionService:
                 )
             return proposal
 
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(_one, p): p for p in LEAD_PROFILES}
-            for fut in as_completed(futures):
-                created.append(fut.result())
+        created = fan_out(_one, LEAD_PROFILES, workers=4)
         created.sort(key=lambda p: p.lead_name)
         return created
 

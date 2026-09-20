@@ -400,3 +400,48 @@ def test_api_run_returns_409_when_cycle_busy(client):
         assert "already running" in r.json()["detail"].lower()
     finally:
         runner._cycle_lock.release()
+
+
+def test_api_analytics_insights_after_cycles(client):
+    client.post("/api/run")
+    client.post("/api/run")
+
+    summary = client.get("/api/analytics/summary").json()
+    assert summary["throughput"]["cycles"] == 2
+    agents = {a["agent"]: a for a in summary["agents"]}
+    assert "Tom" in agents and agents["Tom"]["signals"] == 2
+    # Two cycles at the same fake price → scored once, flat move counts as a miss.
+    assert agents["Tom"]["scored"] == 1
+    assert agents["Tom"]["hit_rate"] == 0.0
+    assert any(s["stage"] == "analyze" for s in summary["stages"])
+    assert summary["funnel"]["proposals"] >= 1
+
+    assert client.get("/api/analytics/agents").json()["items"]
+    assert client.get("/api/analytics/stages").json()["items"]
+    assert client.get("/api/analytics/funnel").json()["proposals"] >= 1
+
+
+def test_api_analytics_insights_when_disabled(fake_broker, fake_llm, monkeypatch, tmp_path):
+    from aoa.data.news import NullNewsFeed
+
+    cfg = Config(
+        anthropic_api_key="x",
+        alpaca_key_id="x",
+        alpaca_secret_key="x",
+        universe=("AAPL",),
+        dry_run=True,
+        news_enabled=False,
+        web_auto_loop=False,
+        analytics_enabled=False,
+        journal_path=tmp_path / "j.jsonl",
+        risk=RiskLimits(),
+    )
+    monkeypatch.setattr("aoa.cli.build_broker", lambda c: fake_broker)
+    monkeypatch.setattr("aoa.cli.build_llm", lambda c: fake_llm)
+    monkeypatch.setattr("aoa.cli.build_news", lambda c: NullNewsFeed())
+    with TestClient(create_app(cfg)) as tc:
+        assert tc.get("/api/analytics/summary").status_code == 404
+        assert tc.get("/api/analytics/agents").json() == {"items": []}
+        assert tc.get("/api/analytics/stages").json() == {"items": []}
+        assert tc.get("/api/analytics/funnel").status_code == 404
+        assert 'data-tab="analytics"' in tc.get("/").text

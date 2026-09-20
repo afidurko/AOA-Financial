@@ -36,6 +36,10 @@ Bob and Julie share `run_code_quality_audit()`:
 |---------|--------|
 | Order limit pricing | `src/aoa/execution/pricing.py` |
 | Alpaca feed/adjustment constants | `src/aoa/brokerage/constants.py` |
+| Concurrency (any fan-out of agents / sub-agents / data) | `src/aoa/parallel.py` — never hand-roll `ThreadPoolExecutor` |
+| Team analysis lanes + `TeamAnalysis` | `src/aoa/team/orchestrator.py` |
+| Indicator hot path (`technical_snapshot`) | `src/aoa/data/indicators.py` — shared series, byte-identical to standalone functions |
+| Decision analytics (hit rates, latency, funnel) | `src/aoa/analytics/insights.py` (+ `report.py` for `aoa analytics`) |
 | Code audit | `src/aoa/team/code_engineering.py` |
 | ATTL mesh | `src/aoa/attl/mesh.py` |
 | Constraints loader | `src/aoa/constraints.py` |
@@ -46,6 +50,7 @@ Bob and Julie share `run_code_quality_audit()`:
 
 ```bash
 python3 -m aoa.cli team health
+python3 -m aoa.cli analytics summary
 python3 -m aoa.cli attl status
 python3 -m aoa.cli attl run --dry-run
 python3 -m aoa.cli integrity roster

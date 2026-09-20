@@ -14,6 +14,7 @@ python3 -m ruff check src tests
 python3 -m pytest -q
 python3 -m aoa.cli tasks run verify
 python3 -m aoa.cli tasks run tier1-check
+python3 -m aoa.cli analytics summary
 python3 -m aoa.cli repair triage
 python3 -m aoa.cli repair gate --for triage
 python3 -m aoa.cli repair gate --for repair

@@ -13,6 +13,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from aoa.analytics.bridge import _analyst_reports_from_env
+from aoa.analytics.insights import (
+    agent_scorecard,
+    analytics_summary,
+    proposal_funnel,
+    stage_latency,
+)
 from aoa.analytics.store import AnalyticsStore
 from aoa.brokerage.base import BrokerError
 from aoa.cli import build_team
@@ -195,6 +201,34 @@ def create_app(cfg: Config | None = None) -> FastAPI:
         if store is None:
             return {"cycles_recorded": 0, "halt_rate": 0.0, "approved_proposals": 0}
         return store.roi_summary()
+
+    @app.get("/api/analytics/summary")
+    def analytics_summary_view(request: Request, runs: int = 200) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        return analytics_summary(store, limit_runs=runs)
+
+    @app.get("/api/analytics/agents")
+    def analytics_agents(request: Request, runs: int = 200) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            return {"items": []}
+        return {"items": agent_scorecard(store, limit_runs=runs)}
+
+    @app.get("/api/analytics/stages")
+    def analytics_stages(request: Request, runs: int = 200) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            return {"items": []}
+        return {"items": stage_latency(store, limit_runs=runs)}
+
+    @app.get("/api/analytics/funnel")
+    def analytics_funnel(request: Request, runs: int = 200) -> dict[str, Any]:
+        store: AnalyticsStore | None = request.app.state.analytics_store
+        if store is None:
+            raise HTTPException(status_code=404, detail="Analytics disabled")
+        return proposal_funnel(store, limit_runs=runs)
 
     @app.get("/api/approvals")
     def list_approvals(request: Request, status: str | None = None) -> dict[str, Any]:
