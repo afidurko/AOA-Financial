@@ -31,8 +31,9 @@ trading paper/dry-run; they compound agent + human throughput.
    knowledge-stack + qm + visualhft setup scripts.
 7. **Paper profile split in cloud** — keep local `paper-dry` on Moomoo; cloud
    agents export `AOA_BROKER=alpaca` so doctor/team health are not OpenD-bound.
-8. **Trillion-class overnight job** — `aoa openquant stress --scale trillion`
-   (~3×10⁹ checks; ~hours). Full 10¹² only with `--iterations 1000000000000`.
+8. **Trillion-class job** — `aoa openquant stress --scale trillion --workers 4`
+   (~3×10⁹ checks sharded across cores; ~40 min on 4 cores instead of ~2.5 h
+   single-core). Full 10¹² only with `--iterations 1000000000000`.
 
 ## Mesh & security add-ons (2026-09-20 loop run)
 
