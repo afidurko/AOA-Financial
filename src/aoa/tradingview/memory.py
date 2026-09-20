@@ -23,12 +23,14 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 DEFAULT_MEMORY_PATH = Path("data") / "tradingview" / "memory.json"
+_LESSON_WEIGHT = re.compile(r"\s*\([+-]?\d+(?:\.\d+)?\)")
 
 
 def memory_path() -> Path:
@@ -198,9 +200,14 @@ class DeskMemory:
                     f"Avoid {row['preset']} on {row['symbol']}@{row['timeframe']} ({float(row['weight']):+.2f})."
                 )
         merged: list[str] = []
+        seen: set[str] = set()
         for text in lessons + self.lessons:
-            if text not in merged:
-                merged.append(text)
+            # Fresh lessons win; an older copy that differs only by its weight is a duplicate.
+            key = _LESSON_WEIGHT.sub("", text)
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(text)
             if len(merged) >= max_lessons:
                 break
         self.lessons = merged

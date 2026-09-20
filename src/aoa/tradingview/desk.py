@@ -365,6 +365,9 @@ class DeskRunner:
         # --- Sol: connectome proposals (one per symbol, best-trusted preset) ---
         best_by_symbol: dict[str, tuple[float, dict[str, Any], dict[str, Any]]] = {}
         for meta, (metrics, _wf, _mc) in zip(task_meta, results, strict=True):
+            # Never build a proposal for a real symbol from synthetic stand-in bars.
+            if meta["source"].startswith("synthetic") and self.source != "synthetic":
+                continue
             w = self.memory.recall(meta["preset"].name, meta["symbol"], meta["tf"])
             cur = best_by_symbol.get(meta["symbol"])
             if cur is None or w > cur[0]:

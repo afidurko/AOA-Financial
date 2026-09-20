@@ -87,6 +87,18 @@ def test_aggregates_lessons_and_context() -> None:
     assert DeskMemory().to_prompt_block() == ""
 
 
+def test_lessons_dedupe_across_runs_when_only_weight_changes() -> None:
+    m = DeskMemory(eta=1.0)
+    m.learn("bad", "AAPL", "1", -0.8)
+    m.distill_lessons()
+    first = [t for t in m.lessons if "Avoid bad on AAPL@1" in t]
+    assert len(first) == 1
+    m.learn("bad", "AAPL", "1", -0.9)
+    m.distill_lessons()
+    avoid = [t for t in m.lessons if "Avoid bad on AAPL@1" in t]
+    assert len(avoid) == 1 and "-0.90" in avoid[0]  # fresh weight wins, stale copy dropped
+
+
 def test_episodes_are_capped_and_agents_tracked() -> None:
     m = DeskMemory(max_episodes=3)
     for i in range(5):

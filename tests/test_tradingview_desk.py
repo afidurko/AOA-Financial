@@ -181,6 +181,24 @@ def test_desk_flags_insufficient_bars_and_reuses_memory(desk_env: Path) -> None:
     assert list((desk_env / "reports").glob("sweep-*.json"))
 
 
+def test_desk_never_proposes_from_synthetic_standin_bars(desk_env: Path, monkeypatch) -> None:
+    from aoa.tradingview import data as tvdata
+
+    def fake_fetch_bars(symbol, tf, **kw):
+        # network "fails" → synthetic stand-in, exactly as fetch_bars reports it
+        return tvdata.synthetic_bars(symbol, tvdata.get_timeframe(tf), n=600, seed=1, market="crypto"), "synthetic (coinbase: HTTP 429)"
+
+    monkeypatch.setattr("aoa.tradingview.desk.fetch_bars", fake_fetch_bars)
+    runner = DeskRunner(source="auto", report_dir=desk_env / "reports", folds=0, monte_carlo=False, use_fundamentals=False)
+    report = runner.run(["BTC-USD"], presets=["position-crypto-1d-trend"], capture=False)
+    assert report.rows and report.rows[0].source.startswith("synthetic")
+    assert report.proposals == []
+    # an explicit synthetic run still proposes (that is what the user asked for)
+    runner2 = DeskRunner(source="synthetic", report_dir=desk_env / "reports", folds=0, monte_carlo=False, use_fundamentals=False)
+    monkeypatch.setattr("aoa.tradingview.desk.fetch_bars", lambda symbol, tf, **kw: (fake_fetch_bars(symbol, tf)[0], "synthetic"))
+    assert runner2.run(["BTC-USD"], presets=["position-crypto-1d-trend"], capture=False).proposals
+
+
 def test_desk_fundamentals_gate_zeroes_reward(desk_env: Path, monkeypatch) -> None:
     from aoa.tradingview.fundamentals import FundamentalSnapshot
 
