@@ -1,0 +1,123 @@
+//@version=6
+// AOA Financial — TradingView desk preset: position-equity-1d-fundamental
+// Daily 12-1 momentum above the 200-day SMA, gated by fundamentals (trailing P/E cap, positive EPS and revenue growth); 3 ATR trailing stop.
+// horizon=position market=equity timeframe=1 day generated=2026-09-20
+// The same rules are backtested offline by aoa.tradingview.backtest (TradingView fill semantics).
+// Human has final say: this script only emits alerts. Route them to POST /api/tradingview/webhook.
+strategy("AOA position-equity-1d-fundamental", shorttitle="AOA-POSI-EQUI-1D", overlay=true,
+     initial_capital=100000, currency=currency.USD,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=10.0,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=1, pyramiding=0, calc_on_every_tick=false,
+     process_orders_on_close=false, use_bar_magnifier=true,
+     max_bars_back=500)
+
+grpSig = "Signal"
+smaLen   = input.int(200, "Trend SMA length", minval=2, group=grpSig)
+momLen   = input.int(252, "Momentum lookback (bars)", minval=2, group=grpSig)
+momSkip  = input.int(21, "Momentum skip (bars)", minval=0, group=grpSig)
+minMom   = input.float(5.0, "Min momentum %", group=grpSig)
+
+smaVal  = ta.sma(close, smaLen)
+momRef  = close[momLen]
+momRec  = close[momSkip]
+momPct  = momRef > 0 ? (momRec / momRef - 1) * 100 : 0.0
+longCond  = close > smaVal and momPct > minMom
+shortCond = false
+exitLong  = ta.crossunder(close, smaVal)
+exitShort = false
+plot(smaVal, "Trend SMA", color=color.new(color.blue, 0))
+
+grpRisk = "Risk"
+stopAtr    = input.float(3.0, "Stop (ATR x)", minval=0, step=0.1, group=grpRisk)
+targetAtr  = input.float(0.0, "Target (ATR x, 0 = off)", minval=0, step=0.1, group=grpRisk)
+trailAtr   = input.float(3.0, "Trailing stop (ATR x, 0 = off)", minval=0, step=0.1, group=grpRisk)
+maxBars    = input.int(0, "Time stop (bars, 0 = off)", minval=0, group=grpRisk)
+maxPerDay  = input.int(0, "Max entries per day (0 = off)", minval=0, group=grpRisk)
+allowShort = input.bool(false, "Allow shorts", group=grpRisk)
+atrLen     = input.int(14, "ATR length", minval=1, group=grpRisk)
+minEdgeMult = input.float(0.0, "Min edge / round-trip cost (0 = off)", minval=0, step=0.5, group=grpRisk)
+commPct    = 0.02  // must match strategy() commission_value
+slipTicks  = 1  // must match strategy() slippage
+
+inSession      = true
+lastSessionBar = false
+
+grpFund = "Fundamentals (request.financial)"
+useFund   = input.bool(true, "Gate entries on fundamentals", group=grpFund)
+maxPE     = input.float(45.0, "Max trailing P/E", minval=0, group=grpFund)
+minEpsG   = input.float(0.0, "Min EPS growth % (1y)", group=grpFund)
+minRevG   = input.float(0.0, "Min revenue growth % (1y)", group=grpFund)
+minMargin = input.float(0.0, "Min net margin %", group=grpFund)
+maxDE     = input.float(3.0, "Max debt / equity", minval=0, group=grpFund)
+epsTTM    = request.financial(syminfo.tickerid, "EARNINGS_PER_SHARE_BASIC", "TTM", ignore_invalid_symbol=true)
+epsGrowth = request.financial(syminfo.tickerid, "EARNINGS_PER_SHARE_BASIC_ONE_YEAR_GROWTH", "TTM", ignore_invalid_symbol=true)
+revGrowth = request.financial(syminfo.tickerid, "REVENUE_ONE_YEAR_GROWTH", "TTM", ignore_invalid_symbol=true)
+netMargin = request.financial(syminfo.tickerid, "NET_MARGIN", "TTM", ignore_invalid_symbol=true)
+debtEq    = request.financial(syminfo.tickerid, "DEBT_TO_EQUITY", "FQ", ignore_invalid_symbol=true)
+trailingPE = epsTTM > 0 ? close / epsTTM : na
+peOk     = na(epsTTM) ? true : epsTTM <= 0 ? false : trailingPE <= maxPE
+epsOk    = na(epsGrowth) or epsGrowth >= minEpsG
+revOk    = na(revGrowth) or revGrowth >= minRevG
+marginOk = na(netMargin) or netMargin >= minMargin
+deOk     = na(debtEq) or debtEq <= maxDE
+fundOk   = not useFund or (peOk and epsOk and revOk and marginOk and deOk)
+
+// ── Execution & risk ────────────────────────────────────────────────────
+atrVal = ta.atr(atrLen)
+var int   tradesToday = 0
+var float entryAtr    = na
+var float trailStop   = na
+if ta.change(time("D")) != 0
+    tradesToday := 0
+justOpened = strategy.position_size != 0 and strategy.position_size[1] == 0
+if justOpened
+    tradesToday += 1
+    entryAtr  := atrVal[1]
+    trailStop := na
+isLong  = strategy.position_size > 0
+isShort = strategy.position_size < 0
+flat    = strategy.position_size == 0
+barsInTrade = strategy.opentrades > 0 ? bar_index - strategy.opentrades.entry_bar_index(0) : 0
+perDayOk = maxPerDay == 0 or tradesToday < maxPerDay
+// HFT/scalp guard: ATR-scaled edge must clear minEdgeMult x round-trip cost (both sides)
+rtCost   = 2 * (commPct / 100 + slipTicks * syminfo.mintick / close)
+edgeAtr  = targetAtr > 0 ? targetAtr : trailAtr > 0 ? trailAtr : stopAtr
+edgeOk   = minEdgeMult == 0 or edgeAtr == 0 or edgeAtr * atrVal / close >= minEdgeMult * rtCost
+canEnter = flat and inSession and not lastSessionBar and perDayOk and fundOk and edgeOk and barstate.isconfirmed
+
+// entries fill on the next bar open (process_orders_on_close=false)
+if canEnter and longCond
+    strategy.entry("L", strategy.long, alert_message='{"source": "aoa-tradingview", "preset": "position-equity-1d-fundamental", "event": "enter_long", "market": "equity","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+if canEnter and shortCond and allowShort
+    strategy.entry("S", strategy.short, alert_message='{"source": "aoa-tradingview", "preset": "position-equity-1d-fundamental", "event": "enter_short", "market": "equity","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+
+// protective exits: ATR stop / target / trailing (ratchets on close), time stop, session end
+entryPx = strategy.opentrades > 0 ? strategy.opentrades.entry_price(0) : na
+if isLong and not na(entryAtr)
+    float fixedStop = stopAtr > 0 ? entryPx - stopAtr * entryAtr : na
+    float tgt       = targetAtr > 0 ? entryPx + targetAtr * entryAtr : na
+    if trailAtr > 0
+        float cand = close - trailAtr * atrVal
+        trailStop := na(trailStop) ? cand : math.max(trailStop, cand)
+    float stopPx = na(trailStop) ? fixedStop : na(fixedStop) ? trailStop : math.max(fixedStop, trailStop)
+    strategy.exit("XL", from_entry="L", stop=stopPx, limit=tgt, alert_message='{"source": "aoa-tradingview", "preset": "position-equity-1d-fundamental", "event": "exit_long", "market": "equity","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+if isShort and not na(entryAtr)
+    float fixedStop = stopAtr > 0 ? entryPx + stopAtr * entryAtr : na
+    float tgt       = targetAtr > 0 ? entryPx - targetAtr * entryAtr : na
+    if trailAtr > 0
+        float cand = close + trailAtr * atrVal
+        trailStop := na(trailStop) ? cand : math.min(trailStop, cand)
+    float stopPx = na(trailStop) ? fixedStop : na(fixedStop) ? trailStop : math.min(fixedStop, trailStop)
+    strategy.exit("XS", from_entry="S", stop=stopPx, limit=tgt, alert_message='{"source": "aoa-tradingview", "preset": "position-equity-1d-fundamental", "event": "exit_short", "market": "equity","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+
+timeStop   = maxBars > 0 and barsInTrade >= maxBars
+sessionEnd = lastSessionBar or (not inSession and not flat)
+if isLong and (exitLong or timeStop or sessionEnd)
+    strategy.close("L", comment=sessionEnd ? "session" : timeStop ? "time" : "signal", alert_message='{"source": "aoa-tradingview", "preset": "position-equity-1d-fundamental", "event": "exit_long", "market": "equity","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}', immediately=sessionEnd)
+if isShort and (exitShort or timeStop or sessionEnd)
+    strategy.close("S", comment=sessionEnd ? "session" : timeStop ? "time" : "signal", alert_message='{"source": "aoa-tradingview", "preset": "position-equity-1d-fundamental", "event": "exit_short", "market": "equity","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}', immediately=sessionEnd)
+
+bgcolor(not inSession ? color.new(color.gray, 92) : na)
+plotshape(canEnter and longCond, "Long signal", shape.triangleup, location.belowbar, color.new(color.green, 0), size=size.tiny)
+plotshape(canEnter and shortCond and allowShort, "Short signal", shape.triangledown, location.abovebar, color.new(color.red, 0), size=size.tiny)

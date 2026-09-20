@@ -1,0 +1,109 @@
+//@version=6
+// AOA Financial — TradingView desk preset: swing-crypto-1d-meanrev
+// Daily Bollinger(20, 2) reversion for crypto: buy band breaks with RSI(14) < 30, exit at the basis.
+// horizon=swing market=crypto timeframe=1 day generated=2026-09-20
+// The same rules are backtested offline by aoa.tradingview.backtest (TradingView fill semantics).
+// Human has final say: this script only emits alerts. Route them to POST /api/tradingview/webhook.
+strategy("AOA swing-crypto-1d-meanrev", shorttitle="AOA-SWIN-CRYP-1D", overlay=true,
+     initial_capital=100000, currency=currency.USD,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=15.0,
+     commission_type=strategy.commission.percent, commission_value=0.02,
+     slippage=1, pyramiding=0, calc_on_every_tick=false,
+     process_orders_on_close=false, use_bar_magnifier=true,
+     max_bars_back=500)
+
+grpSig = "Signal"
+bbLen   = input.int(20, "Bollinger length", minval=2, group=grpSig)
+bbMult  = input.float(2.0, "Bollinger multiplier", minval=0.1, step=0.1, group=grpSig)
+rsiLen  = input.int(14, "RSI length", minval=2, group=grpSig)
+rsiLow  = input.float(30.0, "RSI oversold", group=grpSig)
+rsiHigh = input.float(70.0, "RSI overbought", group=grpSig)
+
+basis  = ta.sma(close, bbLen)
+dev    = bbMult * ta.stdev(close, bbLen)
+upperB = basis + dev
+lowerB = basis - dev
+rsiVal = ta.rsi(close, rsiLen)
+longCond  = close < lowerB and rsiVal < rsiLow
+shortCond = close > upperB and rsiVal > rsiHigh
+exitLong  = ta.crossover(close, basis)
+exitShort = ta.crossunder(close, basis)
+plot(basis, "Basis", color=color.new(color.gray, 0))
+plot(upperB, "Upper", color=color.new(color.red, 30))
+plot(lowerB, "Lower", color=color.new(color.green, 30))
+
+grpRisk = "Risk"
+stopAtr    = input.float(2.0, "Stop (ATR x)", minval=0, step=0.1, group=grpRisk)
+targetAtr  = input.float(0.0, "Target (ATR x, 0 = off)", minval=0, step=0.1, group=grpRisk)
+trailAtr   = input.float(0.0, "Trailing stop (ATR x, 0 = off)", minval=0, step=0.1, group=grpRisk)
+maxBars    = input.int(15, "Time stop (bars, 0 = off)", minval=0, group=grpRisk)
+maxPerDay  = input.int(0, "Max entries per day (0 = off)", minval=0, group=grpRisk)
+allowShort = input.bool(false, "Allow shorts", group=grpRisk)
+atrLen     = input.int(14, "ATR length", minval=1, group=grpRisk)
+minEdgeMult = input.float(0.0, "Min edge / round-trip cost (0 = off)", minval=0, step=0.5, group=grpRisk)
+commPct    = 0.02  // must match strategy() commission_value
+slipTicks  = 1  // must match strategy() slippage
+
+inSession      = true
+lastSessionBar = false
+
+fundOk = true
+
+// ── Execution & risk ────────────────────────────────────────────────────
+atrVal = ta.atr(atrLen)
+var int   tradesToday = 0
+var float entryAtr    = na
+var float trailStop   = na
+if ta.change(time("D")) != 0
+    tradesToday := 0
+justOpened = strategy.position_size != 0 and strategy.position_size[1] == 0
+if justOpened
+    tradesToday += 1
+    entryAtr  := atrVal[1]
+    trailStop := na
+isLong  = strategy.position_size > 0
+isShort = strategy.position_size < 0
+flat    = strategy.position_size == 0
+barsInTrade = strategy.opentrades > 0 ? bar_index - strategy.opentrades.entry_bar_index(0) : 0
+perDayOk = maxPerDay == 0 or tradesToday < maxPerDay
+// HFT/scalp guard: ATR-scaled edge must clear minEdgeMult x round-trip cost (both sides)
+rtCost   = 2 * (commPct / 100 + slipTicks * syminfo.mintick / close)
+edgeAtr  = targetAtr > 0 ? targetAtr : trailAtr > 0 ? trailAtr : stopAtr
+edgeOk   = minEdgeMult == 0 or edgeAtr == 0 or edgeAtr * atrVal / close >= minEdgeMult * rtCost
+canEnter = flat and inSession and not lastSessionBar and perDayOk and fundOk and edgeOk and barstate.isconfirmed
+
+// entries fill on the next bar open (process_orders_on_close=false)
+if canEnter and longCond
+    strategy.entry("L", strategy.long, alert_message='{"source": "aoa-tradingview", "preset": "swing-crypto-1d-meanrev", "event": "enter_long", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+if canEnter and shortCond and allowShort
+    strategy.entry("S", strategy.short, alert_message='{"source": "aoa-tradingview", "preset": "swing-crypto-1d-meanrev", "event": "enter_short", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+
+// protective exits: ATR stop / target / trailing (ratchets on close), time stop, session end
+entryPx = strategy.opentrades > 0 ? strategy.opentrades.entry_price(0) : na
+if isLong and not na(entryAtr)
+    float fixedStop = stopAtr > 0 ? entryPx - stopAtr * entryAtr : na
+    float tgt       = targetAtr > 0 ? entryPx + targetAtr * entryAtr : na
+    if trailAtr > 0
+        float cand = close - trailAtr * atrVal
+        trailStop := na(trailStop) ? cand : math.max(trailStop, cand)
+    float stopPx = na(trailStop) ? fixedStop : na(fixedStop) ? trailStop : math.max(fixedStop, trailStop)
+    strategy.exit("XL", from_entry="L", stop=stopPx, limit=tgt, alert_message='{"source": "aoa-tradingview", "preset": "swing-crypto-1d-meanrev", "event": "exit_long", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+if isShort and not na(entryAtr)
+    float fixedStop = stopAtr > 0 ? entryPx + stopAtr * entryAtr : na
+    float tgt       = targetAtr > 0 ? entryPx - targetAtr * entryAtr : na
+    if trailAtr > 0
+        float cand = close + trailAtr * atrVal
+        trailStop := na(trailStop) ? cand : math.min(trailStop, cand)
+    float stopPx = na(trailStop) ? fixedStop : na(fixedStop) ? trailStop : math.min(fixedStop, trailStop)
+    strategy.exit("XS", from_entry="S", stop=stopPx, limit=tgt, alert_message='{"source": "aoa-tradingview", "preset": "swing-crypto-1d-meanrev", "event": "exit_short", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+
+timeStop   = maxBars > 0 and barsInTrade >= maxBars
+sessionEnd = lastSessionBar or (not inSession and not flat)
+if isLong and (exitLong or timeStop or sessionEnd)
+    strategy.close("L", comment=sessionEnd ? "session" : timeStop ? "time" : "signal", alert_message='{"source": "aoa-tradingview", "preset": "swing-crypto-1d-meanrev", "event": "exit_long", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}', immediately=sessionEnd)
+if isShort and (exitShort or timeStop or sessionEnd)
+    strategy.close("S", comment=sessionEnd ? "session" : timeStop ? "time" : "signal", alert_message='{"source": "aoa-tradingview", "preset": "swing-crypto-1d-meanrev", "event": "exit_short", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}', immediately=sessionEnd)
+
+bgcolor(not inSession ? color.new(color.gray, 92) : na)
+plotshape(canEnter and longCond, "Long signal", shape.triangleup, location.belowbar, color.new(color.green, 0), size=size.tiny)
+plotshape(canEnter and shortCond and allowShort, "Short signal", shape.triangledown, location.abovebar, color.new(color.red, 0), size=size.tiny)

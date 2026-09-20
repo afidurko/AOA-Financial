@@ -1,0 +1,123 @@
+//@version=6
+// AOA Financial — TradingView desk preset: hft-crypto-1s-momentum
+// 1-second EMA(5/13) micro-momentum with RSI(7) and VWAP side filter; 1.0 ATR stop, 1.5 ATR target, 45-bar time stop. Crypto only — requires a TradingView plan with seconds charts and bar magnifier.
+// horizon=hft market=crypto timeframe=1 second generated=2026-09-20
+// The same rules are backtested offline by aoa.tradingview.backtest (TradingView fill semantics).
+// Human has final say: this script only emits alerts. Route them to POST /api/tradingview/webhook.
+// NOTE: seconds-based charts require a TradingView Premium+ plan; keep Bar Magnifier on for honest fills.
+strategy("AOA hft-crypto-1s-momentum", shorttitle="AOA-HFT-CRYP-1S", overlay=true,
+     initial_capital=100000, currency=currency.USD,
+     default_qty_type=strategy.percent_of_equity, default_qty_value=15.0,
+     commission_type=strategy.commission.percent, commission_value=0.04,
+     slippage=1, pyramiding=0, calc_on_every_tick=false,
+     process_orders_on_close=false, use_bar_magnifier=true,
+     max_bars_back=500)
+
+grpSig = "Signal"
+fastLen  = input.int(5, "EMA fast", minval=1, group=grpSig)
+slowLen  = input.int(13, "EMA slow", minval=2, group=grpSig)
+rsiLen   = input.int(7, "RSI length", minval=2, group=grpSig)
+rsiFloor = input.float(52.0, "RSI floor (long)", group=grpSig)
+rsiCeil  = input.float(68.0, "RSI ceiling (long)", group=grpSig)
+volLen   = input.int(30, "Volume SMA length", minval=1, group=grpSig)
+volMult  = input.float(1.2, "Volume surge x", minval=0, step=0.1, group=grpSig)
+useVwap  = input.bool(true, "Require VWAP side", group=grpSig)
+
+emaFast = ta.ema(close, fastLen)
+emaSlow = ta.ema(close, slowLen)
+rsiVal  = ta.rsi(close, rsiLen)
+volSma  = ta.sma(volume, volLen)
+vwapVal = ta.vwap(hlc3)
+volOk   = volSma > 0 ? volume >= volMult * volSma : true
+aboveVw = not useVwap or close > vwapVal
+belowVw = not useVwap or close < vwapVal
+crossUp = ta.crossover(emaFast, emaSlow)
+crossDn = ta.crossunder(emaFast, emaSlow)
+rsiUp   = ta.crossover(rsiVal, rsiFloor)
+rsiDn   = ta.crossunder(rsiVal, 100 - rsiFloor)
+trendUp = emaFast > emaSlow
+longTrig  = crossUp or (trendUp and rsiUp)
+shortTrig = crossDn or (not trendUp and rsiDn)
+longCond  = longTrig and rsiVal > rsiFloor and rsiVal < rsiCeil and aboveVw and volOk
+shortCond = shortTrig and rsiVal < 100 - rsiFloor and rsiVal > 100 - rsiCeil and belowVw and volOk
+exitLong  = crossDn
+exitShort = crossUp
+plot(emaFast, "EMA fast", color=color.new(color.teal, 0))
+plot(emaSlow, "EMA slow", color=color.new(color.orange, 0))
+plot(useVwap ? vwapVal : na, "VWAP", color=color.new(color.purple, 40))
+
+grpRisk = "Risk"
+stopAtr    = input.float(1.0, "Stop (ATR x)", minval=0, step=0.1, group=grpRisk)
+targetAtr  = input.float(1.5, "Target (ATR x, 0 = off)", minval=0, step=0.1, group=grpRisk)
+trailAtr   = input.float(0.0, "Trailing stop (ATR x, 0 = off)", minval=0, step=0.1, group=grpRisk)
+maxBars    = input.int(45, "Time stop (bars, 0 = off)", minval=0, group=grpRisk)
+maxPerDay  = input.int(0, "Max entries per day (0 = off)", minval=0, group=grpRisk)
+allowShort = input.bool(true, "Allow shorts", group=grpRisk)
+atrLen     = input.int(7, "ATR length", minval=1, group=grpRisk)
+minEdgeMult = input.float(2.0, "Min edge / round-trip cost (0 = off)", minval=0, step=0.5, group=grpRisk)
+commPct    = 0.04  // must match strategy() commission_value
+slipTicks  = 1  // must match strategy() slippage
+
+inSession      = true
+lastSessionBar = false
+
+fundOk = true
+
+// ── Execution & risk ────────────────────────────────────────────────────
+atrVal = ta.atr(atrLen)
+var int   tradesToday = 0
+var float entryAtr    = na
+var float trailStop   = na
+if ta.change(time("D")) != 0
+    tradesToday := 0
+justOpened = strategy.position_size != 0 and strategy.position_size[1] == 0
+if justOpened
+    tradesToday += 1
+    entryAtr  := atrVal[1]
+    trailStop := na
+isLong  = strategy.position_size > 0
+isShort = strategy.position_size < 0
+flat    = strategy.position_size == 0
+barsInTrade = strategy.opentrades > 0 ? bar_index - strategy.opentrades.entry_bar_index(0) : 0
+perDayOk = maxPerDay == 0 or tradesToday < maxPerDay
+// HFT/scalp guard: ATR-scaled edge must clear minEdgeMult x round-trip cost (both sides)
+rtCost   = 2 * (commPct / 100 + slipTicks * syminfo.mintick / close)
+edgeAtr  = targetAtr > 0 ? targetAtr : trailAtr > 0 ? trailAtr : stopAtr
+edgeOk   = minEdgeMult == 0 or edgeAtr == 0 or edgeAtr * atrVal / close >= minEdgeMult * rtCost
+canEnter = flat and inSession and not lastSessionBar and perDayOk and fundOk and edgeOk and barstate.isconfirmed
+
+// entries fill on the next bar open (process_orders_on_close=false)
+if canEnter and longCond
+    strategy.entry("L", strategy.long, alert_message='{"source": "aoa-tradingview", "preset": "hft-crypto-1s-momentum", "event": "enter_long", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+if canEnter and shortCond and allowShort
+    strategy.entry("S", strategy.short, alert_message='{"source": "aoa-tradingview", "preset": "hft-crypto-1s-momentum", "event": "enter_short", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+
+// protective exits: ATR stop / target / trailing (ratchets on close), time stop, session end
+entryPx = strategy.opentrades > 0 ? strategy.opentrades.entry_price(0) : na
+if isLong and not na(entryAtr)
+    float fixedStop = stopAtr > 0 ? entryPx - stopAtr * entryAtr : na
+    float tgt       = targetAtr > 0 ? entryPx + targetAtr * entryAtr : na
+    if trailAtr > 0
+        float cand = close - trailAtr * atrVal
+        trailStop := na(trailStop) ? cand : math.max(trailStop, cand)
+    float stopPx = na(trailStop) ? fixedStop : na(fixedStop) ? trailStop : math.max(fixedStop, trailStop)
+    strategy.exit("XL", from_entry="L", stop=stopPx, limit=tgt, alert_message='{"source": "aoa-tradingview", "preset": "hft-crypto-1s-momentum", "event": "exit_long", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+if isShort and not na(entryAtr)
+    float fixedStop = stopAtr > 0 ? entryPx + stopAtr * entryAtr : na
+    float tgt       = targetAtr > 0 ? entryPx - targetAtr * entryAtr : na
+    if trailAtr > 0
+        float cand = close + trailAtr * atrVal
+        trailStop := na(trailStop) ? cand : math.min(trailStop, cand)
+    float stopPx = na(trailStop) ? fixedStop : na(fixedStop) ? trailStop : math.min(fixedStop, trailStop)
+    strategy.exit("XS", from_entry="S", stop=stopPx, limit=tgt, alert_message='{"source": "aoa-tradingview", "preset": "hft-crypto-1s-momentum", "event": "exit_short", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}')
+
+timeStop   = maxBars > 0 and barsInTrade >= maxBars
+sessionEnd = lastSessionBar or (not inSession and not flat)
+if isLong and (exitLong or timeStop or sessionEnd)
+    strategy.close("L", comment=sessionEnd ? "session" : timeStop ? "time" : "signal", alert_message='{"source": "aoa-tradingview", "preset": "hft-crypto-1s-momentum", "event": "exit_long", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}', immediately=sessionEnd)
+if isShort and (exitShort or timeStop or sessionEnd)
+    strategy.close("S", comment=sessionEnd ? "session" : timeStop ? "time" : "signal", alert_message='{"source": "aoa-tradingview", "preset": "hft-crypto-1s-momentum", "event": "exit_short", "market": "crypto","ticker":"' + syminfo.ticker + '","exchange":"' + syminfo.prefix + '","tf":"' + timeframe.period + '","price":' + str.tostring(close) + ',"time":' + str.tostring(time) + '}', immediately=sessionEnd)
+
+bgcolor(not inSession ? color.new(color.gray, 92) : na)
+plotshape(canEnter and longCond, "Long signal", shape.triangleup, location.belowbar, color.new(color.green, 0), size=size.tiny)
+plotshape(canEnter and shortCond and allowShort, "Short signal", shape.triangledown, location.abovebar, color.new(color.red, 0), size=size.tiny)
